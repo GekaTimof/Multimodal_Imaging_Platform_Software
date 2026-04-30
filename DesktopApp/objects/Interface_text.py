@@ -1,6 +1,12 @@
-from App.languge_variations.language_linck import Languages
-from App.obects.errors import Wrong_argumetn_exception
+import sys
+import os
 import json
+
+# Add parent directories to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
+from DesktopApp.language_variations.language_link import Languages
+from DesktopApp.objects.errors import Wrong_argument_exception
 
 
 # На вход класс принимает название языка 
@@ -13,20 +19,20 @@ import json
 class Interface_text():
     def __init__(self, name: str):
         if name not in Languages.keys():
-            raise Wrong_argumetn_exception
+            raise Wrong_argument_exception
         
         link = Languages[name]
         self.file = link
         try:
-            with open(link, 'r', encoding='utf-8') as f:
+            with open(link, 'r') as f:
                 self.text_json = json.load(f)
         except FileNotFoundError:
-            raise Wrong_argumetn_exception(f"Language file not found: {link}")
+            raise Wrong_argument_exception(f"Language file not found: {link}")
         except json.JSONDecodeError:
-            raise Wrong_argumetn_exception(f"Invalid JSON in language file: {link}")
+            raise Wrong_argument_exception(f"Invalid JSON in language file: {link}")
         
-    def abriviation(self):
-        return self.text_json["Abriviation"]
+    def abbreviation(self):
+        return self.text_json["Abbreviation"]
     
     def name(self):
         return self.text_json["Name"]

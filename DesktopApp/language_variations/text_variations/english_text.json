@@ -1,14 +1,14 @@
 {
     "Name": "English",
-    "Abriviation": "EN",
+    "Abbreviation": "EN",
     "Language": "Language:",
     "Spectrometer": "Spectrometer",
     "Spectrum": "Spectrum",
     "Camera": "Camera",
     "Wells": "Wells",
 
-    "Switch_to_Light_Theme": "Switch to light theme theme",
-    "Switch_to_Dark_Theme": "Switch to dark theme theme",
+    "Switch_to_Light_Theme": "Switch to light theme",
+    "Switch_to_Dark_Theme": "Switch to dark theme",
     "Reset_zoom": "Reset zoom",
     "Integral_time": "Integral time (ms):",
     "Set_Dark_Spectrum": "Set dark spectrum",

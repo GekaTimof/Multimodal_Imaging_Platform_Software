@@ -1,9 +1,9 @@
 from PyQt5.QtWidgets import QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout, QFileDialog, QMessageBox
 from PyQt5.QtGui import QPixmap
-from App.threads.camera_thread import CameraThread
-from App.obects.Interface_text import Interface_text
-from App.services.save_photo import save_photo
-from App.services.directory_control import is_directory_allowed, get_home_directory
+from DesktopApp.threads.camera_thread import CameraThread
+from DesktopApp.objects.Interface_text import Interface_text
+from DesktopApp.services.save_photo import save_photo
+from DesktopApp.services.directory_control import is_directory_allowed, get_home_directory
 import os
 import json
 
@@ -53,6 +53,7 @@ class CameraTab(QWidget):
         self.stop_button.clicked.connect(self.stop_camera)
         self.select_folder_button.clicked.connect(self.select_save_folder)
         self.save_image_button.clicked.connect(self.save_current_image)
+
 
     def update_frame(self, image):
         self.current_frame = image
@@ -124,3 +125,9 @@ class CameraTab(QWidget):
 
         with open(settings_path, 'w', encoding='utf-8') as f:
             json.dump(settings, f, indent=4)
+
+
+
+    # TODO добавить получение и отображение видео из потока с Raspberry Pi
+
+    # TODO заменить комадны на отправку команды на API для управления камерой на Raspberry Pi, а не управление камерой напрямую из приложения

@@ -1,8 +1,8 @@
 from PyQt5.QtWidgets import QMainWindow, QTabWidget
-from App.tabs.spectrometer_tab import SpectrometerTab
-from App.tabs.camera_tab import CameraTab
-from App.tabs.wells_tab import WellsTab
-from App.obects.Interface_text import Interface_text
+from DesktopApp.tabs.spectrometer_tab import SpectrometerTab
+from DesktopApp.tabs.camera_tab import CameraTab
+from DesktopApp.tabs.wells_tab import WellsTab
+from DesktopApp.objects.Interface_text import Interface_text
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -18,6 +18,7 @@ class MainWindow(QMainWindow):
         self.camera_tab = CameraTab(self.interface_text)
         self.wells_tab = WellsTab(self.interface_text)
 
+        # TODO добавить отправку команды на API Raspberry Pi на переход в нужный режим при переключении вкладки
 
         self.tabs.addTab(self.spectrometer_tab, self.interface_text.spectrometer())
         self.tabs.addTab(self.camera_tab, self.interface_text.camera())

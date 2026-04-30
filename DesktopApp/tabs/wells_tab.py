@@ -1,8 +1,8 @@
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel
-from App.obects.Interface_text import Interface_text
+from DesktopApp.objects.Interface_text import Interface_text
 
-class SpectrometerTab(QWidget):
+class WellsTab(QWidget):
     def __init__(self, interface_text: Interface_text):
         super().__init__()
         layout = QVBoxLayout(self)
-        layout.addWidget(QLabel(interface_text.spectrometer()))
+        layout.addWidget(QLabel(interface_text.wells()))
