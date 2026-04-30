@@ -1,0 +1,32 @@
+{
+    "Name": "English",
+    "Abriviation": "EN",
+    "Language": "Language:",
+    "Spectrometer": "Spectrometer",
+    "Spectrum": "Spectrum",
+    "Camera": "Camera",
+    "Wells": "Wells",
+
+    "Switch_to_Light_Theme": "Switch to light theme theme",
+    "Switch_to_Dark_Theme": "Switch to dark theme theme",
+    "Reset_zoom": "Reset zoom",
+    "Integral_time": "Integral time (ms):",
+    "Set_Dark_Spectrum": "Set dark spectrum",
+    "Clear_Dark_Spectrum": "Clear dark spectrum",
+    "Save_Directory": "Save directory:",
+    "No_folder_selected": "No folder selected",
+    "Select": "Select",
+    "Save_Spectrum": "Save spectrum",
+    "Select_spectrum_file": "Select spectrum file",
+    "Remove_Selected_Spectrum": "Remove selected spectrum",
+    "Remove_All_Spectra": "Remove all spectra",
+ 
+    "Start_Camera": "Start camera",
+    "Stop_Camera": "Stop camera",
+    "Select_save_directory": "Select save directory",
+    "Save_Image": "Save image",
+    "No_video": "No video",
+    "Warning_Title": "Warning",
+    "Warning_Select_Out_Of_Home": "Please select a directory within your home folder.",
+    "Warning_Saving_Out_Of_Home": "Cannot save outside home directory."
+}

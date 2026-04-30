@@ -1,0 +1,32 @@
+{
+    "Name": "Russian",
+    "Abriviation": "RU",
+    "Language": "Язык:",
+    "Spectrometer": "Спектрометр",
+    "Spectrum": "Спектр",
+    "Camera": "Камера",
+    "Wells": "Лунки",
+
+    "Switch_to_Light_Theme": "Переключить на светлую тему",
+    "Switch_to_Dark_Theme": "Переключить на тёмную тему",
+    "Reset_zoom": "Сбросить зум",
+    "Integral_time": "Время интегрирования (мс):",
+    "Set_Dark_Spectrum": "Установить тёмный спектр",
+    "Clear_Dark_Spectrum": "Очистить тёмный спектр",
+    "Save_Directory": "Директория сохранения:",
+    "No_folder_selected": "Папка не выбрана",
+    "Select": "Выбрать",
+    "Save_Spectrum": "Сохранить спектр",
+    "Select_spectrum_file": "Выбрать файл спектра",
+    "Remove_Selected_Spectrum": "Удалить выбранный спектр",
+    "Remove_All_Spectra": "Удалить все спектры",
+ 
+    "Start_Camera": "Запустить камеру",
+    "Stop_Camera": "Остановить камеру",
+    "Select_save_directory": "Выбрать директорию сохранения",
+    "Save_Image": "Сохранить изображение",
+    "No_video": "Нет видео",
+    "Warning_Title": "Предупреждение",
+    "Warning_Select_Out_Of_Home": "Пожалуйста, выберите директорию в вашей домашней папке.",
+    "Warning_Saving_Out_Of_Home": "Нельзя сохранять вне домашней директории."
+}
