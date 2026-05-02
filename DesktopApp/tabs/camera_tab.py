@@ -1,3 +1,4 @@
+from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout, QFileDialog, QMessageBox
 from PyQt5.QtGui import QPixmap
 from DesktopApp.threads.camera_thread import CameraThread
@@ -8,6 +9,8 @@ import os
 import json
 
 class CameraTab(QWidget):
+    DEFAULT_STREAM_URL = "http://10.43.70.189:8080/video"
+
     def __init__(self, interface_text: Interface_text):
         super().__init__()
 
@@ -16,6 +19,7 @@ class CameraTab(QWidget):
         # Video label (left side)
         self.video_label = QLabel(interface_text.no_video())
         self.video_label.setMinimumSize(640, 480)
+        self.video_label.setAlignment(Qt.AlignCenter)
 
         # Control panel (right side)
         self.start_button = QPushButton(interface_text.start_camera())
@@ -23,14 +27,23 @@ class CameraTab(QWidget):
         self.select_folder_button = QPushButton(interface_text.select_save_directory())
         self.save_image_button = QPushButton(interface_text.save_image())
         self.save_folder_label = QLabel(interface_text.no_folder_selected())
+        self.status_label = QLabel("")
+        self.status_label.setWordWrap(True)
+
+        # Load initial settings
+        self.camera_source = self.load_camera_source()
+        self.current_frame = None
+        self.thread = None
 
         # Right panel layout
         control_layout = QVBoxLayout()
         control_layout.addWidget(self.start_button)
         control_layout.addWidget(self.stop_button)
+        control_layout.addWidget(QLabel(f"Stream URL: {self.camera_source}"))
         control_layout.addWidget(self.select_folder_button)
         control_layout.addWidget(self.save_folder_label)
         control_layout.addWidget(self.save_image_button)
+        control_layout.addWidget(self.status_label)
         control_layout.addStretch()  # Push buttons to top
 
         # Main horizontal layout (4:1 ratio)
@@ -38,45 +51,49 @@ class CameraTab(QWidget):
         main_layout.addWidget(self.video_label, 4)  # Stretch factor 4
         main_layout.addLayout(control_layout, 1)    # Stretch factor 1
 
-        # Camera thread
-        self.thread = CameraThread()
-        self.thread.frame_ready.connect(self.update_frame)
-
-        # Current frame storage
-        self.current_frame = None
-
-        # Load initial save folder from settings
-        self.load_save_folder()
-
         # Connect signals
-        self.start_button.clicked.connect(self.thread.start)
+        self.start_button.clicked.connect(self.start_camera)
         self.stop_button.clicked.connect(self.stop_camera)
         self.select_folder_button.clicked.connect(self.select_save_folder)
         self.save_image_button.clicked.connect(self.save_current_image)
 
+        # Load initial save folder from settings
+        self.load_save_folder()
+
+    def start_camera(self):
+        if self.thread is not None and self.thread.isRunning():
+            return
+
+        self.thread = CameraThread(self.camera_source)
+        self.thread.frame_ready.connect(self.update_frame)
+        self.thread.status_ready.connect(self.status_label.setText)
+        self.thread.finished.connect(self.on_camera_stopped)
+        self.thread.start()
+
+    def on_camera_stopped(self):
+        self.thread = None
 
     def update_frame(self, image):
         self.current_frame = image
         self.video_label.setPixmap(QPixmap.fromImage(image))
 
     def stop_camera(self):
+        if self.thread is None:
+            return
         self.thread.stop()
         self.thread.wait()
 
     def select_save_folder(self):
-        # get home directory of user in whose directory the program is located
         home_dir = get_home_directory()
 
         options = QFileDialog.Option.DontUseNativeDialog
         options |= QFileDialog.Option.ReadOnly
 
-        # if user already select directory we will set it to selection field, if not select, we will set home directory
         current_directory = self.save_folder_label.text() if os.path.isdir(self.save_folder_label.text()) else home_dir
 
         directory = QFileDialog.getExistingDirectory(self, self.interface_text.select_save_directory(),
                                                      current_directory, options)
         if directory:
-            # check that user try to select folder in home directory
             if not directory.startswith(home_dir):
                 QMessageBox.warning(self, self.interface_text.warning_title(),
                                     self.interface_text.warning_select_out_of_home())
@@ -87,7 +104,7 @@ class CameraTab(QWidget):
 
     def save_current_image(self):
         if self.current_frame is None:
-            return  # No frame to save
+            return
         try:
             saved_path = save_photo(self.current_frame)
             print(f"Image saved to: {saved_path}")
@@ -105,6 +122,15 @@ class CameraTab(QWidget):
         except (FileNotFoundError, json.JSONDecodeError):
             pass
 
+    def load_camera_source(self):
+        settings_path = os.path.join(os.path.dirname(__file__), '..', 'settings.json')
+        try:
+            with open(settings_path, 'r', encoding='utf-8') as f:
+                settings = json.load(f)
+            return settings.get('camera', {}).get('stream_url', self.DEFAULT_STREAM_URL)
+        except (FileNotFoundError, json.JSONDecodeError):
+            return self.DEFAULT_STREAM_URL
+
     def save_settings(self, updates):
         settings_path = os.path.join(os.path.dirname(__file__), '..', 'settings.json')
         try:
@@ -113,7 +139,6 @@ class CameraTab(QWidget):
         except (FileNotFoundError, json.JSONDecodeError):
             settings = {}
 
-        # Deep merge updates
         def merge_dict(target, source):
             for key, value in source.items():
                 if isinstance(value, dict) and key in target and isinstance(target[key], dict):
@@ -125,7 +150,6 @@ class CameraTab(QWidget):
 
         with open(settings_path, 'w', encoding='utf-8') as f:
             json.dump(settings, f, indent=4)
-
 
 
     # TODO добавить получение и отображение видео из потока с Raspberry Pi

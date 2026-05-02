@@ -6,17 +6,18 @@ class CameraThread(QThread):
     frame_ready = pyqtSignal(QImage)
     status_ready = pyqtSignal(str)
 
-    def __init__(self, camera_index=0):
+    def __init__(self, camera_source=0):
         super().__init__()
-        self.camera_index = camera_index
+        self.camera_source = camera_source
         self.running = False
 
-    #TODO Заменить emit на сигнал для передачи статуса камеры в интерфейс 
-
     def run(self):
-        cap = cv2.VideoCapture(self.camera_index)
+        self.status_ready.emit(f"Connecting to {self.camera_source}")
+        cap = cv2.VideoCapture(self.camera_source)
+        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+
         if not cap.isOpened():
-            self.status_ready.emit("Camera not opened")
+            self.status_ready.emit(f"Camera not opened: {self.camera_source}")
             return
 
         self.running = True

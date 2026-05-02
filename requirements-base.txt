@@ -1,0 +1,4 @@
+PyQt5==5.15.9
+numpy==1.24.3
+pexpect==4.8.0
+pyqtgraph==0.13.3

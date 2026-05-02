@@ -1,5 +1,0 @@
-PyQt5
-numpy
-pexpect
-pyqtgraph
-opencv-python-headless

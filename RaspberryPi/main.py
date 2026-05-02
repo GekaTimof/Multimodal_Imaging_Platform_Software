@@ -1,4 +1,7 @@
 
 
-# TODO написать API Raspberry Pi для получения команд (управление камерой и спектрометром) 
-# TODO написать логику обновления параметров в бд при изменении их в интерфейсе (например, разрешение камеры)
+from RaspberryPi.services.camera_service import CameraServer
+
+if __name__ == '__main__':
+    server = CameraServer(host='0.0.0.0', port=8080)
+    server.run()
