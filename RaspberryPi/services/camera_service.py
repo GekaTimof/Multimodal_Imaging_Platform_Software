@@ -1,12 +1,12 @@
-import io
 import time
 import threading
-from http.server import BaseHTTPRequestHandler, HTTPServer
-from socketserver import ThreadingMixIn
 from picamera2 import Picamera2
 import cv2
 
-class CameraStreamer:
+
+class CameraService:
+    """Service responsible for capturing frames from the Raspberry Pi camera."""
+
     def __init__(self, width=640, height=480, fps=20):
         self.width = width
         self.height = height
@@ -50,64 +50,3 @@ class CameraStreamer:
             self.picam2.stop()
         except Exception:
             pass
-
-class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
-    daemon_threads = True
-
-class MJPEGHandler(BaseHTTPRequestHandler):
-    boundary = b'--frame'
-
-    def do_GET(self):
-        if self.path != '/video':
-            if self.path == '/status':
-                self.send_response(200)
-                self.send_header('Content-Type', 'text/plain; charset=utf-8')
-                self.end_headers()
-                self.wfile.write(b'OK')
-                return
-            self.send_error(404, 'Not Found')
-            return
-
-        self.send_response(200)
-        self.send_header('Age', '0')
-        self.send_header('Cache-Control', 'no-cache, private')
-        self.send_header('Pragma', 'no-cache')
-        self.send_header('Content-Type', 'multipart/x-mixed-replace; boundary=frame')
-        self.end_headers()
-
-        try:
-            while True:
-                frame = self.server.streamer.get_frame()
-                if frame is None:
-                    time.sleep(0.01)
-                    continue
-
-                self.wfile.write(self.boundary + b'\r\n')
-                self.wfile.write(b'Content-Type: image/jpeg\r\n')
-                self.wfile.write(f'Content-Length: {len(frame)}\r\n'.encode('utf-8'))
-                self.wfile.write(b'\r\n')
-                self.wfile.write(frame)
-                self.wfile.write(b'\r\n')
-                self.wfile.flush()
-                time.sleep(1 / self.server.streamer.fps)
-        except (ConnectionResetError, BrokenPipeError):
-            return
-
-class CameraServer:
-    def __init__(self, host='0.0.0.0', port=8080):
-        self.host = host
-        self.port = port
-        self.streamer = CameraStreamer()
-
-    def run(self):
-        self.streamer.start()
-        server = ThreadedHTTPServer((self.host, self.port), MJPEGHandler)
-        server.streamer = self.streamer
-        print(f'Raspberry Pi camera MJPEG stream available at http://{self.host}:{self.port}/video')
-        try:
-            server.serve_forever()
-        except KeyboardInterrupt:
-            pass
-        finally:
-            self.streamer.stop()
-            server.server_close()
