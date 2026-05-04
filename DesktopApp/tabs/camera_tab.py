@@ -60,6 +60,9 @@ class CameraTab(QWidget):
         main_layout.addWidget(self.video_label, 4)  # Stretch factor 4 for video
         main_layout.addLayout(right_panel_layout, 1)    # Stretch factor 1 for controls
 
+        # Connect settings updated signal
+        self.device_settings_widget.settings_updated.connect(self.on_settings_updated)
+
         # Connect signals
         self.start_button.clicked.connect(self.start_camera)
         self.stop_button.clicked.connect(self.stop_camera)
@@ -119,6 +122,21 @@ class CameraTab(QWidget):
             print(f"Image saved to: {saved_path}")
         except Exception as e:
             print(f"Error saving image: {e}")
+
+    def on_settings_updated(self):
+        """Handle settings updated event - restart camera with new settings from database."""
+        print("Settings updated, restarting camera with new database settings...")
+        
+        # Stop current camera if running
+        if self.thread is not None and self.thread.isRunning():
+            self.stop_camera()
+        
+        # Wait a moment for camera to stop
+        import time
+        time.sleep(0.5)
+        
+        # Restart camera - it will load settings from database automatically
+        self.start_camera()
 
     def load_save_folder(self):
         settings_path = os.path.join(os.path.dirname(__file__), '..', 'settings.json')

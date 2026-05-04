@@ -15,6 +15,7 @@ class MainWindow(QMainWindow):
         self.interface_text = Interface_text("English")
         self.setWindowTitle("Lab App")
         self.resize(1400, 800)
+        self.showMaximized()  # Start in fullscreen mode
 
         self.tabs = QTabWidget()
         self.setCentralWidget(self.tabs)

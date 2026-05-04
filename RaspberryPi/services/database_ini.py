@@ -54,3 +54,9 @@ conn.commit()
 conn.close()
 
 print(f"Database created: {db_path}")
+
+def main():
+    """Main function to initialize database"""
+    # The database initialization code above runs when the module is imported
+    # This function exists for explicit calls if needed
+    pass

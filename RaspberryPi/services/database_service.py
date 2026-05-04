@@ -27,8 +27,8 @@ class DatabaseService:
     def _ensure_database_exists(self):
         """Ensure database and tables exist."""
         if not os.path.exists(db_path):
-            from .database_ini import main
-            main()
+            import database_ini
+            database_ini.main()
     
     def _validate_parameter(self, table_name: str, parameter: str, value: Any) -> Tuple[bool, str]:
         """Validate parameter value against type and range constraints."""

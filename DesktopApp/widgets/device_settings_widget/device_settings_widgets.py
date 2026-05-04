@@ -144,6 +144,8 @@ class CameraSettingsWidget(QWidget):
         # Status label
         self.status_label = QLabel("Ready")
         self.status_label.setStyleSheet("QLabel { color: green; font-weight: bold; }")
+        self.status_label.setWordWrap(True)
+        self.status_label.setMaximumWidth(300)  # Prevent screen stretching
         layout.addWidget(self.status_label)
         
         layout.addStretch()
@@ -251,6 +253,8 @@ class CameraSettingsWidget(QWidget):
         if index >= len(settings_list):
             self.status_label.setText("All settings applied successfully")
             self.status_label.setStyleSheet("QLabel { color: green; font-weight: bold; }")
+            # Emit signal that settings were updated
+            self.parent().settings_updated.emit()
             return
         
         table_name, parameter, value = settings_list[index]
@@ -335,6 +339,9 @@ class FileSettingsWidget(QWidget):
 
 class DeviceSettingsWidget(QWidget):
     """Main device settings widget with tabbed interface."""
+    
+    # Signal emitted when settings are updated
+    settings_updated = pyqtSignal()
     
     def __init__(self, parent=None):
         super().__init__(parent)
