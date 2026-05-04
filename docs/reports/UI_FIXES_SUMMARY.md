@@ -4,7 +4,7 @@
 
 Successfully fixed both UI issues:
 
-### 1. ✅ Start Button Visibility After Camera Stop
+### 1. Start Button Visibility After Camera Stop
 
 **Problem:** After stopping the camera, the start button remained disabled, preventing users from restarting the camera.
 
@@ -25,7 +25,7 @@ def stop_camera(self):
 
 **Result:** Users can now start/stop camera multiple times without issues.
 
-### 2. ✅ Parameter Controls Not Disabled When Auto Modes Enabled
+### 2. Parameter Controls Not Disabled When Auto Modes Enabled
 
 **Problem:** When auto exposure and auto white balance were enabled, manual parameter controls remained enabled instead of being disabled.
 
@@ -76,20 +76,20 @@ def _update_control_states(self):
 
 ## Test Results
 
-### ✅ All Tests Pass: 3/3
+### All Tests Pass: 3/3
 
-1. **Start/Stop Button States**: ✅ PASS
+1. **Start/Stop Button States**: PASS
    - Start button correctly enabled after stop
    - Stop button correctly disabled after stop
    - Multiple start/stop cycles work
 
-2. **Parameter Control States**: ✅ PASS
+2. **Parameter Control States**: PASS
    - Auto exposure enabled → Manual controls disabled
    - Auto exposure disabled → Manual controls enabled
    - Auto white balance enabled → Manual gains disabled
    - Auto white balance disabled → Manual gains enabled
 
-3. **Settings Load and Controls**: ✅ PASS
+3. **Settings Load and Controls**: PASS
    - Settings loaded correctly from database
    - Control states updated based on settings
    - UI reflects correct enabled/disabled states
@@ -121,7 +121,7 @@ def _update_control_states(self):
 
 ## Current Status
 
-### ✅ ALL ISSUES RESOLVED
+### ALL ISSUES RESOLVED
 
 The UI now works correctly:
 - **Camera can be started/stopped multiple times** without button issues

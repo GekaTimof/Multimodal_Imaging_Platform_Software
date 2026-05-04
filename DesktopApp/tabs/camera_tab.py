@@ -1,3 +1,15 @@
+"""
+Camera Tab Interface
+Provides camera control functionality including video streaming, image capture, and device settings.
+
+Features:
+- Video stream display from IP camera
+- Start/stop camera controls
+- Image capture and saving
+- Camera parameter configuration
+- Save directory management
+"""
+
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout, QFileDialog, QMessageBox
 from PyQt5.QtGui import QPixmap
@@ -9,10 +21,27 @@ from DesktopApp.widgets.device_settings_widget.device_settings_widgets import De
 import os
 import json
 
+
 class CameraTab(QWidget):
+    """
+    Camera control tab with video streaming and image capture capabilities.
+    
+    Provides interface for:
+    - Video stream display
+    - Camera start/stop controls
+    - Image capture and saving
+    - Camera parameter settings
+    """
+    
     DEFAULT_STREAM_URL = "http://10.43.70.189:8080/video"
 
     def __init__(self, interface_text: Interface_text):
+        """
+        Initialize camera tab with interface text.
+        
+        Args:
+            interface_text (Interface_text): Text manager for UI labels
+        """
         super().__init__()
 
         self.interface_text = interface_text  # Store reference to interface_text

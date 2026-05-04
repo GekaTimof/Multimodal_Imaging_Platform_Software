@@ -1,4 +1,10 @@
-#TODO классы ошибок
+"""
+Custom Exception Classes
+Defines application-specific exceptions for error handling.
 
-def Wrong_argument_exception():
-    return "Wrong_argument_exception"
+TODO: Implement proper exception classes instead of string returns
+"""
+
+class Wrong_argument_exception(Exception):
+    """Raised when invalid arguments are provided to functions."""
+    pass
