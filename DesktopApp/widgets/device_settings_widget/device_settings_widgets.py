@@ -173,6 +173,27 @@ class CameraSettingsWidget(QWidget):
         self.red_gain.setEnabled(not awb_enabled)
         self.blue_gain.setEnabled(not awb_enabled)
     
+    def _update_ui_from_settings(self, settings):
+        """Update UI controls from settings dictionary."""
+        try:
+            # Update checkbox states
+            self.chk_ae.setChecked(bool(settings.get('AeEnable', True)))
+            self.chk_awb.setChecked(bool(settings.get('AwbEnable', True)))
+            
+            # Update numeric values
+            self.exp_time.setValue(int(settings.get('ExposureTime', 10000)))
+            self.gain.setValue(float(settings.get('AnalogueGain', 1.0)))
+            self.exp_value.setValue(float(settings.get('ExposureValue', 0.0)))
+            self.red_gain.setValue(float(settings.get('RedGain', 1.0)))
+            self.blue_gain.setValue(float(settings.get('BlueGain', 1.0)))
+            
+            # Update control states (this will enable/disable appropriate controls)
+            self._update_control_states()
+            
+        except Exception as e:
+            self.status_label.setText(f"Error updating UI: {str(e)}")
+            self.status_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
+    
     def load_settings(self):
         """Load current camera settings from API or database fallback."""
         self.status_label.setText("Loading settings...")

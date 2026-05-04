@@ -69,18 +69,33 @@ class CameraTab(QWidget):
         self.select_folder_button.clicked.connect(self.select_save_folder)
         self.save_image_button.clicked.connect(self.save_current_image)
 
-        # Load initial save folder from settings
-        self.load_save_folder()
-
     def start_camera(self):
         if self.thread is not None and self.thread.isRunning():
             return
 
         self.thread = CameraThread(self.camera_source)
         self.thread.frame_ready.connect(self.update_frame)
-        self.thread.status_ready.connect(self.status_label.setText)
-        self.thread.finished.connect(self.on_camera_stopped)
+        self.thread.status_ready.connect(self.on_camera_status)
         self.thread.start()
+        
+        # Load and apply database settings after camera starts
+        def apply_db_settings():
+            if self.thread and self.thread.cap:
+                settings = self.thread.load_camera_settings()
+                if settings:
+                    self.thread.apply_camera_settings(settings)
+        
+        # Wait a moment for camera to initialize, then apply settings
+        from PyQt5.QtCore import QTimer
+        QTimer.singleShot(1000, apply_db_settings)
+        
+        self.start_button.setEnabled(False)
+        self.stop_button.setEnabled(True)
+
+    def on_camera_status(self, message):
+        """Handle camera status messages."""
+        self.status_label.setText(message)
+        print(f"Camera status: {message}")
 
     def on_camera_stopped(self):
         self.thread = None
@@ -92,13 +107,25 @@ class CameraTab(QWidget):
     def stop_camera(self):
         if self.thread is None:
             return
+        
         self.status_label.setText("Stopping camera...")
+        
+        # Stop the thread
         self.thread.stop()
-        if not self.thread.wait(5000):  # Wait up to 5 seconds
-            self.thread.terminate()  # Force terminate if not stopping
-            self.thread.wait(2000)   # Additional wait for termination
+        
+        # Wait for thread to finish
+        if self.thread.isRunning():
+            if not self.thread.wait(3000):  # Wait up to 3 seconds
+                self.status_label.setText("Force terminating camera...")
+                self.thread.terminate()  # Force terminate if not stopping
+                self.thread.wait(1000)   # Additional wait for termination
+        
         self.thread = None
         self.status_label.setText("Camera stopped")
+        
+        # Re-enable start button and disable stop button
+        self.start_button.setEnabled(True)
+        self.stop_button.setEnabled(False)
 
     def select_save_folder(self):
         home_dir = get_home_directory()

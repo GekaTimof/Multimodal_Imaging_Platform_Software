@@ -4,9 +4,6 @@ import os
 from PyQt5.QtCore import QThread, pyqtSignal
 from PyQt5.QtGui import QImage
 
-# Add path for database service
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'RaspberryPi', 'services'))
-
 class CameraThread(QThread):
     frame_ready = pyqtSignal(QImage)
     status_ready = pyqtSignal(str)
@@ -18,7 +15,7 @@ class CameraThread(QThread):
         self.cap = None
 
     def load_camera_settings(self):
-        """Load camera settings from database"""
+        """Load camera settings from database - called from main thread"""
         try:
             # Use absolute import path
             db_path = os.path.join(os.path.dirname(__file__), '..', '..', 'RaspberryPi', 'services')
@@ -39,75 +36,80 @@ class CameraThread(QThread):
             self.status_ready.emit(f"Error loading settings from database: {e}")
             return None
 
-    def apply_camera_settings(self, cap, settings):
-        """Apply database settings to camera"""
+    def apply_camera_settings(self, settings):
+        """Apply database settings to camera - called from main thread"""
         try:
-            # Apply exposure settings
-            if not settings.get('AeEnable', True):
-                # Manual exposure
-                exposure_time = settings.get('ExposureTime', 10000)
-                gain = settings.get('AnalogueGain', 1.0)
-                
-                # Convert exposure time from microseconds to appropriate value for OpenCV
-                # Note: This is a simplified conversion - actual implementation may need calibration
-                exposure_value = exposure_time / 10000.0  # Normalize to reasonable range
-                
-                cap.set(cv2.CAP_PROP_EXPOSURE, exposure_value)
-                cap.set(cv2.CAP_PROP_GAIN, gain)
-                
-                self.status_ready.emit(f"Applied manual settings: Exposure={exposure_time}, Gain={gain}")
+            if self.cap and self.cap.isOpened():
+                # Apply exposure settings
+                if not settings.get('AeEnable', True):
+                    # Manual exposure
+                    exposure_time = settings.get('ExposureTime', 10000)
+                    gain = settings.get('AnalogueGain', 1.0)
+                    
+                    # Convert exposure time from microseconds to appropriate value for OpenCV
+                    exposure_value = exposure_time / 10000.0  # Normalize to reasonable range
+                    
+                    self.cap.set(cv2.CAP_PROP_EXPOSURE, exposure_value)
+                    self.cap.set(cv2.CAP_PROP_GAIN, gain)
+                    
+                    self.status_ready.emit(f"Applied manual settings: Exposure={exposure_time}, Gain={gain}")
+                else:
+                    # Auto exposure
+                    self.cap.set(cv2.CAP_PROP_AUTO_EXPOSURE, 1)
+                    self.status_ready.emit("Applied auto exposure settings")
+                    
+                return True
             else:
-                # Auto exposure
-                cap.set(cv2.CAP_PROP_AUTO_EXPOSURE, 1)
-                self.status_ready.emit("Applied auto exposure settings")
+                return False
                 
-            return True
-            
         except Exception as e:
             self.status_ready.emit(f"Error applying camera settings: {e}")
             return False
 
     def run(self):
-        self.status_ready.emit(f"Connecting to {self.camera_source}")
+        try:
+            self.status_ready.emit(f"Connecting to {self.camera_source}")
+            
+            # Simple camera connection
+            cap = cv2.VideoCapture(self.camera_source)
+            if not cap.isOpened():
+                self.status_ready.emit(f"Camera not opened: {self.camera_source}")
+                return
+            
+            self.cap = cap
+            self.running = True
+            self.status_ready.emit("Camera started")
+
+            # Simple capture loop
+            while self.running:
+                ret, frame = cap.read()
+                if not ret or not self.running:
+                    break
+
+                # Convert to QImage
+                rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                h, w, ch = rgb.shape
+                img = QImage(rgb.data, w, h, ch * w, QImage.Format_RGB888).copy()
+                self.frame_ready.emit(img)
+
+        except Exception as e:
+            self.status_ready.emit(f"Camera error: {e}")
         
-        # Load settings from database first
-        settings = self.load_camera_settings()
-        
-        # Connect to camera
-        cap = cv2.VideoCapture(self.camera_source)
-        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-        self.cap = cap
-
-        if not cap.isOpened():
-            self.status_ready.emit(f"Camera not opened: {self.camera_source}")
-            return
-
-        # Apply database settings to camera
-        if settings:
-            self.apply_camera_settings(cap, settings)
-
-        self.running = True
-        self.status_ready.emit("Camera started with database settings")
-
-        while self.running:
-            ret, frame = cap.read()
-            if not ret:
-                continue
-
-            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            h, w, ch = rgb.shape
-            img = QImage(rgb.data, w, h, ch * w, QImage.Format_RGB888).copy()
-            self.frame_ready.emit(img)
-
-        cap.release()
-        self.status_ready.emit("Camera stopped")
+        finally:
+            # Clean up
+            try:
+                if hasattr(self, 'cap') and self.cap is not None:
+                    self.cap.release()
+            except Exception:
+                pass
+            self.cap = None
+            self.status_ready.emit("Camera stopped")
 
     def stop(self):
         self.running = False
-        if self.cap:
-            self.cap.release()
-            self.cap = None
         
-        # Wait for thread to finish properly
+        # Wait for thread to finish
         if self.isRunning():
-            self.wait(3000)  # Wait up to 3 seconds for thread to finish
+            if not self.wait(3000):  # Wait up to 3 seconds
+                self.terminate()
+                self.wait(1000)
