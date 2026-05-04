@@ -92,8 +92,13 @@ class CameraTab(QWidget):
     def stop_camera(self):
         if self.thread is None:
             return
+        self.status_label.setText("Stopping camera...")
         self.thread.stop()
-        self.thread.wait()
+        if not self.thread.wait(5000):  # Wait up to 5 seconds
+            self.thread.terminate()  # Force terminate if not stopping
+            self.thread.wait(2000)   # Additional wait for termination
+        self.thread = None
+        self.status_label.setText("Camera stopped")
 
     def select_save_folder(self):
         home_dir = get_home_directory()

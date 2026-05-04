@@ -106,3 +106,8 @@ class CameraThread(QThread):
         self.running = False
         if self.cap:
             self.cap.release()
+            self.cap = None
+        
+        # Wait for thread to finish properly
+        if self.isRunning():
+            self.wait(3000)  # Wait up to 3 seconds for thread to finish

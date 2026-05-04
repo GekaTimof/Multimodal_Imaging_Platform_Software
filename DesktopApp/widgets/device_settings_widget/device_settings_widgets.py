@@ -174,10 +174,11 @@ class CameraSettingsWidget(QWidget):
         self.blue_gain.setEnabled(not awb_enabled)
     
     def load_settings(self):
-        """Load current camera settings from API."""
+        """Load current camera settings from API or database fallback."""
         self.status_label.setText("Loading settings...")
         self.status_label.setStyleSheet("QLabel { color: blue; font-weight: bold; }")
         
+        # Try API first, then fallback to database
         thread = APIClientThread('GET', f"{self.api_base_url}/settings/camera")
         thread.response_received.connect(self._on_settings_loaded)
         thread.finished.connect(lambda: self._cleanup_thread(thread))
@@ -211,22 +212,37 @@ class CameraSettingsWidget(QWidget):
                 settings = data.get('data', {})
             
             self.current_settings = settings
-            
-            # Update UI with loaded settings
-            self.chk_ae.setChecked(bool(settings.get('AeEnable', True)))
-            self.chk_awb.setChecked(bool(settings.get('AwbEnable', True)))
-            self.exp_time.setValue(int(settings.get('ExposureTime', 10000)))
-            self.gain.setValue(float(settings.get('AnalogueGain', 1.0)))
-            self.exp_value.setValue(float(settings.get('ExposureValue', 0.0)))
-            self.red_gain.setValue(float(settings.get('RedGain', 1.0)))
-            self.blue_gain.setValue(float(settings.get('BlueGain', 1.0)))
-            
-            self._update_control_states()
+            self._update_ui_from_settings(settings)
             
             self.status_label.setText("Settings loaded successfully")
             self.status_label.setStyleSheet("QLabel { color: green; font-weight: bold; }")
         else:
-            self.status_label.setText(f"Failed to load settings: {message}")
+            # API failed, try database fallback
+            self._load_settings_from_database()
+    
+    def _load_settings_from_database(self):
+        """Load settings directly from database as fallback."""
+        try:
+            import sys
+            import os
+            db_path = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'RaspberryPi', 'services')
+            if db_path not in sys.path:
+                sys.path.insert(0, db_path)
+            
+            from database_service import db_service
+            settings = db_service.get_camera_settings()
+            
+            if settings:
+                self.current_settings = settings
+                self._update_ui_from_settings(settings)
+                self.status_label.setText("Settings loaded from database (API offline)")
+                self.status_label.setStyleSheet("QLabel { color: orange; font-weight: bold; }")
+            else:
+                self.status_label.setText("No settings found in database")
+                self.status_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
+                
+        except Exception as e:
+            self.status_label.setText(f"Failed to load from database: {str(e)}")
             self.status_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
     
     def apply_settings(self):
@@ -245,8 +261,69 @@ class CameraSettingsWidget(QWidget):
             ("CameraSettings", "BlueGain", str(self.blue_gain.value())),
         ]
         
-        # Apply settings sequentially
-        self._apply_settings_sequentially(settings_to_update, 0)
+        # Try API first, then fallback to database
+        self._apply_settings_with_fallback(settings_to_update, 0)
+    
+    def _apply_settings_with_fallback(self, settings_list, index):
+        """Apply settings with API fallback to database."""
+        if index >= len(settings_list):
+            self.status_label.setText("All settings applied successfully")
+            self.status_label.setStyleSheet("QLabel { color: green; font-weight: bold; }")
+            # Emit signal that settings were updated
+            self.parent().settings_updated.emit()
+            return
+        
+        table_name, parameter, value = settings_list[index]
+        
+        # Try API first
+        thread = APIClientThread('POST', f"{self.api_base_url}/settings/update", {
+            'table_name': table_name,
+            'parameter': parameter,
+            'value': value
+        })
+        
+        # Store remaining settings for next call
+        thread.remaining_settings = settings_list
+        thread.next_index = index + 1
+        
+        thread.response_received.connect(lambda success, message, data: 
+            self._on_setting_applied_with_fallback(success, message, data, thread))
+        thread.finished.connect(lambda: self._cleanup_thread(thread))
+        self.active_threads.append(thread)
+        thread.start()
+    
+    def _on_setting_applied_with_fallback(self, success, message, data, thread):
+        """Handle individual setting application response with fallback."""
+        if success:
+            # Continue with next setting
+            self._apply_settings_with_fallback(thread.remaining_settings, thread.next_index)
+        else:
+            # API failed, try database fallback for this setting
+            table_name, parameter, value = thread.remaining_settings[thread.next_index - 1]
+            self._apply_setting_to_database(table_name, parameter, value, thread.remaining_settings, thread.next_index)
+    
+    def _apply_setting_to_database(self, table_name, parameter, value, settings_list, index):
+        """Apply setting directly to database."""
+        try:
+            import sys
+            import os
+            db_path = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'RaspberryPi', 'services')
+            if db_path not in sys.path:
+                sys.path.insert(0, db_path)
+            
+            from database_service import db_service
+            success, message = db_service.update_parameter(table_name, parameter, value)
+            
+            if success:
+                # Continue with next setting
+                self._apply_settings_with_fallback(settings_list, index)
+            else:
+                self.status_label.setText(f"Failed to apply {parameter}: {message}")
+                self.status_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
+                
+        except Exception as e:
+            self.status_label.setText(f"Database error for {parameter}: {str(e)}")
+            self.status_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
     
     def _apply_settings_sequentially(self, settings_list, index):
         """Apply settings one by one to avoid overwhelming the API."""
