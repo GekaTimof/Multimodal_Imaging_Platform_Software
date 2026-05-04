@@ -13,6 +13,7 @@ from DesktopApp.tabs.spectrometer_tab import SpectrometerTab
 from DesktopApp.tabs.camera_tab import CameraTab
 from DesktopApp.tabs.wells_tab import WellsTab
 from DesktopApp.objects.Interface_text import Interface_text
+from DesktopApp.config import interface_config
 from DesktopApp.services.raspberry_mode import (
     switch_to_camera_mode,
     switch_to_spectrometer_mode,
@@ -28,12 +29,24 @@ class MainWindow(QMainWindow):
     """
     
     def __init__(self):
-        """Initialize main window with default English language."""
+        """Initialize main window with configuration-based settings."""
         super().__init__()
-        self.interface_text = Interface_text("English")
-        self.setWindowTitle("Lab App")
-        self.resize(1400, 800)
-        self.showMaximized()  # Start in fullscreen mode
+        
+        # Load language from config
+        default_language = interface_config.get('language.default', 'English')
+        self.interface_text = Interface_text(default_language)
+        
+        # Configure window from config
+        window_config = interface_config.get_window_config()
+        self.setWindowTitle(window_config.get('title', 'Lab App'))
+        self.resize(window_config.get('width', 1400), window_config.get('height', 800))
+        
+        if window_config.get('start_maximized', True):
+            self.showMaximized()
+        
+        # Set resizable property
+        if not window_config.get('resizable', True):
+            self.setFixedSize(self.size())
 
         # Create tab widget
         self.tabs = QTabWidget()
@@ -51,6 +64,11 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(self.spectrometer_tab, self.interface_text.spectrometer())
         self.tabs.addTab(self.camera_tab, self.interface_text.camera())
         self.tabs.addTab(self.wells_tab, self.interface_text.wells())
+        
+        # Set default tab from config
+        tabs_config = interface_config.get_tabs_config()
+        default_tab = tabs_config.get('default_tab', 0)
+        self.tabs.setCurrentIndex(default_tab)
 
     def handle_tab_change(self, index):
         """

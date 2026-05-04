@@ -10,16 +10,18 @@ Features:
 - Save directory management
 """
 
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtWidgets import QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout, QFileDialog, QMessageBox
 from PyQt5.QtGui import QPixmap
 from DesktopApp.threads.camera_thread import CameraThread
 from DesktopApp.objects.Interface_text import Interface_text
-from DesktopApp.services.save_photo import save_photo
 from DesktopApp.services.directory_control import get_home_directory
+from DesktopApp.services.save_photo import save_photo
+from DesktopApp.config import path_manager
 from DesktopApp.widgets.device_settings_widget.device_settings_widgets import DeviceSettingsWidget
 import os
 import json
+import time
 
 
 class CameraTab(QWidget):
@@ -115,7 +117,6 @@ class CameraTab(QWidget):
                     self.thread.apply_camera_settings(settings)
         
         # Wait a moment for camera to initialize, then apply settings
-        from PyQt5.QtCore import QTimer
         QTimer.singleShot(1000, apply_db_settings)
         
         self.start_button.setEnabled(False)
@@ -193,21 +194,18 @@ class CameraTab(QWidget):
             self.stop_camera()
         
         # Wait a moment for camera to stop
-        import time
         time.sleep(0.5)
         
         # Restart camera - it will load settings from database automatically
         self.start_camera()
 
     def load_save_folder(self):
-        settings_path = os.path.join(os.path.dirname(__file__), '..', 'settings.json')
+        """Load save directory from path manager configuration."""
         try:
-            with open(settings_path, 'r', encoding='utf-8') as f:
-                settings = json.load(f)
-            save_dir = settings.get('photo', {}).get('save_directory', '')
+            save_dir = path_manager.get_save_directory('photo')
             if save_dir:
                 self.save_folder_label.setText(save_dir)
-        except (FileNotFoundError, json.JSONDecodeError):
+        except Exception:
             pass
 
     def load_camera_source(self):
@@ -220,26 +218,13 @@ class CameraTab(QWidget):
             return self.DEFAULT_STREAM_URL
 
     def save_settings(self, updates):
-        settings_path = os.path.join(os.path.dirname(__file__), '..', 'settings.json')
-        try:
-            with open(settings_path, 'r', encoding='utf-8') as f:
-                settings = json.load(f)
-        except (FileNotFoundError, json.JSONDecodeError):
-            settings = {}
-
-        def merge_dict(target, source):
-            for key, value in source.items():
-                if isinstance(value, dict) and key in target and isinstance(target[key], dict):
-                    merge_dict(target[key], value)
-                else:
-                    target[key] = value
-
-        merge_dict(settings, updates)
-
-        with open(settings_path, 'w', encoding='utf-8') as f:
-            json.dump(settings, f, indent=4)
+        """Save settings using path manager for photo operations."""
+        if 'photo' in updates and 'save_directory' in updates['photo']:
+            try:
+                path_manager.set_save_directory('photo', updates['photo']['save_directory'])
+            except ValueError as e:
+                print(f"Error saving directory: {e}")
 
 
-    # TODO добавить получение и отображение видео из потока с Raspberry Pi
-
-    # TODO заменить комадны на отправку команды на API для управления камерой на Raspberry Pi, а не управление камерой напрямую из приложения
+    # Future enhancement: Add video stream reception from Raspberry Pi
+    # Future enhancement: Replace direct camera control with API commands to Raspberry Pi

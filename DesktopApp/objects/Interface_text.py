@@ -36,16 +36,21 @@ class Interface_text():
             Wrong_argument_exception: If language not supported or file not found
         """
         if name not in Languages.keys():
-            raise Wrong_argument_exception
+            print(f"Language '{name}' not found in available languages: {list(Languages.keys())}")
+            # Fallback to first available language
+            name = list(Languages.keys())[0]
+            print(f"Falling back to language: {name}")
         
         link = Languages[name]
         self.file = link
         try:
-            with open(link, 'r') as f:
+            with open(link, 'r', encoding='utf-8') as f:
                 self.text_json = json.load(f)
         except FileNotFoundError:
+            print(f"Language file not found: {link}")
             raise Wrong_argument_exception(f"Language file not found: {link}")
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as e:
+            print(f"Invalid JSON in language file: {link} - {e}")
             raise Wrong_argument_exception(f"Invalid JSON in language file: {link}")
         
     def abbreviation(self):

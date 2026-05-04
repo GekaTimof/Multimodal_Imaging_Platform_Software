@@ -1,0 +1,75 @@
+{
+    "base_directories": {
+        "home": "/home/evgeniy",
+        "downloads": "/home/evgeniy/Downloads",
+        "documents": "/home/evgeniy/Documents",
+        "desktop": "/home/evgeniy/Desktop",
+        "app_data": "/home/evgeniy/.lab_app_data"
+    },
+    "file_operations": {
+        "photo": {
+            "default_save_dir": "",
+            "filename_template": "camera_snapshot_{timestamp}.png",
+            "format": "PNG",
+            "allowed_formats": [
+                "PNG",
+                "JPG",
+                "JPEG",
+                "BMP",
+                "TIFF"
+            ],
+            "create_subdirs": false,
+            "subdir_format": "{date}"
+        },
+        "spectrometer": {
+            "default_save_dir": "",
+            "filename_template": "spectrum_{timestamp}.txt",
+            "format": "TXT",
+            "allowed_formats": [
+                "TXT",
+                "CSV",
+                "JSON"
+            ],
+            "create_subdirs": false,
+            "subdir_format": "{date}"
+        },
+        "wells": {
+            "default_save_dir": "",
+            "filename_template": "wells_analysis_{timestamp}.csv",
+            "format": "CSV",
+            "allowed_formats": [
+                "CSV",
+                "XLSX",
+                "JSON"
+            ],
+            "create_subdirs": false,
+            "subdir_format": "{date}"
+        },
+        "logs": {
+            "default_save_dir": "",
+            "filename_template": "app_log_{date}.txt",
+            "format": "TXT",
+            "max_log_files": 10
+        }
+    },
+    "path_validation": {
+        "require_home_subdir": true,
+        "allowed_base_dirs": [
+            "home",
+            "downloads",
+            "documents",
+            "desktop",
+            "app_data"
+        ],
+        "max_path_length": 255,
+        "forbidden_chars": [
+            "<",
+            ">",
+            ":",
+            "\"",
+            "|",
+            "?",
+            "*"
+        ]
+    }
+}

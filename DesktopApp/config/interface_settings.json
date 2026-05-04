@@ -1,0 +1,40 @@
+{
+    "window": {
+        "title": "Lab App",
+        "width": 1400,
+        "height": 800,
+        "start_maximized": true,
+        "resizable": true
+    },
+    "theme": {
+        "default": "light",
+        "available_themes": [
+            "light",
+            "dark"
+        ],
+        "auto_switch": false
+    },
+    "language": {
+        "default": "english",
+        "available_languages": [
+            "english",
+            "russian"
+        ],
+        "auto_detect": false
+    },
+    "tabs": {
+        "default_tab": 0,
+        "remember_last_tab": true,
+        "tab_positions": [
+            "spectrometer",
+            "camera",
+            "wells"
+        ]
+    },
+    "ui_behavior": {
+        "confirmations": true,
+        "tooltips": true,
+        "animations": true,
+        "auto_save": true
+    }
+}
