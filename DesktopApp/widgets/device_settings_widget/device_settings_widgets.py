@@ -1,5 +1,3 @@
-
-
 import requests
 import json
 from PyQt5.QtWidgets import (

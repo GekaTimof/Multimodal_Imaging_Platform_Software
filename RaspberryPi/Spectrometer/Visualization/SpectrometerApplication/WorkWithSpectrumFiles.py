@@ -55,7 +55,7 @@ def save_data_to_folder(data, file_name: str, folder):
             with open(path_to_file, "w") as file:
                 file.writelines(f"{i}\n" for i in data)
         except KeyError:
-            print(f"⚠ Error: The user could not be found {user_name}")
+            print(f"WARNING: Error: The user could not be found {user_name}")
     else:
         raise Exception(f"{folder} is not a directory")
 

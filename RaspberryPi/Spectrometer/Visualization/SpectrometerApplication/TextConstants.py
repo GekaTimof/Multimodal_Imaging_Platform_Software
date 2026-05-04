@@ -21,8 +21,8 @@ SELECT_DIRECTORY_FILE_DIALOG = {'en': "Select Directory", 'ru': "Выбор ка
 
 # select directory warnings
 WARNING_SELECT_OUT_OF_HOME = {
-    'en': "Access Denied.\n⚠ You can only select folders in your home directory!",
-    'ru': "Доступ запрещён.\n⚠ Вы можете выбирать только папки в домашнем каталоге!"
+    'en': "Access Denied.\nWARNING: You can only select folders in your home directory!",
+    'ru': "Доступ запрещён.\nWARNING: Вы можете выбирать только папки в домашнем каталоге!"
 }
 
 # save file to directory button text
@@ -34,8 +34,8 @@ WARNING_NO_DIRECTORY_SELECTED = {
     'ru': "Каталог не выбран.\nПожалуйста, выберите каталог для сохранения данных."
 }
 WARNING_SAWING_OUT_OF_HOME = {
-    'en': "Access Denied.\n⚠ Saving outside the home directory is prohibited!",
-    'ru': "Доступ запрещён.\n⚠ Сохранение вне домашнего каталога запрещено!"
+    'en': "Access Denied.\nWARNING: Saving outside the home directory is prohibited!",
+    'ru': "Доступ запрещён.\nWARNING: Сохранение вне домашнего каталога запрещено!"
 }
 CRITICAL_SAVING_FAILED = {
     'en': "Failed to save spectrum data.",
@@ -44,8 +44,8 @@ CRITICAL_SAVING_FAILED = {
 
 # can't input data from file
 WARNING_WRONG_DATA_FILE = {
-    'en': "Error in file.\n⚠ Failed to extract contents!",
-    'ru': "Ошибка в файле.\n⚠ не удалось извлечь содержимое!"
+    'en': "Error in file.\nWARNING: Failed to extract contents!",
+    'ru': "Ошибка в файле.\nWARNING: не удалось извлечь содержимое!"
 }
 
 # input field to set integral time text

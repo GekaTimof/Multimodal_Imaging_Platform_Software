@@ -103,7 +103,7 @@ class CameraWindow(QMainWindow):
 
         layout.addWidget(ctrl_box)
 
-        # ✅ FIXED STATUS (no window resizing)
+        # FIXED STATUS (no window resizing)
         self.status = QLabel("Ready")
         self.status.setWordWrap(True)
         self.status.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
