@@ -42,12 +42,14 @@ class DatabaseService:
             if rules['type'] is bool:
                 if isinstance(value, str):
                     if value.lower() in ('true', '1', 'on'):
-                        value = True
+                        value = 1  # Convert to integer for database
                     elif value.lower() in ('false', '0', 'off'):
-                        value = False
+                        value = 0  # Convert to integer for database
                     else:
                         return False, f"Invalid boolean value: {value}"
-                elif not isinstance(value, bool):
+                elif isinstance(value, bool):
+                    value = 1 if value else 0  # Convert boolean to integer for database
+                else:
                     return False, f"Expected boolean, got {type(value).__name__}"
             
             elif rules['type'] is int:

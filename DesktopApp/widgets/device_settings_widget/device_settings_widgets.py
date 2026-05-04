@@ -158,6 +158,9 @@ class CameraSettingsWidget(QWidget):
         # Enable/disable controls based on auto settings
         self.chk_ae.toggled.connect(self._update_control_states)
         self.chk_awb.toggled.connect(self._update_control_states)
+        
+        # Initialize control states based on default checkbox values
+        self._update_control_states()
     
     def _update_control_states(self):
         """Enable/disable controls based on auto exposure and white balance settings."""
@@ -275,11 +278,11 @@ class CameraSettingsWidget(QWidget):
         settings_to_update = [
             ("CameraSettings", "AeEnable", str(int(self.chk_ae.isChecked()))),
             ("CameraSettings", "AwbEnable", str(int(self.chk_awb.isChecked()))),
-            ("CameraSettings", "ExposureTime", str(self.exp_time.value())),
-            ("CameraSettings", "AnalogueGain", str(self.gain.value())),
-            ("CameraSettings", "ExposureValue", str(self.exp_value.value())),
-            ("CameraSettings", "RedGain", str(self.red_gain.value())),
-            ("CameraSettings", "BlueGain", str(self.blue_gain.value())),
+            ("CameraSettings", "ExposureTime", str(int(self.exp_time.value()))),
+            ("CameraSettings", "AnalogueGain", str(float(self.gain.value()))),
+            ("CameraSettings", "ExposureValue", str(float(self.exp_value.value()))),
+            ("CameraSettings", "RedGain", str(float(self.red_gain.value()))),
+            ("CameraSettings", "BlueGain", str(float(self.blue_gain.value()))),
         ]
         
         # Try API first, then fallback to database
@@ -291,7 +294,18 @@ class CameraSettingsWidget(QWidget):
             self.status_label.setText("All settings applied successfully")
             self.status_label.setStyleSheet("QLabel { color: green; font-weight: bold; }")
             # Emit signal that settings were updated
-            self.parent().settings_updated.emit()
+            try:
+                # Try to find the DeviceSettingsWidget parent
+                parent = self.parent()
+                while parent and not hasattr(parent, 'settings_updated'):
+                    parent = parent.parent()
+                
+                if parent and hasattr(parent, 'settings_updated'):
+                    parent.settings_updated.emit()
+                else:
+                    pass  # Could not find parent with signal
+            except Exception:
+                pass  # Error emitting signal
             return
         
         table_name, parameter, value = settings_list[index]
@@ -335,6 +349,8 @@ class CameraSettingsWidget(QWidget):
             from database_service import db_service
             success, message = db_service.update_parameter(table_name, parameter, value)
             
+            # Database update successful
+            
             if success:
                 # Continue with next setting
                 self._apply_settings_with_fallback(settings_list, index)
@@ -352,7 +368,18 @@ class CameraSettingsWidget(QWidget):
             self.status_label.setText("All settings applied successfully")
             self.status_label.setStyleSheet("QLabel { color: green; font-weight: bold; }")
             # Emit signal that settings were updated
-            self.parent().settings_updated.emit()
+            try:
+                # Try to find the DeviceSettingsWidget parent
+                parent = self.parent()
+                while parent and not hasattr(parent, 'settings_updated'):
+                    parent = parent.parent()
+                
+                if parent and hasattr(parent, 'settings_updated'):
+                    parent.settings_updated.emit()
+                else:
+                    pass  # Could not find parent with signal
+            except Exception:
+                pass  # Error emitting signal
             return
         
         table_name, parameter, value = settings_list[index]
