@@ -62,8 +62,9 @@ class CameraSettingsWidget(QWidget):
         super().__init__()
         self.api_base_url = "http://localhost:8000/api"
         self.current_settings = {}
+        self.active_threads = []  # Track active threads
         self._build_ui()
-        self.load_settings()
+        # Don't auto-load settings to avoid threading issues on startup
     
     def _build_ui(self):
         layout = QVBoxLayout(self)
@@ -177,7 +178,24 @@ class CameraSettingsWidget(QWidget):
         
         thread = APIClientThread('GET', f"{self.api_base_url}/settings/camera")
         thread.response_received.connect(self._on_settings_loaded)
+        thread.finished.connect(lambda: self._cleanup_thread(thread))
+        self.active_threads.append(thread)
         thread.start()
+    
+    def _cleanup_thread(self, thread):
+        """Remove thread from active threads list when finished."""
+        if thread in self.active_threads:
+            self.active_threads.remove(thread)
+    
+    def closeEvent(self, event):
+        """Clean up active threads when widget is destroyed."""
+        # Terminate all active threads
+        for thread in self.active_threads:
+            if thread.isRunning():
+                thread.terminate()
+                thread.wait(1000)  # Wait up to 1 second for thread to finish
+        self.active_threads.clear()
+        super().closeEvent(event)
     
     def _on_settings_loaded(self, success, message, data):
         """Handle settings load response."""
@@ -249,6 +267,8 @@ class CameraSettingsWidget(QWidget):
         
         thread.response_received.connect(lambda success, message, data: 
             self._on_setting_applied(success, message, data, thread))
+        thread.finished.connect(lambda: self._cleanup_thread(thread))
+        self.active_threads.append(thread)
         thread.start()
     
     def _on_setting_applied(self, success, message, data, thread):
