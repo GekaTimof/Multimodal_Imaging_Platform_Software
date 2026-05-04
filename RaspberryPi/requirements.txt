@@ -1,3 +1,7 @@
 -r ../requirements-base.txt
 opencv-python-headless==4.8.0.74
 picamera2==0.3.12
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+requests==2.31.0

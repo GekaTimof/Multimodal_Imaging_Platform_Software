@@ -4,7 +4,8 @@ from PyQt5.QtGui import QPixmap
 from DesktopApp.threads.camera_thread import CameraThread
 from DesktopApp.objects.Interface_text import Interface_text
 from DesktopApp.services.save_photo import save_photo
-from DesktopApp.services.directory_control import is_directory_allowed, get_home_directory
+from DesktopApp.services.directory_control import get_home_directory
+from DesktopApp.widgets.device_settings_widget.device_settings_widgets import DeviceSettingsWidget
 import os
 import json
 
@@ -35,21 +36,29 @@ class CameraTab(QWidget):
         self.current_frame = None
         self.thread = None
 
-        # Right panel layout
-        control_layout = QVBoxLayout()
-        control_layout.addWidget(self.start_button)
-        control_layout.addWidget(self.stop_button)
-        control_layout.addWidget(QLabel(f"Stream URL: {self.camera_source}"))
-        control_layout.addWidget(self.select_folder_button)
-        control_layout.addWidget(self.save_folder_label)
-        control_layout.addWidget(self.save_image_button)
-        control_layout.addWidget(self.status_label)
-        control_layout.addStretch()  # Push buttons to top
+        # Upper control panel (basic camera controls)
+        upper_control_layout = QVBoxLayout()
+        upper_control_layout.addWidget(self.start_button)
+        upper_control_layout.addWidget(self.stop_button)
+        upper_control_layout.addWidget(QLabel(f"Stream URL: {self.camera_source}"))
+        upper_control_layout.addWidget(self.select_folder_button)
+        upper_control_layout.addWidget(self.save_folder_label)
+        upper_control_layout.addWidget(self.save_image_button)
+        upper_control_layout.addWidget(self.status_label)
+        upper_control_layout.addStretch()  # Push buttons to top
+
+        # Lower panel with device settings (tabbed interface)
+        self.device_settings_widget = DeviceSettingsWidget()
+
+        # Right panel layout (split into upper and lower parts)
+        right_panel_layout = QVBoxLayout()
+        right_panel_layout.addLayout(upper_control_layout, 1)  # Upper part takes 1/3 space
+        right_panel_layout.addWidget(self.device_settings_widget, 2)  # Lower part takes 2/3 space
 
         # Main horizontal layout (4:1 ratio)
         main_layout = QHBoxLayout(self)
-        main_layout.addWidget(self.video_label, 4)  # Stretch factor 4
-        main_layout.addLayout(control_layout, 1)    # Stretch factor 1
+        main_layout.addWidget(self.video_label, 4)  # Stretch factor 4 for video
+        main_layout.addLayout(right_panel_layout, 1)    # Stretch factor 1 for controls
 
         # Connect signals
         self.start_button.clicked.connect(self.start_camera)
