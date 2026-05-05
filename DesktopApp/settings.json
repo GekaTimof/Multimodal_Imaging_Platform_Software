@@ -10,7 +10,7 @@
         "filename_template": "spectrum_{timestamp}.txt"
     },
     "interface": {
-        "default_language": "english",
+        "default_language": "English",
         "theme": "light"
     }
 }

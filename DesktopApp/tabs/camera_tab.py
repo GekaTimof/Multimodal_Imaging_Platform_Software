@@ -50,8 +50,8 @@ class CameraTab(QWidget):
 
         # Video label (left side)
         self.video_label = QLabel(interface_text.no_video())
-        self.video_label.setMinimumSize(640, 480)
         self.video_label.setAlignment(Qt.AlignCenter)
+        self.video_label.setStyleSheet("QLabel { background-color: black; color: white; }")
 
         # Control panel (right side)
         self.start_button = QPushButton(interface_text.start_camera())
@@ -66,6 +66,7 @@ class CameraTab(QWidget):
         self.camera_source = self.load_camera_source()
         self.current_frame = None
         self.thread = None
+        self.current_settings_slot = 0  # Default to slot 0 (Basic)
 
         # Upper control panel (basic camera controls)
         upper_control_layout = QVBoxLayout()
@@ -86,13 +87,16 @@ class CameraTab(QWidget):
         right_panel_layout.addLayout(upper_control_layout, 1)  # Upper part takes 1/3 space
         right_panel_layout.addWidget(self.device_settings_widget, 2)  # Lower part takes 2/3 space
 
-        # Main horizontal layout (4:1 ratio)
+        # Main horizontal layout (8:2 ratio - more space for video)
         main_layout = QHBoxLayout(self)
-        main_layout.addWidget(self.video_label, 4)  # Stretch factor 4 for video
-        main_layout.addLayout(right_panel_layout, 1)    # Stretch factor 1 for controls
+        main_layout.addWidget(self.video_label, 8)  # Stretch factor 8 for video
+        main_layout.addLayout(right_panel_layout, 2)    # Stretch factor 2 for controls
 
         # Connect settings updated signal
         self.device_settings_widget.settings_updated.connect(self.on_settings_updated)
+        
+        # Connect slot changed signal
+        self.device_settings_widget.camera_tab.slot_changed.connect(self.set_current_settings_slot)
 
         # Connect signals
         self.start_button.clicked.connect(self.start_camera)
@@ -112,7 +116,7 @@ class CameraTab(QWidget):
         # Load and apply database settings after camera starts
         def apply_db_settings():
             if self.thread and self.thread.cap:
-                settings = self.thread.load_camera_settings()
+                settings = self.thread.load_camera_settings(self.current_settings_slot)
                 if settings:
                     self.thread.apply_camera_settings(settings)
         
@@ -132,7 +136,10 @@ class CameraTab(QWidget):
 
     def update_frame(self, image):
         self.current_frame = image
-        self.video_label.setPixmap(QPixmap.fromImage(image))
+        # Scale image to fit the video label size while maintaining aspect ratio
+        pixmap = QPixmap.fromImage(image)
+        scaled_pixmap = pixmap.scaled(self.video_label.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        self.video_label.setPixmap(scaled_pixmap)
 
     def stop_camera(self):
         if self.thread is None:
@@ -198,6 +205,17 @@ class CameraTab(QWidget):
         
         # Restart camera - it will load settings from database automatically
         self.start_camera()
+    
+    def set_current_settings_slot(self, slot_id):
+        """Set the current settings slot and restart camera if needed."""
+        self.current_settings_slot = slot_id
+        print(f"Switched to settings slot {slot_id}")
+        
+        # If camera is running, restart it with new slot settings
+        if self.thread is not None and self.thread.isRunning():
+            self.stop_camera()
+            time.sleep(0.5)
+            self.start_camera()
 
     def load_save_folder(self):
         """Load save directory from path manager configuration."""

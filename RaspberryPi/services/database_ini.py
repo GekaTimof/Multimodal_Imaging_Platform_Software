@@ -14,6 +14,8 @@ cursor = conn.cursor()
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS CameraSettings (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    SettingsName TEXT NOT NULL DEFAULT 'Basic',
+    Resolution TEXT NOT NULL DEFAULT '1920x1080',
     AeEnable INTEGER NOT NULL DEFAULT 1 CHECK(AeEnable IN (0, 1)),
     AwbEnable INTEGER NOT NULL DEFAULT 1 CHECK(AwbEnable IN (0, 1)),
     ExposureTime INTEGER NOT NULL DEFAULT 10000 CHECK(ExposureTime BETWEEN 100 AND 3000000),
@@ -27,6 +29,7 @@ CREATE TABLE IF NOT EXISTS CameraSettings (
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS SpectrometerSettings (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    SettingsName TEXT NOT NULL DEFAULT 'Basic',
     parameter1 TEXT,
     parameter2 TEXT,
     parameter3 TEXT
@@ -36,18 +39,19 @@ CREATE TABLE IF NOT EXISTS SpectrometerSettings (
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS PositionerSettings (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    SettingsName TEXT NOT NULL DEFAULT 'Basic',
     parameter1 TEXT,
     parameter2 TEXT,
     parameter3 TEXT
 )
 """)
 
-# Insert default camera settings if table is empty
-cursor.execute("SELECT COUNT(*) FROM CameraSettings")
+# Insert default camera settings for slot 0 if not exists
+cursor.execute("SELECT COUNT(*) FROM CameraSettings WHERE id = 0")
 if cursor.fetchone()[0] == 0:
     cursor.execute("""
-    INSERT INTO CameraSettings (AeEnable, AwbEnable, ExposureTime, AnalogueGain, ExposureValue, RedGain, BlueGain)
-    VALUES (1, 1, 10000, 1.0, 0.0, 1.0, 1.0)
+    INSERT INTO CameraSettings (id, SettingsName, Resolution, AeEnable, AwbEnable, ExposureTime, AnalogueGain, ExposureValue, RedGain, BlueGain)
+    VALUES (0, 'Basic', '1920x1080', 1, 1, 10000, 1.0, 0.0, 1.0, 1.0)
     """)
 
 conn.commit()

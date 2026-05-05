@@ -15,10 +15,10 @@
         "auto_switch": false
     },
     "language": {
-        "default": "english",
+        "default": "English",
         "available_languages": [
-            "english",
-            "russian"
+            "English",
+            "Russian"
         ],
         "auto_detect": false
     },

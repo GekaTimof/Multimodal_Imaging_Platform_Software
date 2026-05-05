@@ -14,8 +14,8 @@ class CameraThread(QThread):
         self.running = False
         self.cap = None
 
-    def load_camera_settings(self):
-        """Load camera settings from database - called from main thread"""
+    def load_camera_settings(self, slot_id=0):
+        """Load camera settings from database slot - called from main thread"""
         try:
             # Use absolute import path
             db_path = os.path.join(os.path.dirname(__file__), '..', '..', 'RaspberryPi', 'services')
@@ -23,23 +23,38 @@ class CameraThread(QThread):
                 sys.path.insert(0, db_path)
             
             from database_service import db_service
-            settings = db_service.get_camera_settings()
+            settings = db_service.get_camera_settings_by_slot(slot_id)
             
             if not settings:
-                self.status_ready.emit("No camera settings found in database")
+                self.status_ready.emit(f"No camera settings found in slot {slot_id}")
                 return None
             
-            self.status_ready.emit(f"Loaded settings from database: AE={settings.get('AeEnable')}, AWB={settings.get('AwbEnable')}")
+            self.status_ready.emit(f"Loaded settings from slot {slot_id}: {settings.get('SettingsName')} - {settings.get('Resolution')}")
             return settings
             
         except Exception as e:
-            self.status_ready.emit(f"Error loading settings from database: {e}")
+            self.status_ready.emit(f"Error loading settings from slot {slot_id}: {e}")
             return None
 
     def apply_camera_settings(self, settings):
         """Apply database settings to camera - called from main thread"""
         try:
             if self.cap and self.cap.isOpened():
+                # Apply resolution first
+                resolution = settings.get('Resolution', '1920x1080')
+                if 'x' in resolution:
+                    width, height = map(int, resolution.split('x'))
+                    
+                    # Set camera resolution
+                    self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+                    self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+                    
+                    # Verify the resolution was applied
+                    actual_width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                    actual_height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                    
+                    self.status_ready.emit(f"Resolution set to {width}x{height} (actual: {actual_width}x{actual_height})")
+                
                 # Apply exposure settings
                 if not settings.get('AeEnable', True):
                     # Manual exposure
@@ -70,6 +85,9 @@ class CameraThread(QThread):
         try:
             self.status_ready.emit(f"Connecting to {self.camera_source}")
             
+            # Load settings before initializing camera
+            settings = self.load_camera_settings()
+            
             # Simple camera connection
             cap = cv2.VideoCapture(self.camera_source)
             if not cap.isOpened():
@@ -77,6 +95,11 @@ class CameraThread(QThread):
                 return
             
             self.cap = cap
+            
+            # Apply initial settings including resolution
+            if settings:
+                self.apply_camera_settings(settings)
+            
             self.running = True
             self.status_ready.emit("Camera started")
 

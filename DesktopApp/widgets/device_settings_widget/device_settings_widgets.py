@@ -3,10 +3,103 @@ import json
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTabWidget, QGroupBox, 
     QLabel, QSpinBox, QDoubleSpinBox, QCheckBox, QPushButton, 
-    QGridLayout
+    QGridLayout, QComboBox, QLineEdit, QDialog, QDialogButtonBox,
+    QListWidget, QListWidgetItem
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QFont
+
+
+class SettingsSlotDialog(QDialog):
+    """Dialog for selecting and managing camera settings slots (0-9)."""
+    
+    slot_selected = pyqtSignal(int)
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Camera Settings Slots")
+        self.setModal(True)
+        self.resize(400, 300)
+        self.slots_data = {}
+        self._build_ui()
+        self._load_slots()
+    
+    def _build_ui(self):
+        layout = QVBoxLayout(self)
+        
+        # Title
+        title = QLabel("Select a settings slot to load:")
+        title.setStyleSheet("QLabel { font-weight: bold; font-size: 14px; }")
+        layout.addWidget(title)
+        
+        # Slots list
+        self.slots_list = QListWidget()
+        self.slots_list.itemDoubleClicked.connect(self._on_slot_selected)
+        layout.addWidget(self.slots_list)
+        
+        # Buttons
+        button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        button_box.accepted.connect(self._on_ok_clicked)
+        button_box.rejected.connect(self.reject)
+        layout.addWidget(button_box)
+    
+    def _load_slots(self):
+        """Load all settings slots from database."""
+        try:
+            import sys
+            import os
+            db_path = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'RaspberryPi', 'services')
+            if db_path not in sys.path:
+                sys.path.insert(0, db_path)
+            
+            from database_service import db_service
+            self.slots_data = db_service.get_all_camera_settings_slots()
+            
+            # Populate list widget
+            self.slots_list.clear()
+            for slot_id, settings in self.slots_data.items():
+                name = settings.get('SettingsName', f"Slot {slot_id}")
+                resolution = settings.get('Resolution', '1920x1080')
+                
+                if slot_id == 0:
+                    display_text = f"Slot {slot_id} - {name} (Basic) - {resolution}"
+                else:
+                    display_text = f"Slot {slot_id} - {name} - {resolution}"
+                
+                item = QListWidgetItem(display_text)
+                item.setData(Qt.UserRole, slot_id)
+                self.slots_list.addItem(item)
+                
+        except Exception as e:
+            # Fallback: create empty slots
+            self.slots_list.clear()
+            for slot_id in range(10):
+                name = "Basic" if slot_id == 0 else f"Custom {slot_id}"
+                display_text = f"Slot {slot_id} - {name} - 1920x1080"
+                item = QListWidgetItem(display_text)
+                item.setData(Qt.UserRole, slot_id)
+                self.slots_list.addItem(item)
+    
+    def _on_slot_selected(self, item):
+        """Handle slot selection."""
+        slot_id = item.data(Qt.UserRole)
+        self.slot_selected.emit(slot_id)
+        self.accept()
+    
+    def _on_ok_clicked(self):
+        """Handle OK button click."""
+        current_item = self.slots_list.currentItem()
+        if current_item:
+            slot_id = current_item.data(Qt.UserRole)
+            self.slot_selected.emit(slot_id)
+            self.accept()
+    
+    def get_selected_slot(self):
+        """Get the selected slot ID."""
+        current_item = self.slots_list.currentItem()
+        if current_item:
+            return current_item.data(Qt.UserRole)
+        return None
 
 
 class APIClientThread(QThread):
@@ -58,13 +151,18 @@ class APIClientThread(QThread):
 class CameraSettingsWidget(QWidget):
     """Widget for camera settings configuration."""
     
+    # Signal emitted when settings slot is changed
+    slot_changed = pyqtSignal(int)
+    
     def __init__(self):
         super().__init__()
         self.api_base_url = "http://localhost:8000/api"
         self.current_settings = {}
         self.active_threads = []  # Track active threads
+        self.current_slot_id = 0  # Track current settings slot
         self._build_ui()
-        # Don't auto-load settings to avoid threading issues on startup
+        # Load default settings from slot 0 on startup
+        self.load_settings_from_slot(0)
     
     def _build_ui(self):
         layout = QVBoxLayout(self)
@@ -73,57 +171,82 @@ class CameraSettingsWidget(QWidget):
         settings_group = QGroupBox("Camera Parameters")
         settings_layout = QGridLayout(settings_group)
         
+        # Settings Name
+        self.settings_name = QLineEdit()
+        self.settings_name.setPlaceholderText("Enter settings name...")
+        settings_layout.addWidget(QLabel("Settings Name:"), 0, 0)
+        settings_layout.addWidget(self.settings_name, 0, 1)
+        
+        # Resolution
+        self.resolution_combo = QComboBox()
+        self.resolution_combo.addItems([
+            '640x480 (4:3)',      # VGA
+            '800x600 (4:3)',      # SVGA  
+            '1024x768 (4:3)',     # XGA
+            '1280x720 (16:9)',    # 720p HD
+            '1296x972 (4:3)',     # 4:3 mid-resolution
+            '1640x1232 (4:3)',    # 4:3 aspect ratio
+            '1920x1080 (16:9)',   # 1080p FHD
+            '2304x1296 (16:9)',   # 16:9 aspect ratio
+            '2592x1944 (4:3)',    # High 4:3 resolution
+            '3280x2464 (4:3)',    # Full 8MP resolution
+            '4608x2592 (16:9)',   # Full 12MP resolution
+        ])
+        self.resolution_combo.setCurrentText('1920x1080 (16:9)')
+        settings_layout.addWidget(QLabel("Resolution:"), 1, 0)
+        settings_layout.addWidget(self.resolution_combo, 1, 1)
+        
         # Auto Exposure
         self.chk_ae = QCheckBox("Auto Exposure")
         self.chk_ae.setChecked(True)
-        settings_layout.addWidget(QLabel("Auto Exposure:"), 0, 0)
-        settings_layout.addWidget(self.chk_ae, 0, 1)
+        settings_layout.addWidget(QLabel("Auto Exposure:"), 2, 0)
+        settings_layout.addWidget(self.chk_ae, 2, 1)
         
         # Auto White Balance
         self.chk_awb = QCheckBox("Auto White Balance")
         self.chk_awb.setChecked(True)
-        settings_layout.addWidget(QLabel("Auto WB:"), 1, 0)
-        settings_layout.addWidget(self.chk_awb, 1, 1)
+        settings_layout.addWidget(QLabel("Auto WB:"), 3, 0)
+        settings_layout.addWidget(self.chk_awb, 3, 1)
         
         # Exposure Time
         self.exp_time = QSpinBox()
         self.exp_time.setRange(100, 3000000)
         self.exp_time.setValue(10000)
         self.exp_time.setSuffix(" μs")
-        settings_layout.addWidget(QLabel("Exposure Time:"), 2, 0)
-        settings_layout.addWidget(self.exp_time, 2, 1)
+        settings_layout.addWidget(QLabel("Exposure Time:"), 4, 0)
+        settings_layout.addWidget(self.exp_time, 4, 1)
         
         # Analogue Gain
         self.gain = QDoubleSpinBox()
         self.gain.setRange(0.0, 32.0)
         self.gain.setValue(1.0)
         self.gain.setDecimals(2)
-        settings_layout.addWidget(QLabel("Analogue Gain:"), 3, 0)
-        settings_layout.addWidget(self.gain, 3, 1)
+        settings_layout.addWidget(QLabel("Analogue Gain:"), 5, 0)
+        settings_layout.addWidget(self.gain, 5, 1)
         
         # Exposure Value
         self.exp_value = QDoubleSpinBox()
         self.exp_value.setRange(-10.0, 10.0)
         self.exp_value.setValue(0.0)
         self.exp_value.setDecimals(2)
-        settings_layout.addWidget(QLabel("Exposure Value:"), 4, 0)
-        settings_layout.addWidget(self.exp_value, 4, 1)
+        settings_layout.addWidget(QLabel("Exposure Value:"), 6, 0)
+        settings_layout.addWidget(self.exp_value, 6, 1)
         
         # Red Gain
         self.red_gain = QDoubleSpinBox()
         self.red_gain.setRange(0.0, 8.0)
         self.red_gain.setValue(1.0)
         self.red_gain.setDecimals(2)
-        settings_layout.addWidget(QLabel("Red Gain:"), 5, 0)
-        settings_layout.addWidget(self.red_gain, 5, 1)
+        settings_layout.addWidget(QLabel("Red Gain:"), 7, 0)
+        settings_layout.addWidget(self.red_gain, 7, 1)
         
         # Blue Gain
         self.blue_gain = QDoubleSpinBox()
         self.blue_gain.setRange(0.0, 8.0)
         self.blue_gain.setValue(1.0)
         self.blue_gain.setDecimals(2)
-        settings_layout.addWidget(QLabel("Blue Gain:"), 6, 0)
-        settings_layout.addWidget(self.blue_gain, 6, 1)
+        settings_layout.addWidget(QLabel("Blue Gain:"), 8, 0)
+        settings_layout.addWidget(self.blue_gain, 8, 1)
         
         layout.addWidget(settings_group)
         
@@ -131,11 +254,13 @@ class CameraSettingsWidget(QWidget):
         button_layout = QHBoxLayout()
         
         self.btn_refresh = QPushButton("Refresh")
+        self.btn_load_slot = QPushButton("Load Slot")
+        self.btn_save_slot = QPushButton("Save to Slot")
         self.btn_apply = QPushButton("Apply Changes")
-        self.btn_reset = QPushButton("Reset to Defaults")
         
         button_layout.addWidget(self.btn_refresh)
-        button_layout.addWidget(self.btn_reset)
+        button_layout.addWidget(self.btn_load_slot)
+        button_layout.addWidget(self.btn_save_slot)
         button_layout.addStretch()
         button_layout.addWidget(self.btn_apply)
         
@@ -152,8 +277,9 @@ class CameraSettingsWidget(QWidget):
         
         # Connect signals
         self.btn_refresh.clicked.connect(self.load_settings)
+        self.btn_load_slot.clicked.connect(self.show_slot_selection_dialog)
+        self.btn_save_slot.clicked.connect(self.save_to_slot_dialog)
         self.btn_apply.clicked.connect(self.apply_settings)
-        self.btn_reset.clicked.connect(self.reset_to_defaults)
         
         # Enable/disable controls based on auto settings
         self.chk_ae.toggled.connect(self._update_control_states)
@@ -179,6 +305,23 @@ class CameraSettingsWidget(QWidget):
     def _update_ui_from_settings(self, settings):
         """Update UI controls from settings dictionary."""
         try:
+            # Update settings name and resolution
+            self.settings_name.setText(settings.get('SettingsName', 'Basic'))
+            resolution = settings.get('Resolution', '1920x1080')
+            
+            # Try to find exact match first (with aspect ratio)
+            index = self.resolution_combo.findText(resolution)
+            if index < 0:
+                # If not found, try to find by resolution part only
+                for i in range(self.resolution_combo.count()):
+                    text = self.resolution_combo.itemText(i)
+                    if text.startswith(resolution):
+                        index = i
+                        break
+            
+            if index >= 0:
+                self.resolution_combo.setCurrentIndex(index)
+            
             # Update checkbox states
             self.chk_ae.setChecked(bool(settings.get('AeEnable', True)))
             self.chk_awb.setChecked(bool(settings.get('AwbEnable', True)))
@@ -274,8 +417,14 @@ class CameraSettingsWidget(QWidget):
         self.status_label.setText("Applying settings...")
         self.status_label.setStyleSheet("QLabel { color: blue; font-weight: bold; }")
         
+        # Extract resolution from display text (remove aspect ratio)
+        resolution_text = self.resolution_combo.currentText()
+        resolution = resolution_text.split(' ')[0] if ' ' in resolution_text else resolution_text
+        
         # Collect all settings
         settings_to_update = [
+            ("CameraSettings", "SettingsName", self.settings_name.text()),
+            ("CameraSettings", "Resolution", resolution),
             ("CameraSettings", "AeEnable", str(int(self.chk_ae.isChecked()))),
             ("CameraSettings", "AwbEnable", str(int(self.chk_awb.isChecked()))),
             ("CameraSettings", "ExposureTime", str(int(self.exp_time.value()))),
@@ -409,19 +558,96 @@ class CameraSettingsWidget(QWidget):
             self.status_label.setText(f"Failed to apply setting: {message}")
             self.status_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
     
-    def reset_to_defaults(self):
-        """Reset all settings to default values."""
-        self.chk_ae.setChecked(True)
-        self.chk_awb.setChecked(True)
-        self.exp_time.setValue(10000)
-        self.gain.setValue(1.0)
-        self.exp_value.setValue(0.0)
-        self.red_gain.setValue(1.0)
-        self.blue_gain.setValue(1.0)
-        
-        self._update_control_states()
-        self.status_label.setText("Reset to default values")
-        self.status_label.setStyleSheet("QLabel { color: orange; font-weight: bold; }")
+    def show_slot_selection_dialog(self):
+        """Show dialog for selecting a settings slot to load."""
+        try:
+            dialog = SettingsSlotDialog(self)
+            dialog.slot_selected.connect(self.load_settings_from_slot)
+            dialog.exec_()
+        except Exception as e:
+            self.status_label.setText(f"Error opening slot dialog: {str(e)}")
+            self.status_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
+    
+    def load_settings_from_slot(self, slot_id):
+        """Load settings from a specific slot."""
+        try:
+            import sys
+            import os
+            db_path = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'RaspberryPi', 'services')
+            if db_path not in sys.path:
+                sys.path.insert(0, db_path)
+            
+            from database_service import db_service
+            settings = db_service.get_camera_settings_by_slot(slot_id)
+            
+            self.current_slot_id = slot_id
+            self.current_settings = settings
+            self._update_ui_from_settings(settings)
+            
+            slot_name = settings.get('SettingsName', f"Slot {slot_id}")
+            self.status_label.setText(f"Loaded settings from: {slot_name}")
+            self.status_label.setStyleSheet("QLabel { color: green; font-weight: bold; }")
+            
+            # Emit signal that slot has changed
+            self.slot_changed.emit(slot_id)
+            
+        except Exception as e:
+            self.status_label.setText(f"Error loading slot {slot_id}: {str(e)}")
+            self.status_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
+    
+    def save_to_slot_dialog(self):
+        """Show dialog for selecting a slot to save current settings."""
+        try:
+            dialog = SettingsSlotDialog(self)
+            dialog.setWindowTitle("Save to Settings Slot")
+            dialog.slot_selected.connect(self.save_current_settings_to_slot)
+            dialog.exec_()
+        except Exception as e:
+            self.status_label.setText(f"Error opening save dialog: {str(e)}")
+            self.status_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
+    
+    def save_current_settings_to_slot(self, slot_id):
+        """Save current settings to a specific slot."""
+        try:
+            import sys
+            import os
+            db_path = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'RaspberryPi', 'services')
+            if db_path not in sys.path:
+                sys.path.insert(0, db_path)
+            
+            from database_service import db_service
+            
+            # Extract resolution from display text (remove aspect ratio)
+            resolution_text = self.resolution_combo.currentText()
+            resolution = resolution_text.split(' ')[0] if ' ' in resolution_text else resolution_text
+            
+            # Collect current settings
+            settings = {
+                'SettingsName': self.settings_name.text() or f"Slot {slot_id}",
+                'Resolution': resolution,
+                'AeEnable': self.chk_ae.isChecked(),
+                'AwbEnable': self.chk_awb.isChecked(),
+                'ExposureTime': self.exp_time.value(),
+                'AnalogueGain': self.gain.value(),
+                'ExposureValue': self.exp_value.value(),
+                'RedGain': self.red_gain.value(),
+                'BlueGain': self.blue_gain.value()
+            }
+            
+            success, message = db_service.save_camera_settings_to_slot(slot_id, settings)
+            
+            if success:
+                self.current_slot_id = slot_id
+                slot_name = settings['SettingsName']
+                self.status_label.setText(f"Settings saved to slot {slot_id}: {slot_name}")
+                self.status_label.setStyleSheet("QLabel { color: green; font-weight: bold; }")
+            else:
+                self.status_label.setText(f"Error saving to slot {slot_id}: {message}")
+                self.status_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
+                
+        except Exception as e:
+            self.status_label.setText(f"Error saving to slot {slot_id}: {str(e)}")
+            self.status_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
 
 
 class SpectrometerSettingsWidget(QWidget):
