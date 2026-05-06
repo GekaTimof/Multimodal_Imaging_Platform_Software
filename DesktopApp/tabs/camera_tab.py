@@ -10,8 +10,8 @@ Features:
 - Save directory management
 """
 
+from PyQt5.QtWidgets import QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout, QFileDialog, QMessageBox, QScrollArea
 from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtWidgets import QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout, QFileDialog, QMessageBox
 from PyQt5.QtGui import QPixmap
 from DesktopApp.threads.camera_thread import CameraThread
 from DesktopApp.objects.Interface_text import Interface_text
@@ -68,7 +68,7 @@ class CameraTab(QWidget):
         self.thread = None
         self.current_settings_slot = 0  # Default to slot 0 (Basic)
 
-        # Upper control panel (basic camera controls)
+        # Upper control panel (basic camera controls) with scroll
         upper_control_layout = QVBoxLayout()
         upper_control_layout.addWidget(self.start_button)
         upper_control_layout.addWidget(self.stop_button)
@@ -78,19 +78,36 @@ class CameraTab(QWidget):
         upper_control_layout.addWidget(self.save_image_button)
         upper_control_layout.addWidget(self.status_label)
         upper_control_layout.addStretch()  # Push buttons to top
+        
+        # Create scroll area for upper controls
+        upper_scroll_area = QScrollArea()
+        upper_scroll_area.setWidgetResizable(True)
+        upper_scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        upper_scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        
+        upper_widget = QWidget()
+        upper_widget.setLayout(upper_control_layout)
+        upper_scroll_area.setWidget(upper_widget)
 
-        # Lower panel with device settings (tabbed interface)
+        # Lower panel with device settings (tabbed interface) with scroll
         self.device_settings_widget = DeviceSettingsWidget()
+        
+        # Create scroll area for device settings
+        lower_scroll_area = QScrollArea()
+        lower_scroll_area.setWidgetResizable(True)
+        lower_scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        lower_scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        lower_scroll_area.setWidget(self.device_settings_widget)
 
-        # Right panel layout (split into upper and lower parts)
+        # Right panel layout (split into upper and lower parts with 2:3 ratio)
         right_panel_layout = QVBoxLayout()
-        right_panel_layout.addLayout(upper_control_layout, 1)  # Upper part takes 1/3 space
-        right_panel_layout.addWidget(self.device_settings_widget, 2)  # Lower part takes 2/3 space
+        right_panel_layout.addWidget(upper_scroll_area, 2)  # Upper part takes 2/5 space
+        right_panel_layout.addWidget(lower_scroll_area, 3)  # Lower part takes 3/5 space
 
-        # Main horizontal layout (8:2 ratio - more space for video)
+        # Main horizontal layout (3:1 ratio - more space for video)
         main_layout = QHBoxLayout(self)
-        main_layout.addWidget(self.video_label, 8)  # Stretch factor 8 for video
-        main_layout.addLayout(right_panel_layout, 2)    # Stretch factor 2 for controls
+        main_layout.addWidget(self.video_label, 3)  # Stretch factor 3 for video
+        main_layout.addLayout(right_panel_layout, 1)    # Stretch factor 1 for controls
 
         # Connect settings updated signal
         self.device_settings_widget.settings_updated.connect(self.on_settings_updated)
