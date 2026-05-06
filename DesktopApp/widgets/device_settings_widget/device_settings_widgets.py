@@ -1,10 +1,10 @@
 import requests
 import json
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QTabWidget, QGroupBox, 
+    QWidget, QVBoxLayout, QHBoxLayout, 
     QLabel, QSpinBox, QDoubleSpinBox, QCheckBox, QPushButton, 
     QGridLayout, QComboBox, QLineEdit, QDialog, QDialogButtonBox,
-    QListWidget, QListWidgetItem
+    QListWidget, QListWidgetItem, QStackedWidget
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QFont
@@ -19,7 +19,7 @@ class SettingsSlotDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Camera Settings Slots")
         self.setModal(True)
-        self.resize(400, 300)
+        self.resize(800, 900)  # 2x wider (400->800) and 3x taller (300->900)
         self.slots_data = {}
         self._build_ui()
         self._load_slots()
@@ -57,28 +57,54 @@ class SettingsSlotDialog(QDialog):
             
             # Populate list widget
             self.slots_list.clear()
-            for slot_id, settings in self.slots_data.items():
+            sorted_slots = sorted(self.slots_data.items())
+            
+            for i, (slot_id, settings) in enumerate(sorted_slots):
                 name = settings.get('SettingsName', f"Slot {slot_id}")
-                resolution = settings.get('Resolution', '1920x1080')
+                photo_resolution = settings.get('PhotoResolution', '3280x2464')
+                video_resolution = settings.get('VideoResolution', '1920x1080')
                 
                 if slot_id == 0:
-                    display_text = f"Slot {slot_id} - {name} (Basic) - {resolution}"
+                    display_text = f"Slot {slot_id} - {name} (Basic)\n  Photo: {photo_resolution} | Video: {video_resolution}"
                 else:
-                    display_text = f"Slot {slot_id} - {name} - {resolution}"
+                    display_text = f"Slot {slot_id} - {name}\n  Photo: {photo_resolution} | Video: {video_resolution}"
                 
                 item = QListWidgetItem(display_text)
                 item.setData(Qt.UserRole, slot_id)
                 self.slots_list.addItem(item)
                 
+                # Add visual separator after each item except the last one
+                if i < len(sorted_slots) - 1:
+                    separator = QListWidgetItem("")
+                    separator.setFlags(Qt.NoItemFlags)  # Make it non-selectable
+                    separator.setSizeHint(separator.sizeHint().expandedTo(separator.sizeHint() + 
+                                   separator.sizeHint().expandedTo(separator.sizeHint())))
+                    # Create a visual separator using a line character
+                    separator.setText("─" * 40)  # Horizontal line
+                    separator.setForeground(separator.foreground().color().lighter(150))  # Make it lighter
+                    self.slots_list.addItem(separator)
+                
         except Exception as e:
+            print(f"Error loading slots: {e}")
             # Fallback: create empty slots
             self.slots_list.clear()
             for slot_id in range(10):
                 name = "Basic" if slot_id == 0 else f"Custom {slot_id}"
-                display_text = f"Slot {slot_id} - {name} - 1920x1080"
+                display_text = f"Slot {slot_id} - {name}\n  Photo: 3280x2464 | Video: 1920x1080"
                 item = QListWidgetItem(display_text)
                 item.setData(Qt.UserRole, slot_id)
                 self.slots_list.addItem(item)
+                
+                # Add visual separator after each item except the last one
+                if slot_id < 9:
+                    separator = QListWidgetItem("")
+                    separator.setFlags(Qt.NoItemFlags)  # Make it non-selectable
+                    separator.setSizeHint(separator.sizeHint().expandedTo(separator.sizeHint() + 
+                                   separator.sizeHint().expandedTo(separator.sizeHint())))
+                    # Create a visual separator using a line character
+                    separator.setText("─" * 40)  # Horizontal line
+                    separator.setForeground(separator.foreground().color().lighter(150))  # Make it lighter
+                    self.slots_list.addItem(separator)
     
     def _on_slot_selected(self, item):
         """Handle slot selection."""
@@ -154,6 +180,9 @@ class CameraSettingsWidget(QWidget):
     # Signal emitted when settings slot is changed
     slot_changed = pyqtSignal(int)
     
+    # Signal emitted when settings are updated
+    settings_updated = pyqtSignal()
+    
     def __init__(self):
         super().__init__()
         self.api_base_url = "http://localhost:8000/api"
@@ -167,19 +196,33 @@ class CameraSettingsWidget(QWidget):
     def _build_ui(self):
         layout = QVBoxLayout(self)
         
-        # Camera settings group
-        settings_group = QGroupBox("Camera Parameters")
-        settings_layout = QGridLayout(settings_group)
+        # Camera settings layout (no group box)
+        settings_layout = QGridLayout()
         
         # Settings Name
         self.settings_name = QLineEdit()
         self.settings_name.setPlaceholderText("Enter settings name...")
-        settings_layout.addWidget(QLabel("Settings Name:"), 0, 0)
-        settings_layout.addWidget(self.settings_name, 0, 1)
+        settings_layout.addWidget(self.settings_name, 0, 0, 1, 2)
         
-        # Resolution
-        self.resolution_combo = QComboBox()
-        self.resolution_combo.addItems([
+        # Photo Resolution
+        self.photo_resolution_combo = QComboBox()
+        self.photo_resolution_combo.addItems([
+            '640x480 (4:3)',      # VGA
+            '800x600 (4:3)',      # SVGA  
+            '1024x768 (4:3)',     # XGA
+            '1296x972 (4:3)',     # 4:3 mid-resolution
+            '1640x1232 (4:3)',    # 4:3 aspect ratio
+            '1920x1080 (16:9)',   # 1080p FHD
+            '2592x1944 (4:3)',    # High 4:3 resolution
+            '3280x2464 (4:3)',    # Full 8MP resolution
+            '4608x2592 (16:9)',   # Full 12MP resolution
+        ])
+        self.photo_resolution_combo.setCurrentText('3280x2464 (4:3)')
+        settings_layout.addWidget(self.photo_resolution_combo, 1, 0, 1, 2)
+        
+        # Video Resolution
+        self.video_resolution_combo = QComboBox()
+        self.video_resolution_combo.addItems([
             '640x480 (4:3)',      # VGA
             '800x600 (4:3)',      # SVGA  
             '1024x768 (4:3)',     # XGA
@@ -189,74 +232,64 @@ class CameraSettingsWidget(QWidget):
             '1920x1080 (16:9)',   # 1080p FHD
             '2304x1296 (16:9)',   # 16:9 aspect ratio
             '2592x1944 (4:3)',    # High 4:3 resolution
-            '3280x2464 (4:3)',    # Full 8MP resolution
-            '4608x2592 (16:9)',   # Full 12MP resolution
         ])
-        self.resolution_combo.setCurrentText('1920x1080 (16:9)')
-        settings_layout.addWidget(QLabel("Resolution:"), 1, 0)
-        settings_layout.addWidget(self.resolution_combo, 1, 1)
+        self.video_resolution_combo.setCurrentText('1920x1080 (16:9)')
+        settings_layout.addWidget(self.video_resolution_combo, 2, 0, 1, 2)
         
         # Auto Exposure
         self.chk_ae = QCheckBox("Auto Exposure")
         self.chk_ae.setChecked(True)
-        settings_layout.addWidget(QLabel("Auto Exposure:"), 2, 0)
-        settings_layout.addWidget(self.chk_ae, 2, 1)
+        settings_layout.addWidget(self.chk_ae, 3, 0, 1, 2)
         
         # Auto White Balance
         self.chk_awb = QCheckBox("Auto White Balance")
         self.chk_awb.setChecked(True)
-        settings_layout.addWidget(QLabel("Auto WB:"), 3, 0)
-        settings_layout.addWidget(self.chk_awb, 3, 1)
+        settings_layout.addWidget(self.chk_awb, 4, 0, 1, 2)
         
         # Exposure Time
         self.exp_time = QSpinBox()
         self.exp_time.setRange(100, 3000000)
         self.exp_time.setValue(10000)
         self.exp_time.setSuffix(" μs")
-        settings_layout.addWidget(QLabel("Exposure Time:"), 4, 0)
-        settings_layout.addWidget(self.exp_time, 4, 1)
+        settings_layout.addWidget(self.exp_time, 5, 0, 1, 2)
         
         # Analogue Gain
         self.gain = QDoubleSpinBox()
         self.gain.setRange(0.0, 32.0)
         self.gain.setValue(1.0)
         self.gain.setDecimals(2)
-        settings_layout.addWidget(QLabel("Analogue Gain:"), 5, 0)
-        settings_layout.addWidget(self.gain, 5, 1)
+        settings_layout.addWidget(self.gain, 6, 0, 1, 2)
         
         # Exposure Value
         self.exp_value = QDoubleSpinBox()
         self.exp_value.setRange(-10.0, 10.0)
         self.exp_value.setValue(0.0)
         self.exp_value.setDecimals(2)
-        settings_layout.addWidget(QLabel("Exposure Value:"), 6, 0)
-        settings_layout.addWidget(self.exp_value, 6, 1)
+        settings_layout.addWidget(self.exp_value, 7, 0, 1, 2)
         
         # Red Gain
         self.red_gain = QDoubleSpinBox()
         self.red_gain.setRange(0.0, 8.0)
         self.red_gain.setValue(1.0)
         self.red_gain.setDecimals(2)
-        settings_layout.addWidget(QLabel("Red Gain:"), 7, 0)
-        settings_layout.addWidget(self.red_gain, 7, 1)
+        settings_layout.addWidget(self.red_gain, 8, 0, 1, 2)
         
         # Blue Gain
         self.blue_gain = QDoubleSpinBox()
         self.blue_gain.setRange(0.0, 8.0)
         self.blue_gain.setValue(1.0)
         self.blue_gain.setDecimals(2)
-        settings_layout.addWidget(QLabel("Blue Gain:"), 8, 0)
-        settings_layout.addWidget(self.blue_gain, 8, 1)
+        settings_layout.addWidget(self.blue_gain, 9, 0, 1, 2)
         
-        layout.addWidget(settings_group)
+        layout.addLayout(settings_layout)
         
         # Buttons
         button_layout = QHBoxLayout()
         
-        self.btn_refresh = QPushButton("Refresh")
-        self.btn_load_slot = QPushButton("Load Slot")
-        self.btn_save_slot = QPushButton("Save to Slot")
-        self.btn_apply = QPushButton("Apply Changes")
+        self.btn_refresh = QPushButton("↻")
+        self.btn_load_slot = QPushButton("Load")
+        self.btn_save_slot = QPushButton("Save")
+        self.btn_apply = QPushButton("Apply")
         
         button_layout.addWidget(self.btn_refresh)
         button_layout.addWidget(self.btn_load_slot)
@@ -305,22 +338,32 @@ class CameraSettingsWidget(QWidget):
     def _update_ui_from_settings(self, settings):
         """Update UI controls from settings dictionary."""
         try:
-            # Update settings name and resolution
+            # Update settings name and resolutions
             self.settings_name.setText(settings.get('SettingsName', 'Basic'))
-            resolution = settings.get('Resolution', '1920x1080')
             
-            # Try to find exact match first (with aspect ratio)
-            index = self.resolution_combo.findText(resolution)
+            # Update photo resolution
+            photo_resolution = settings.get('PhotoResolution', '3280x2464')
+            index = self.photo_resolution_combo.findText(photo_resolution)
             if index < 0:
-                # If not found, try to find by resolution part only
-                for i in range(self.resolution_combo.count()):
-                    text = self.resolution_combo.itemText(i)
-                    if text.startswith(resolution):
+                for i in range(self.photo_resolution_combo.count()):
+                    text = self.photo_resolution_combo.itemText(i)
+                    if text.startswith(photo_resolution):
                         index = i
                         break
-            
             if index >= 0:
-                self.resolution_combo.setCurrentIndex(index)
+                self.photo_resolution_combo.setCurrentIndex(index)
+            
+            # Update video resolution
+            video_resolution = settings.get('VideoResolution', '1920x1080')
+            index = self.video_resolution_combo.findText(video_resolution)
+            if index < 0:
+                for i in range(self.video_resolution_combo.count()):
+                    text = self.video_resolution_combo.itemText(i)
+                    if text.startswith(video_resolution):
+                        index = i
+                        break
+            if index >= 0:
+                self.video_resolution_combo.setCurrentIndex(index)
             
             # Update checkbox states
             self.chk_ae.setChecked(bool(settings.get('AeEnable', True)))
@@ -418,13 +461,17 @@ class CameraSettingsWidget(QWidget):
         self.status_label.setStyleSheet("QLabel { color: blue; font-weight: bold; }")
         
         # Extract resolution from display text (remove aspect ratio)
-        resolution_text = self.resolution_combo.currentText()
-        resolution = resolution_text.split(' ')[0] if ' ' in resolution_text else resolution_text
+        photo_resolution_text = self.photo_resolution_combo.currentText()
+        photo_resolution = photo_resolution_text.split(' ')[0] if ' ' in photo_resolution_text else photo_resolution_text
+        
+        video_resolution_text = self.video_resolution_combo.currentText()
+        video_resolution = video_resolution_text.split(' ')[0] if ' ' in video_resolution_text else video_resolution_text
         
         # Collect all settings
         settings_to_update = [
             ("CameraSettings", "SettingsName", self.settings_name.text()),
-            ("CameraSettings", "Resolution", resolution),
+            ("CameraSettings", "PhotoResolution", photo_resolution),
+            ("CameraSettings", "VideoResolution", video_resolution),
             ("CameraSettings", "AeEnable", str(int(self.chk_ae.isChecked()))),
             ("CameraSettings", "AwbEnable", str(int(self.chk_awb.isChecked()))),
             ("CameraSettings", "ExposureTime", str(int(self.exp_time.value()))),
@@ -443,18 +490,7 @@ class CameraSettingsWidget(QWidget):
             self.status_label.setText("All settings applied successfully")
             self.status_label.setStyleSheet("QLabel { color: green; font-weight: bold; }")
             # Emit signal that settings were updated
-            try:
-                # Try to find the DeviceSettingsWidget parent
-                parent = self.parent()
-                while parent and not hasattr(parent, 'settings_updated'):
-                    parent = parent.parent()
-                
-                if parent and hasattr(parent, 'settings_updated'):
-                    parent.settings_updated.emit()
-                else:
-                    pass  # Could not find parent with signal
-            except Exception:
-                pass  # Error emitting signal
+            self.settings_updated.emit()
             return
         
         table_name, parameter, value = settings_list[index]
@@ -517,18 +553,7 @@ class CameraSettingsWidget(QWidget):
             self.status_label.setText("All settings applied successfully")
             self.status_label.setStyleSheet("QLabel { color: green; font-weight: bold; }")
             # Emit signal that settings were updated
-            try:
-                # Try to find the DeviceSettingsWidget parent
-                parent = self.parent()
-                while parent and not hasattr(parent, 'settings_updated'):
-                    parent = parent.parent()
-                
-                if parent and hasattr(parent, 'settings_updated'):
-                    parent.settings_updated.emit()
-                else:
-                    pass  # Could not find parent with signal
-            except Exception:
-                pass  # Error emitting signal
+            self.settings_updated.emit()
             return
         
         table_name, parameter, value = settings_list[index]
@@ -618,13 +643,17 @@ class CameraSettingsWidget(QWidget):
             from database_service import db_service
             
             # Extract resolution from display text (remove aspect ratio)
-            resolution_text = self.resolution_combo.currentText()
-            resolution = resolution_text.split(' ')[0] if ' ' in resolution_text else resolution_text
+            photo_resolution_text = self.photo_resolution_combo.currentText()
+            photo_resolution = photo_resolution_text.split(' ')[0] if ' ' in photo_resolution_text else photo_resolution_text
+            
+            video_resolution_text = self.video_resolution_combo.currentText()
+            video_resolution = video_resolution_text.split(' ')[0] if ' ' in video_resolution_text else video_resolution_text
             
             # Collect current settings
             settings = {
                 'SettingsName': self.settings_name.text() or f"Slot {slot_id}",
-                'Resolution': resolution,
+                'PhotoResolution': photo_resolution,
+                'VideoResolution': video_resolution,
                 'AeEnable': self.chk_ae.isChecked(),
                 'AwbEnable': self.chk_awb.isChecked(),
                 'ExposureTime': self.exp_time.value(),
@@ -689,7 +718,7 @@ class FileSettingsWidget(QWidget):
 
 
 class DeviceSettingsWidget(QWidget):
-    """Main device settings widget with tabbed interface."""
+    """Main device settings widget with dropdown selector."""
     
     # Signal emitted when settings are updated
     settings_updated = pyqtSignal()
@@ -701,21 +730,46 @@ class DeviceSettingsWidget(QWidget):
     def _build_ui(self):
         layout = QVBoxLayout(self)
         
-        # Create tab widget
-        self.tab_widget = QTabWidget()
+        # Create dropdown for settings type selection
+        self.settings_type_combo = QComboBox()
+        self.settings_type_combo.addItems(["Camera", "Spectrometer", "File Settings"])
+        self.settings_type_combo.currentTextChanged.connect(self._on_settings_type_changed)
+        self.settings_type_combo.setMaximumWidth(200)  # Limit width for better layout
+        layout.addWidget(self.settings_type_combo)
         
-        # Add tabs
+        # Create stacked widget for different settings
+        self.stacked_widget = QStackedWidget()
+        
+        # Add settings widgets
         self.camera_tab = CameraSettingsWidget()
         self.spectrometer_tab = SpectrometerSettingsWidget()
         self.file_tab = FileSettingsWidget()
         
-        self.tab_widget.addTab(self.camera_tab, "Camera")
-        self.tab_widget.addTab(self.spectrometer_tab, "Spectrometer")
-        self.tab_widget.addTab(self.file_tab, "File Settings")
+        self.stacked_widget.addWidget(self.camera_tab)
+        self.stacked_widget.addWidget(self.spectrometer_tab)
+        self.stacked_widget.addWidget(self.file_tab)
         
-        layout.addWidget(self.tab_widget)
+        layout.addWidget(self.stacked_widget)
         
         # Set font for better readability
         font = QFont()
         font.setPointSize(10)
         self.setFont(font)
+        
+        # Connect camera settings signals
+        self.camera_tab.settings_updated.connect(self.settings_updated.emit)
+        self.camera_tab.slot_changed.connect(self._on_slot_changed)
+    
+    def _on_settings_type_changed(self, text):
+        """Handle settings type dropdown change."""
+        if text == "Camera":
+            self.stacked_widget.setCurrentWidget(self.camera_tab)
+        elif text == "Spectrometer":
+            self.stacked_widget.setCurrentWidget(self.spectrometer_tab)
+        elif text == "File Settings":
+            self.stacked_widget.setCurrentWidget(self.file_tab)
+    
+    def _on_slot_changed(self, slot_id):
+        """Forward slot changed signal."""
+        # This will be handled by parent widget
+        pass

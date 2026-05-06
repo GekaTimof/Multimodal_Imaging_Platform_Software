@@ -16,6 +16,8 @@ CREATE TABLE IF NOT EXISTS CameraSettings (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     SettingsName TEXT NOT NULL DEFAULT 'Basic',
     Resolution TEXT NOT NULL DEFAULT '1920x1080',
+    PhotoResolution TEXT NOT NULL DEFAULT '3280x2464',
+    VideoResolution TEXT NOT NULL DEFAULT '1920x1080',
     AeEnable INTEGER NOT NULL DEFAULT 1 CHECK(AeEnable IN (0, 1)),
     AwbEnable INTEGER NOT NULL DEFAULT 1 CHECK(AwbEnable IN (0, 1)),
     ExposureTime INTEGER NOT NULL DEFAULT 10000 CHECK(ExposureTime BETWEEN 100 AND 3000000),
@@ -46,12 +48,20 @@ CREATE TABLE IF NOT EXISTS PositionerSettings (
 )
 """)
 
+# Check if PhotoResolution and VideoResolution columns exist, add them if not
+cursor.execute("PRAGMA table_info(CameraSettings)")
+columns = [row[1] for row in cursor.fetchall()]
+if 'PhotoResolution' not in columns:
+    cursor.execute("ALTER TABLE CameraSettings ADD COLUMN PhotoResolution TEXT NOT NULL DEFAULT '3280x2464'")
+if 'VideoResolution' not in columns:
+    cursor.execute("ALTER TABLE CameraSettings ADD COLUMN VideoResolution TEXT NOT NULL DEFAULT '1920x1080'")
+
 # Insert default camera settings for slot 0 if not exists
 cursor.execute("SELECT COUNT(*) FROM CameraSettings WHERE id = 0")
 if cursor.fetchone()[0] == 0:
     cursor.execute("""
-    INSERT INTO CameraSettings (id, SettingsName, Resolution, AeEnable, AwbEnable, ExposureTime, AnalogueGain, ExposureValue, RedGain, BlueGain)
-    VALUES (0, 'Basic', '1920x1080', 1, 1, 10000, 1.0, 0.0, 1.0, 1.0)
+    INSERT INTO CameraSettings (id, SettingsName, Resolution, PhotoResolution, VideoResolution, AeEnable, AwbEnable, ExposureTime, AnalogueGain, ExposureValue, RedGain, BlueGain)
+    VALUES (0, 'Basic', '1920x1080', '3280x2464', '1920x1080', 1, 1, 10000, 1.0, 0.0, 1.0, 1.0)
     """)
 
 conn.commit()

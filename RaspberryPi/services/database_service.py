@@ -13,7 +13,8 @@ class DatabaseService:
     # Camera parameter validation rules
     CAMERA_VALIDATION_RULES = {
         'SettingsName': {'type': str, 'range': None},
-        'Resolution': {'type': str, 'range': None},
+        'PhotoResolution': {'type': str, 'range': None},
+        'VideoResolution': {'type': str, 'range': None},
         'AeEnable': {'type': bool, 'range': None},
         'AwbEnable': {'type': bool, 'range': None},
         'ExposureTime': {'type': int, 'range': (100, 3000000)},
@@ -87,9 +88,9 @@ class DatabaseService:
                 if not isinstance(value, str):
                     return False, f"Expected string, got {type(value).__name__}"
                 
-                # Special validation for Resolution
-                if parameter == 'Resolution' and value not in self.AVAILABLE_RESOLUTIONS:
-                    return False, f"Invalid resolution: {value}. Available: {', '.join(self.AVAILABLE_RESOLUTIONS)}"
+                # Special validation for Resolution parameters
+                if parameter in ['PhotoResolution', 'VideoResolution'] and value not in self.AVAILABLE_RESOLUTIONS:
+                    return False, f"Invalid {parameter}: {value}. Available: {', '.join(self.AVAILABLE_RESOLUTIONS)}"
                 
                 # Special validation for SettingsName
                 if parameter == 'SettingsName':
@@ -222,7 +223,8 @@ class DatabaseService:
                 default_settings = {
                     'id': slot_id,
                     'SettingsName': default_name,
-                    'Resolution': '1920x1080',
+                    'PhotoResolution': '3280x2464',
+                    'VideoResolution': '1920x1080',
                     'AeEnable': True,
                     'AwbEnable': True,
                     'ExposureTime': 10000,
@@ -235,10 +237,11 @@ class DatabaseService:
                 # Insert the default settings into database
                 cursor.execute("""
                 INSERT OR IGNORE INTO CameraSettings 
-                (id, SettingsName, Resolution, AeEnable, AwbEnable, ExposureTime, AnalogueGain, ExposureValue, RedGain, BlueGain)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (id, SettingsName, PhotoResolution, VideoResolution, AeEnable, AwbEnable, ExposureTime, AnalogueGain, ExposureValue, RedGain, BlueGain)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
-                    slot_id, default_name, default_settings['Resolution'],
+                    slot_id, default_name,
+                    default_settings['PhotoResolution'], default_settings['VideoResolution'],
                     int(default_settings['AeEnable']), int(default_settings['AwbEnable']),
                     default_settings['ExposureTime'], default_settings['AnalogueGain'],
                     default_settings['ExposureValue'], default_settings['RedGain'], default_settings['BlueGain']
@@ -269,13 +272,14 @@ class DatabaseService:
                 # Update existing slot
                 query = """
                 UPDATE CameraSettings 
-                SET SettingsName = ?, Resolution = ?, AeEnable = ?, AwbEnable = ?,
+                SET SettingsName = ?, PhotoResolution = ?, VideoResolution = ?, AeEnable = ?, AwbEnable = ?,
                     ExposureTime = ?, AnalogueGain = ?, ExposureValue = ?, RedGain = ?, BlueGain = ?
                 WHERE id = ?
                 """
                 cursor.execute(query, (
                     settings.get('SettingsName', f"Slot {slot_id}"),
-                    settings.get('Resolution', '1920x1080'),
+                    settings.get('PhotoResolution', '3280x2464'),
+                    settings.get('VideoResolution', '1920x1080'),
                     int(settings.get('AeEnable', True)),
                     int(settings.get('AwbEnable', True)),
                     settings.get('ExposureTime', 10000),
@@ -289,13 +293,14 @@ class DatabaseService:
                 # Insert new slot
                 query = """
                 INSERT INTO CameraSettings 
-                (id, SettingsName, Resolution, AeEnable, AwbEnable, ExposureTime, AnalogueGain, ExposureValue, RedGain, BlueGain)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (id, SettingsName, PhotoResolution, VideoResolution, AeEnable, AwbEnable, ExposureTime, AnalogueGain, ExposureValue, RedGain, BlueGain)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """
                 cursor.execute(query, (
                     slot_id,
                     settings.get('SettingsName', f"Slot {slot_id}"),
-                    settings.get('Resolution', '1920x1080'),
+                    settings.get('PhotoResolution', '3280x2464'),
+                    settings.get('VideoResolution', '1920x1080'),
                     int(settings.get('AeEnable', True)),
                     int(settings.get('AwbEnable', True)),
                     settings.get('ExposureTime', 10000),
