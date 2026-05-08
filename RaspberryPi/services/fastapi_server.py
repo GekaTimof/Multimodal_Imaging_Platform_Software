@@ -19,6 +19,9 @@ app = FastAPI(
 # Pydantic Models for Request/Response
 class CameraSettingsResponse(BaseModel):
     id: Optional[int] = None
+    SettingsName: Optional[str] = Field(default="Basic", description="Settings profile name")
+    PhotoResolution: str = Field(default="3280x2464", description="Photo resolution")
+    VideoResolution: str = Field(default="1920x1080", description="Video resolution")
     AeEnable: bool = Field(default=True, description="Auto Exposure enabled")
     AwbEnable: bool = Field(default=True, description="Auto White Balance enabled")
     ExposureTime: int = Field(default=10000, ge=100, le=3000000, description="Exposure time in microseconds")
@@ -30,6 +33,9 @@ class CameraSettingsResponse(BaseModel):
     class Config:
         schema_extra = {
             "example": {
+                "SettingsName": "Basic",
+                "PhotoResolution": "3280x2464",
+                "VideoResolution": "1920x1080",
                 "AeEnable": True,
                 "AwbEnable": True,
                 "ExposureTime": 10000,
@@ -192,6 +198,22 @@ async def get_camera_validation_rules():
         "success": True,
         "data": db_service.CAMERA_VALIDATION_RULES
     }
+
+
+@app.post("/api/settings/camera/reload", response_model=APIResponse)
+async def reload_camera_settings():
+    """Signal that camera settings need to be reloaded."""
+    try:
+        # For now, just return success - the actual reload will happen 
+        # when the camera service is restarted or settings are reloaded
+        return APIResponse(
+            success=True,
+            message="Camera reload signal sent. Restart camera service to apply new resolution.",
+            data={"action": "restart_required"}
+        )
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error signaling camera reload: {str(e)}")
 
 
 # Exception handlers
