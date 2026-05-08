@@ -28,5 +28,21 @@
     "No_video": "Нет видео",
     "Warning_Title": "Предупреждение",
     "Warning_Select_Out_Of_Home": "Пожалуйста, выберите директорию в вашей домашней папке.",
-    "Warning_Saving_Out_Of_Home": "Нельзя сохранять вне домашней директории."
+    "Warning_Saving_Out_Of_Home": "Нельзя сохранять вне домашней директории.",
+    
+    "Photo_Resolution": "Разрешение фото:",
+    "Video_Resolution": "Разрешение видео:",
+    "Auto_Exposure": "Автоматическая экспозиция",
+    "Auto_White_Balance": "Автоматический баланс белого",
+    "Exposure_Time": "Время экспозиции",
+    "Analogue_Gain": "Аналоговое усиление",
+    "Exposure_Value": "Значение экспозиции",
+    "Red_Gain": "Усиление красного",
+    "Blue_Gain": "Усиление синего",
+    "Settings_Name": "Название настроек:",
+    "Camera_Settings": "Настройки камеры",
+    "Load": "Загрузить",
+    "Save": "Сохранить",
+    "Apply": "Применить",
+    "Refresh": "Обновить"
 }

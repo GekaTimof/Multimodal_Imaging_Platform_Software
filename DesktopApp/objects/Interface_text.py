@@ -145,3 +145,48 @@ class Interface_text():
     def warning_saving_out_of_home(self):
         return self.text_json["Warning_Saving_Out_Of_Home"]
     
+    def photo_resolution(self):
+        return self.text_json["Photo_Resolution"]
+    
+    def video_resolution(self):
+        return self.text_json["Video_Resolution"]
+    
+    def auto_exposure(self):
+        return self.text_json["Auto_Exposure"]
+    
+    def auto_white_balance(self):
+        return self.text_json["Auto_White_Balance"]
+    
+    def exposure_time(self):
+        return self.text_json["Exposure_Time"]
+    
+    def analogue_gain(self):
+        return self.text_json["Analogue_Gain"]
+    
+    def exposure_value(self):
+        return self.text_json["Exposure_Value"]
+    
+    def red_gain(self):
+        return self.text_json["Red_Gain"]
+    
+    def blue_gain(self):
+        return self.text_json["Blue_Gain"]
+    
+    def settings_name(self):
+        return self.text_json["Settings_Name"]
+    
+    def camera_settings(self):
+        return self.text_json["Camera_Settings"]
+    
+    def load(self):
+        return self.text_json["Load"]
+    
+    def save(self):
+        return self.text_json["Save"]
+    
+    def apply(self):
+        return self.text_json["Apply"]
+    
+    def refresh(self):
+        return self.text_json["Refresh"]
+    

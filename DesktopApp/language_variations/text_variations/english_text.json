@@ -28,5 +28,21 @@
     "No_video": "No video",
     "Warning_Title": "Warning",
     "Warning_Select_Out_Of_Home": "Please select a directory within your home folder.",
-    "Warning_Saving_Out_Of_Home": "Cannot save outside home directory."
+    "Warning_Saving_Out_Of_Home": "Cannot save outside home directory.",
+    
+    "Photo_Resolution": "Photo Resolution:",
+    "Video_Resolution": "Video Resolution:",
+    "Auto_Exposure": "Auto Exposure",
+    "Auto_White_Balance": "Auto White Balance",
+    "Exposure_Time": "Exposure Time",
+    "Analogue_Gain": "Analogue Gain",
+    "Exposure_Value": "Exposure Value",
+    "Red_Gain": "Red Gain",
+    "Blue_Gain": "Blue Gain",
+    "Settings_Name": "Settings Name:",
+    "Camera_Settings": "Camera Settings",
+    "Load": "Load",
+    "Save": "Save",
+    "Apply": "Apply",
+    "Refresh": "Refresh"
 }

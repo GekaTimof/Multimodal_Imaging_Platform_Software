@@ -183,8 +183,9 @@ class CameraSettingsWidget(QWidget):
     # Signal emitted when settings are updated
     settings_updated = pyqtSignal()
     
-    def __init__(self):
+    def __init__(self, interface_text=None):
         super().__init__()
+        self.interface_text = interface_text
         self.api_base_url = "http://localhost:8000/api"
         self.current_settings = {}
         self.active_threads = []  # Track active threads
@@ -200,11 +201,19 @@ class CameraSettingsWidget(QWidget):
         settings_layout = QGridLayout()
         
         # Settings Name
+        settings_name_label = QLabel(self.interface_text.settings_name() if self.interface_text else "Settings Name:")
+        settings_name_label.setStyleSheet("QLabel { font-weight: bold; }")
+        settings_layout.addWidget(settings_name_label, 0, 0, 1, 2)
+        
         self.settings_name = QLineEdit()
         self.settings_name.setPlaceholderText("Enter settings name...")
-        settings_layout.addWidget(self.settings_name, 0, 0, 1, 2)
+        settings_layout.addWidget(self.settings_name, 1, 0, 1, 2)
         
         # Photo Resolution
+        photo_resolution_label = QLabel(self.interface_text.photo_resolution() if self.interface_text else "Photo Resolution:")
+        photo_resolution_label.setStyleSheet("QLabel { font-weight: bold; }")
+        settings_layout.addWidget(photo_resolution_label, 2, 0, 1, 2)
+        
         self.photo_resolution_combo = QComboBox()
         self.photo_resolution_combo.addItems([
             '640x480 (4:3)',      # VGA
@@ -218,9 +227,13 @@ class CameraSettingsWidget(QWidget):
             '4608x2592 (16:9)',   # Full 12MP resolution
         ])
         self.photo_resolution_combo.setCurrentText('3280x2464 (4:3)')
-        settings_layout.addWidget(self.photo_resolution_combo, 1, 0, 1, 2)
+        settings_layout.addWidget(self.photo_resolution_combo, 3, 0, 1, 2)
         
         # Video Resolution
+        video_resolution_label = QLabel(self.interface_text.video_resolution() if self.interface_text else "Video Resolution:")
+        video_resolution_label.setStyleSheet("QLabel { font-weight: bold; }")
+        settings_layout.addWidget(video_resolution_label, 4, 0, 1, 2)
+        
         self.video_resolution_combo = QComboBox()
         self.video_resolution_combo.addItems([
             '640x480 (4:3)',      # VGA
@@ -234,62 +247,62 @@ class CameraSettingsWidget(QWidget):
             '2592x1944 (4:3)',    # High 4:3 resolution
         ])
         self.video_resolution_combo.setCurrentText('1920x1080 (16:9)')
-        settings_layout.addWidget(self.video_resolution_combo, 2, 0, 1, 2)
+        settings_layout.addWidget(self.video_resolution_combo, 5, 0, 1, 2)
         
         # Auto Exposure
-        self.chk_ae = QCheckBox("Auto Exposure")
+        self.chk_ae = QCheckBox(self.interface_text.auto_exposure() if self.interface_text else "Auto Exposure")
         self.chk_ae.setChecked(True)
-        settings_layout.addWidget(self.chk_ae, 3, 0, 1, 2)
+        settings_layout.addWidget(self.chk_ae, 6, 0, 1, 2)
         
         # Auto White Balance
-        self.chk_awb = QCheckBox("Auto White Balance")
+        self.chk_awb = QCheckBox(self.interface_text.auto_white_balance() if self.interface_text else "Auto White Balance")
         self.chk_awb.setChecked(True)
-        settings_layout.addWidget(self.chk_awb, 4, 0, 1, 2)
+        settings_layout.addWidget(self.chk_awb, 7, 0, 1, 2)
         
         # Exposure Time
         self.exp_time = QSpinBox()
         self.exp_time.setRange(100, 3000000)
         self.exp_time.setValue(10000)
         self.exp_time.setSuffix(" μs")
-        settings_layout.addWidget(self.exp_time, 5, 0, 1, 2)
+        settings_layout.addWidget(self.exp_time, 8, 0, 1, 2)
         
         # Analogue Gain
         self.gain = QDoubleSpinBox()
         self.gain.setRange(0.0, 32.0)
         self.gain.setValue(1.0)
         self.gain.setDecimals(2)
-        settings_layout.addWidget(self.gain, 6, 0, 1, 2)
+        settings_layout.addWidget(self.gain, 9, 0, 1, 2)
         
         # Exposure Value
         self.exp_value = QDoubleSpinBox()
         self.exp_value.setRange(-10.0, 10.0)
         self.exp_value.setValue(0.0)
         self.exp_value.setDecimals(2)
-        settings_layout.addWidget(self.exp_value, 7, 0, 1, 2)
+        settings_layout.addWidget(self.exp_value, 10, 0, 1, 2)
         
         # Red Gain
         self.red_gain = QDoubleSpinBox()
         self.red_gain.setRange(0.0, 8.0)
         self.red_gain.setValue(1.0)
         self.red_gain.setDecimals(2)
-        settings_layout.addWidget(self.red_gain, 8, 0, 1, 2)
+        settings_layout.addWidget(self.red_gain, 11, 0, 1, 2)
         
         # Blue Gain
         self.blue_gain = QDoubleSpinBox()
         self.blue_gain.setRange(0.0, 8.0)
         self.blue_gain.setValue(1.0)
         self.blue_gain.setDecimals(2)
-        settings_layout.addWidget(self.blue_gain, 9, 0, 1, 2)
+        settings_layout.addWidget(self.blue_gain, 12, 0, 1, 2)
         
         layout.addLayout(settings_layout)
         
         # Buttons
         button_layout = QHBoxLayout()
         
-        self.btn_refresh = QPushButton("↻")
-        self.btn_load_slot = QPushButton("Load")
-        self.btn_save_slot = QPushButton("Save")
-        self.btn_apply = QPushButton("Apply")
+        self.btn_refresh = QPushButton(self.interface_text.refresh() if self.interface_text else "Refresh")
+        self.btn_load_slot = QPushButton(self.interface_text.load() if self.interface_text else "Load")
+        self.btn_save_slot = QPushButton(self.interface_text.save() if self.interface_text else "Save")
+        self.btn_apply = QPushButton(self.interface_text.apply() if self.interface_text else "Apply")
         
         button_layout.addWidget(self.btn_refresh)
         button_layout.addWidget(self.btn_load_slot)
@@ -682,8 +695,9 @@ class CameraSettingsWidget(QWidget):
 class SpectrometerSettingsWidget(QWidget):
     """Widget for spectrometer settings configuration."""
     
-    def __init__(self):
+    def __init__(self, interface_text=None):
         super().__init__()
+        self.interface_text = interface_text
         self._build_ui()
     
     def _build_ui(self):
@@ -701,8 +715,9 @@ class SpectrometerSettingsWidget(QWidget):
 class FileSettingsWidget(QWidget):
     """Widget for file saving settings configuration."""
     
-    def __init__(self):
+    def __init__(self, interface_text=None):
         super().__init__()
+        self.interface_text = interface_text
         self._build_ui()
     
     def _build_ui(self):
@@ -723,8 +738,9 @@ class DeviceSettingsWidget(QWidget):
     # Signal emitted when settings are updated
     settings_updated = pyqtSignal()
     
-    def __init__(self, parent=None):
+    def __init__(self, interface_text=None, parent=None):
         super().__init__(parent)
+        self.interface_text = interface_text
         self._build_ui()
     
     def _build_ui(self):
@@ -741,9 +757,9 @@ class DeviceSettingsWidget(QWidget):
         self.stacked_widget = QStackedWidget()
         
         # Add settings widgets
-        self.camera_tab = CameraSettingsWidget()
-        self.spectrometer_tab = SpectrometerSettingsWidget()
-        self.file_tab = FileSettingsWidget()
+        self.camera_tab = CameraSettingsWidget(self.interface_text)
+        self.spectrometer_tab = SpectrometerSettingsWidget(self.interface_text)
+        self.file_tab = FileSettingsWidget(self.interface_text)
         
         self.stacked_widget.addWidget(self.camera_tab)
         self.stacked_widget.addWidget(self.spectrometer_tab)

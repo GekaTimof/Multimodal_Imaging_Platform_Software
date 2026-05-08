@@ -15,7 +15,7 @@ class SpectrometerTab(QWidget):
         left_layout.addStretch()
         
         # Right side - Device settings
-        self.device_settings_widget = DeviceSettingsWidget()
+        self.device_settings_widget = DeviceSettingsWidget(interface_text)
         
         # Add to main layout with 4:1 ratio
         main_layout.addLayout(left_layout, 4)

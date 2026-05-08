@@ -90,7 +90,7 @@ class CameraTab(QWidget):
         upper_scroll_area.setWidget(upper_widget)
 
         # Lower panel with device settings (tabbed interface) with scroll
-        self.device_settings_widget = DeviceSettingsWidget()
+        self.device_settings_widget = DeviceSettingsWidget(self.interface_text)
         
         # Create scroll area for device settings
         lower_scroll_area = QScrollArea()
