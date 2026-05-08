@@ -234,9 +234,9 @@ if __name__ == "__main__":
     print("       -d '{\"AeEnable\":true,\"AwbEnable\":true,\"ExposureTime\":15000,\"AnalogueGain\":1.5,\"ExposureValue\":0.0,\"RedGain\":1.2,\"BlueGain\":1.1}'")
     
     uvicorn.run(
-        "fastapi_server:app",
+        app,
         host="0.0.0.0",
         port=8000,
-        reload=True,
+        reload=False,
         log_level="info"
     )
