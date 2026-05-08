@@ -51,10 +51,10 @@ class MJPEGHandler(BaseHTTPRequestHandler):
 
 
 class CameraStreamServer:
-    def __init__(self, host='0.0.0.0', port=8080, width=640, height=480, fps=20):
+    def __init__(self, host='0.0.0.0', port=8080, fps=20):
         self.host = host
         self.port = port
-        self.camera_service = CameraService(width=width, height=height, fps=fps)
+        self.camera_service = CameraService(fps=fps)
 
     def run(self):
         self.camera_service.start()
