@@ -7,7 +7,7 @@ import os
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from RaspberryPi.services.database_service import db_service
+from RaspberryPi.database_service import db_service
 
 app = FastAPI(
     title="Device Settings API",
