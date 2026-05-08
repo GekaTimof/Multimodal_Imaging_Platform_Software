@@ -270,6 +270,9 @@ class CameraService:
     def _capture_rpicam_frame(self):
         """Capture frame using rpicam-still subprocess."""
         try:
+            # Reload settings from database to get current resolution
+            self._load_settings()
+            
             # Use rpicam-still to capture a single frame
             cmd = [
                 'rpicam-still',
