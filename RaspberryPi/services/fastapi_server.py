@@ -102,7 +102,7 @@ async def health_check():
 
 @app.get("/api/settings/camera", response_model=CameraSettingsResponse)
 async def get_camera_settings():
-    """Get current camera settings."""
+    """Get current camera settings (slot 0)."""
     try:
         settings = db_service.get_camera_settings()
         if not settings:
@@ -110,6 +110,35 @@ async def get_camera_settings():
         
         # Convert database values to proper types
         return CameraSettingsResponse(**settings)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+
+@app.get("/api/settings/camera/slot/{slot_id}", response_model=CameraSettingsResponse)
+async def get_camera_settings_by_slot(slot_id: int):
+    """Get camera settings for a specific slot (0-9)."""
+    try:
+        if not 0 <= slot_id <= 9:
+            raise HTTPException(status_code=400, detail="Slot ID must be between 0 and 9")
+        
+        settings = db_service.get_camera_settings_by_slot(slot_id)
+        if not settings:
+            raise HTTPException(status_code=404, detail=f"No camera settings found for slot {slot_id}")
+        
+        # Convert database values to proper types
+        return CameraSettingsResponse(**settings)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+
+@app.get("/api/settings/camera/slots", response_model=Dict[str, Any])
+async def get_all_camera_settings_slots():
+    """Get all camera settings slots (0-9)."""
+    try:
+        slots = db_service.get_all_camera_settings_slots()
+        return {"success": True, "data": slots}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 

@@ -51,7 +51,7 @@ class SettingsSlotDialog(QDialog):
         """Load all settings slots from API."""
         try:
             # Load slots from API
-            api_url = f"{self.api_base_url}/settings/CameraSettings"
+            api_url = f"{self.api_base_url}/settings/camera/slots"
             thread = APIClientThread('GET', api_url)
             thread.response_received.connect(self._on_slots_loaded)
             thread.finished.connect(lambda: self._cleanup_thread(thread))
@@ -645,8 +645,8 @@ class CameraSettingsWidget(QWidget):
     def load_settings_from_slot(self, slot_id):
         """Load settings from a specific slot via API."""
         try:
-            # Load settings from API for current slot
-            api_url = f"{self.api_base_url}/settings/camera"
+            # Load settings from API for specific slot
+            api_url = f"{self.api_base_url}/settings/camera/slot/{slot_id}"
             thread = APIClientThread('GET', api_url)
             thread.response_received.connect(lambda success, message, data: 
                 self._on_slot_settings_loaded(success, message, data, slot_id))
@@ -661,21 +661,30 @@ class CameraSettingsWidget(QWidget):
     def _on_slot_settings_loaded(self, success, message, data, slot_id):
         """Handle slot settings loaded from API."""
         try:
-            if success and (data.get('success') or 'id' in data):
-                # Handle both formats: FastAPI direct response and wrapped response
-                if 'id' in data:
-                    # Direct FastAPI response
-                    settings = data
-                else:
-                    # Wrapped response format
-                    settings = data.get('data', {})
+            if success and 'id' in data:
+                # FastAPI direct response for slot settings
+                settings = data
                 
                 self.current_slot_id = slot_id
                 self.current_settings = settings
                 self._update_ui_from_settings(settings)
                 
                 slot_name = settings.get('SettingsName', f"Slot {slot_id}")
-                self.status_label.setText(f"Loaded settings from API: {slot_name}")
+                self.status_label.setText(f"Loaded settings from slot {slot_id}: {slot_name}")
+                self.status_label.setStyleSheet("QLabel { color: green; font-weight: bold; }")
+                
+                # Emit signal that slot has changed
+                self.slot_changed.emit(slot_id)
+            elif success and data.get('success') and 'data' in data:
+                # Wrapped response format (fallback)
+                settings = data.get('data', {})
+                
+                self.current_slot_id = slot_id
+                self.current_settings = settings
+                self._update_ui_from_settings(settings)
+                
+                slot_name = settings.get('SettingsName', f"Slot {slot_id}")
+                self.status_label.setText(f"Loaded settings from slot {slot_id}: {slot_name}")
                 self.status_label.setStyleSheet("QLabel { color: green; font-weight: bold; }")
                 
                 # Emit signal that slot has changed
