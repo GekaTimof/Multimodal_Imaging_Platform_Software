@@ -2,7 +2,7 @@ import sqlite3
 import os
 from typing import Dict, Any, Tuple
 
-db_folder = "RaspberryPi"
+db_folder = "."
 db_name = "DevicesSettings.db"
 db_path = os.path.join(db_folder, db_name)
 

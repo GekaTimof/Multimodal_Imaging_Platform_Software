@@ -1,7 +1,7 @@
 import sqlite3
 import os
 
-db_folder = "RaspberryPi"
+db_folder = "."
 db_name = "DevicesSettings.db"
 
 os.makedirs(db_folder, exist_ok=True)
