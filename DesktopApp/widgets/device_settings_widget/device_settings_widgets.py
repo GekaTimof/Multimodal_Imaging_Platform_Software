@@ -20,8 +20,9 @@ class SettingsSlotDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Camera Settings Slots")
         self.setModal(True)
-        self.resize(800, 900)  # 2x wider (400->800) and 3x taller (300->900)
+        self.resize(800, 900) 
         self.slots_data = {}
+        self.api_base_url = "http://10.43.70.189:8000/api"
         self._build_ui()
         self._load_slots()
     
@@ -228,7 +229,7 @@ class CameraSettingsWidget(QWidget):
     def __init__(self, interface_text=None):
         super().__init__()
         self.interface_text = interface_text
-        self.api_base_url = "http://localhost:8000/api"
+        self.api_base_url = "http://10.43.70.189:8000/api"
         self.current_settings = {}
         self.active_threads = []  # Track active threads
         self.current_slot_id = 0  # Track current settings slot

@@ -17,7 +17,7 @@ class CameraThread(QThread):
         """Load camera settings from API only - called from main thread"""
         try:
             # Load settings from API only
-            api_url = "http://localhost:8000/api/settings/camera"
+            api_url = "http://10.43.70.189:8000/api/settings/camera"
             response = requests.get(api_url, timeout=5)
             
             if response.status_code == 200:
