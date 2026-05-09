@@ -26,6 +26,10 @@ class SettingsSlotDialog(QDialog):
         self.api_base_url = "http://10.43.70.189:8000/api"
         self.active_threads = []
         self._build_ui()
+    
+    def showEvent(self, event):
+        """Override showEvent to reload slots data each time dialog is shown."""
+        super().showEvent(event)
         self._load_slots()
     
     def _build_ui(self):
@@ -86,41 +90,9 @@ class SettingsSlotDialog(QDialog):
             if success and data.get('success') and 'data' in data:
                 self.slots_data = data['data']
                 
-                # Populate list widget
+                # Clear list and start loading individual slot details
                 self.slots_list.clear()
-                
-                # Create slots 0-9 with data from API or defaults
-                for slot_id in range(10):
-                    if slot_id in self.slots_data:
-                        settings = self.slots_data[slot_id]
-                        name = settings.get('SettingsName', f"Slot {slot_id}")
-                        photo_resolution = settings.get('PhotoResolution', '3280x2464')
-                        video_resolution = settings.get('VideoResolution', '1920x1080')
-                    else:
-                        # Default slot data
-                        name = "Basic" if slot_id == 0 else f"Custom {slot_id}"
-                        photo_resolution = "3280x2464"
-                        video_resolution = "1920x1080"
-                    
-                    if slot_id == 0:
-                        display_text = f"Slot {slot_id} - {name} (Basic)\n  Photo: {photo_resolution} | Video: {video_resolution}"
-                    else:
-                        display_text = f"Slot {slot_id} - {name}\n  Photo: {photo_resolution} | Video: {video_resolution}"
-                    
-                    item = QListWidgetItem(display_text)
-                    item.setData(Qt.UserRole, slot_id)
-                    self.slots_list.addItem(item)
-                    
-                    # Add visual separator after each item except the last one
-                    if slot_id < 9:
-                        separator = QListWidgetItem("")
-                        separator.setFlags(Qt.NoItemFlags)  # Make it non-selectable
-                        separator.setSizeHint(separator.sizeHint().expandedTo(separator.sizeHint() + 
-                                       separator.sizeHint().expandedTo(separator.sizeHint())))
-                        # Create a visual separator using a line character
-                        separator.setText("─" * 40)  # Horizontal line
-                        separator.setForeground(separator.foreground().color().lighter(150))  # Make it lighter
-                        self.slots_list.addItem(separator)
+                self._load_individual_slot_details(0)
             else:
                 print(f"API error loading slots: {message}")
                 # Fallback to empty slots
@@ -129,6 +101,82 @@ class SettingsSlotDialog(QDialog):
         except Exception as e:
             print(f"Error processing slots data: {e}")
             self._create_fallback_slots()
+    
+    def _load_individual_slot_details(self, slot_id):
+        """Load details for a specific slot via API."""
+        if slot_id > 9:
+            # All slots loaded, add separators
+            self._add_separators()
+            return
+        
+        try:
+            api_url = f"{self.api_base_url}/settings/camera/slot/{slot_id}"
+            thread = APIClientThread('GET', api_url)
+            thread.response_received.connect(lambda success, message, data: 
+                self._on_slot_details_loaded(success, message, data, slot_id))
+            thread.finished.connect(lambda: self._cleanup_thread(thread))
+            self.active_threads.append(thread)
+            thread.start()
+        except Exception as e:
+            print(f"Error loading slot {slot_id} details: {e}")
+            # Continue with next slot
+            self._load_individual_slot_details(slot_id + 1)
+    
+    def _on_slot_details_loaded(self, success, message, data, slot_id):
+        """Handle individual slot details loaded from API."""
+        try:
+            if success and 'id' in data:
+                # Real slot data from API
+                settings = data
+                name = settings.get('SettingsName', f"Slot {slot_id}")
+                photo_resolution = settings.get('PhotoResolution', '3280x2464')
+                video_resolution = settings.get('VideoResolution', '1920x1080')
+                exposure_time = settings.get('ExposureTime', 10000)
+                ae_enable = settings.get('AeEnable', True)
+                
+                # Create display text with real parameters
+                if slot_id == 0:
+                    display_text = f"Slot {slot_id} - {name} (Basic)\n  Photo: {photo_resolution} | Video: {video_resolution}\n  Exposure: {exposure_time}μs | Auto-Exp: {'On' if ae_enable else 'Off'}"
+                else:
+                    display_text = f"Slot {slot_id} - {name}\n  Photo: {photo_resolution} | Video: {video_resolution}\n  Exposure: {exposure_time}μs | Auto-Exp: {'On' if ae_enable else 'Off'}"
+                
+                item = QListWidgetItem(display_text)
+                item.setData(Qt.UserRole, slot_id)
+                self.slots_list.addItem(item)
+            else:
+                # Slot doesn't exist or API error, use defaults
+                name = "Basic" if slot_id == 0 else f"Custom {slot_id}"
+                if slot_id == 0:
+                    display_text = f"Slot {slot_id} - {name} (Basic)\n  Photo: 3280x2464 | Video: 1920x1080\n  Default settings"
+                else:
+                    display_text = f"Slot {slot_id} - {name}\n  Photo: 3280x2464 | Video: 1920x1080\n  Empty slot"
+                
+                item = QListWidgetItem(display_text)
+                item.setData(Qt.UserRole, slot_id)
+                self.slots_list.addItem(item)
+            
+            # Add separator after each slot except the last one
+            if slot_id < 9:
+                self._add_separator_after_current_item()
+            
+            # Continue with next slot
+            self._load_individual_slot_details(slot_id + 1)
+            
+        except Exception as e:
+            print(f"Error processing slot {slot_id} details: {e}")
+            # Continue with next slot
+            self._load_individual_slot_details(slot_id + 1)
+    
+    def _add_separator_after_current_item(self):
+        """Add separator after the current last item in the list."""
+        separator = QListWidgetItem("")
+        separator.setFlags(Qt.NoItemFlags)  # Make it non-selectable
+        separator.setSizeHint(separator.sizeHint().expandedTo(separator.sizeHint() + 
+                       separator.sizeHint().expandedTo(separator.sizeHint())))
+        # Create a visual separator using a line character
+        separator.setText("─" * 40)  # Horizontal line
+        separator.setForeground(separator.foreground().color().lighter(150))  # Make it lighter
+        self.slots_list.addItem(separator)
     
     def _create_fallback_slots(self):
         """Create fallback slots when API fails."""
@@ -142,14 +190,7 @@ class SettingsSlotDialog(QDialog):
             
             # Add visual separator after each item except the last one
             if slot_id < 9:
-                separator = QListWidgetItem("")
-                separator.setFlags(Qt.NoItemFlags)  # Make it non-selectable
-                separator.setSizeHint(separator.sizeHint().expandedTo(separator.sizeHint() + 
-                               separator.sizeHint().expandedTo(separator.sizeHint())))
-                # Create a visual separator using a line character
-                separator.setText("─" * 40)  # Horizontal line
-                separator.setForeground(separator.foreground().color().lighter(150))  # Make it lighter
-                self.slots_list.addItem(separator)
+                self._add_separator_after_current_item()
     
     def _on_slot_selected(self, item):
         """Handle slot selection."""
