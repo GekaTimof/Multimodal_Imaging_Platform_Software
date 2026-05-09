@@ -7,13 +7,24 @@ import os
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from RaspberryPi.database_service import db_service
+# Try different import approaches for flexibility
+try:
+    from RaspberryPi.database_service import db_service
+    from RaspberryPi.services.camera_service import CameraService
+except ImportError:
+    # Fallback for running from services directory
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from database_service import db_service
+    from camera_service import CameraService
 
 app = FastAPI(
     title="Device Settings API",
     description="API for managing camera and spectrometer settings",
     version="1.0.0"
 )
+
+# Global camera service instance
+camera_service = CameraService()
 
 
 # Pydantic Models for Request/Response
@@ -167,6 +178,15 @@ async def update_parameter(request: ParameterUpdateRequest):
         )
         
         if success:
+            # Check if camera resolution parameter was updated and reload camera if needed
+            if (request.table_name == "CameraSettings" and 
+                request.parameter in ["PhotoResolution", "VideoResolution"]):
+                try:
+                    camera_service.reload_settings()
+                    message += " Camera reinitialized with new resolution."
+                except Exception as reload_error:
+                    message += f" Warning: Camera reload failed: {reload_error}"
+            
             return APIResponse(
                 success=True, 
                 message=message,
@@ -187,6 +207,9 @@ async def update_camera_settings(settings: CameraSettingsResponse):
     try:
         # Update all parameters sequentially
         updates = [
+            ("CameraSettings", "SettingsName", settings.SettingsName),
+            ("CameraSettings", "PhotoResolution", settings.PhotoResolution),
+            ("CameraSettings", "VideoResolution", settings.VideoResolution),
             ("CameraSettings", "AeEnable", int(settings.AeEnable)),
             ("CameraSettings", "AwbEnable", int(settings.AwbEnable)),
             ("CameraSettings", "ExposureTime", settings.ExposureTime),
@@ -197,10 +220,14 @@ async def update_camera_settings(settings: CameraSettingsResponse):
         ]
         
         failed_updates = []
+        resolution_updated = False
+        
         for table_name, parameter, value in updates:
             success, message = db_service.update_parameter(table_name, parameter, value)
             if not success:
                 failed_updates.append(f"{parameter}: {message}")
+            elif parameter in ["PhotoResolution", "VideoResolution"]:
+                resolution_updated = True
         
         if failed_updates:
             raise HTTPException(
@@ -208,11 +235,27 @@ async def update_camera_settings(settings: CameraSettingsResponse):
                 detail=f"Failed to update some parameters: {'; '.join(failed_updates)}"
             )
         
-        return APIResponse(
-            success=True,
-            message="All camera settings updated successfully",
-            data=settings.dict()
-        )
+        # Reload camera if resolution was updated
+        if resolution_updated:
+            try:
+                camera_service.reload_settings()
+                return APIResponse(
+                    success=True,
+                    message="All camera settings updated successfully. Camera reinitialized with new resolution.",
+                    data=settings.dict()
+                )
+            except Exception as reload_error:
+                return APIResponse(
+                    success=True,
+                    message=f"All camera settings updated but camera reload failed: {reload_error}",
+                    data=settings.dict()
+                )
+        else:
+            return APIResponse(
+                success=True,
+                message="All camera settings updated successfully",
+                data=settings.dict()
+            )
         
     except HTTPException:
         raise
@@ -255,18 +298,19 @@ async def save_camera_settings_to_slot(slot_id: int, settings: CameraSettingsRes
 
 @app.post("/api/settings/camera/reload", response_model=APIResponse)
 async def reload_camera_settings():
-    """Signal that camera settings need to be reloaded."""
+    """Reload camera settings and reinitialize camera if resolution changed."""
     try:
-        # For now, just return success - the actual reload will happen 
-        # when the camera service is restarted or settings are reloaded
+        # Reload settings from database and reinitialize camera if needed
+        camera_service.reload_settings()
+        
         return APIResponse(
             success=True,
-            message="Camera reload signal sent. Restart camera service to apply new resolution.",
-            data={"action": "restart_required"}
+            message="Camera settings reloaded successfully. Camera reinitialized if resolution changed.",
+            data={"action": "reloaded"}
         )
             
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error signaling camera reload: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error reloading camera settings: {str(e)}")
 
 
 # Exception handlers

@@ -545,7 +545,7 @@ class CameraSettingsWidget(QWidget):
             self.status_label.setStyleSheet("QLabel { color: green; font-weight: bold; }")
         else:
             # API failed, try database fallback
-            self._load_settings_from_database()
+            self._load_settings_from_api_fallback()
     
     def _load_settings_from_api_fallback(self):
         """Load settings from API fallback when main API call fails."""
