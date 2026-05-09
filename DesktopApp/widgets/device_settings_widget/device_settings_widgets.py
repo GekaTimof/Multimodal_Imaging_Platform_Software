@@ -23,6 +23,7 @@ class SettingsSlotDialog(QDialog):
         self.resize(800, 900) 
         self.slots_data = {}
         self.api_base_url = "http://10.43.70.189:8000/api"
+        self.active_threads = []
         self._build_ui()
         self._load_slots()
     
@@ -570,8 +571,8 @@ class CameraSettingsWidget(QWidget):
     def _on_setting_applied_via_api(self, success, message, data, thread):
         """Handle individual setting application response via API."""
         if success:
-            # Continue with next setting
-            self._apply_settings_with_fallback(thread.remaining_settings, thread.next_index)
+            # Continue with next setting (increment index)
+            self._apply_settings_with_fallback(thread.remaining_settings, thread.next_index + 1)
         else:
             self.status_label.setText(f"Failed to apply setting: {message}")
             self.status_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
