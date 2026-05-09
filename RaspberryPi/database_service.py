@@ -110,12 +110,12 @@ class DatabaseService:
         return False, f"Unsupported table: {table_name}"
     
     def get_camera_settings(self) -> Dict[str, Any]:
-        """Get current camera settings from database."""
+        """Get current camera settings from database (always from slot 0 - main settings)."""
         try:
             conn = sqlite3.connect(db_path)
             cursor = conn.cursor()
             
-            cursor.execute("SELECT * FROM CameraSettings ORDER BY id DESC LIMIT 1")
+            cursor.execute("SELECT * FROM CameraSettings WHERE id = 0")
             row = cursor.fetchone()
             
             if row:
@@ -126,7 +126,36 @@ class DatabaseService:
                 settings['AwbEnable'] = bool(settings['AwbEnable'])
                 return settings
             else:
-                return {}
+                # Create default settings for slot 0 if doesn't exist
+                default_settings = {
+                    'id': 0,
+                    'SettingsName': 'Basic',
+                    'PhotoResolution': '3280x2464',
+                    'VideoResolution': '1920x1080',
+                    'AeEnable': True,
+                    'AwbEnable': True,
+                    'ExposureTime': 10000,
+                    'AnalogueGain': 1.0,
+                    'ExposureValue': 0.0,
+                    'RedGain': 1.0,
+                    'BlueGain': 1.0
+                }
+                
+                # Insert the default settings into database
+                cursor.execute("""
+                INSERT OR IGNORE INTO CameraSettings 
+                (id, SettingsName, PhotoResolution, VideoResolution, AeEnable, AwbEnable, ExposureTime, AnalogueGain, ExposureValue, RedGain, BlueGain)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    0, default_settings['SettingsName'],
+                    default_settings['PhotoResolution'], default_settings['VideoResolution'],
+                    int(default_settings['AeEnable']), int(default_settings['AwbEnable']),
+                    default_settings['ExposureTime'], default_settings['AnalogueGain'],
+                    default_settings['ExposureValue'], default_settings['RedGain'], default_settings['BlueGain']
+                ))
+                conn.commit()
+                
+                return default_settings
                 
         except sqlite3.Error as e:
             raise Exception(f"Database error: {e}")
@@ -155,20 +184,40 @@ class DatabaseService:
             if parameter not in columns:
                 return False, f"Parameter {parameter} does not exist in table {table_name}"
             
+            # For CameraSettings, always update slot 0 (main settings)
+            if table_name == 'CameraSettings':
+                target_id = 0
+            else:
+                target_id = "(SELECT MAX(id) FROM {table_name})"
+            
             # Update the parameter
-            query = f"UPDATE {table_name} SET {parameter} = ? WHERE id = (SELECT MAX(id) FROM {table_name})"
-            cursor.execute(query, (validated_value,))
+            query = f"UPDATE {table_name} SET {parameter} = ? WHERE id = ?"
+            cursor.execute(query, (validated_value, target_id))
             
             if cursor.rowcount == 0:
-                # If no rows exist, insert a new one
-                columns_str = ', '.join(columns)
-                placeholders = ', '.join(['?' for _ in columns])
-                values = [None] * len(columns)  # id will be auto-incremented
-                param_index = columns.index(parameter)
-                values[param_index] = validated_value
-                
-                query = f"INSERT INTO {table_name} ({columns_str}) VALUES ({placeholders})"
-                cursor.execute(query, values)
+                # If no rows exist for CameraSettings slot 0, insert default settings
+                if table_name == 'CameraSettings':
+                    # Ensure slot 0 exists with default values
+                    cursor.execute("""
+                    INSERT OR IGNORE INTO CameraSettings 
+                    (id, SettingsName, PhotoResolution, VideoResolution, AeEnable, AwbEnable, ExposureTime, AnalogueGain, ExposureValue, RedGain, BlueGain)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        0, 'Basic', '3280x2464', '1920x1080', 1, 1, 10000, 1.0, 0.0, 1.0, 1.0
+                    ))
+                    
+                    # Try updating again
+                    cursor.execute(query, (validated_value, target_id))
+                else:
+                    # For other tables, insert a new row
+                    columns_str = ', '.join(columns)
+                    placeholders = ', '.join(['?' for _ in columns])
+                    values = [None] * len(columns)  # id will be auto-incremented
+                    param_index = columns.index(parameter)
+                    values[param_index] = validated_value
+                    
+                    query = f"INSERT INTO {table_name} ({columns_str}) VALUES ({placeholders})"
+                    cursor.execute(query, values)
             
             conn.commit()
             return True, f"Updated {parameter} to {validated_value}"
@@ -184,12 +233,22 @@ class DatabaseService:
             conn = sqlite3.connect(db_path)
             cursor = conn.cursor()
             
-            cursor.execute(f"SELECT * FROM {table_name} ORDER BY id DESC LIMIT 1")
+            # For CameraSettings, always get slot 0 (main settings)
+            if table_name == 'CameraSettings':
+                cursor.execute(f"SELECT * FROM {table_name} WHERE id = 0")
+            else:
+                cursor.execute(f"SELECT * FROM {table_name} ORDER BY id DESC LIMIT 1")
+            
             row = cursor.fetchone()
             
             if row:
                 columns = [desc[0] for desc in cursor.description]
-                return dict(zip(columns, row))
+                settings = dict(zip(columns, row))
+                # Convert boolean fields properly for CameraSettings
+                if table_name == 'CameraSettings':
+                    settings['AeEnable'] = bool(settings['AeEnable'])
+                    settings['AwbEnable'] = bool(settings['AwbEnable'])
+                return settings
             else:
                 return {}
                 
