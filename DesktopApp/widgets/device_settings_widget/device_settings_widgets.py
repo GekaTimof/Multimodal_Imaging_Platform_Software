@@ -1,10 +1,11 @@
 import requests
 import json
+import os
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, 
     QLabel, QSpinBox, QDoubleSpinBox, QCheckBox, QPushButton, 
     QGridLayout, QComboBox, QLineEdit, QDialog, QDialogButtonBox,
-    QListWidget, QListWidgetItem, QStackedWidget
+    QListWidget, QListWidgetItem, QStackedWidget, QProgressBar
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QFont
@@ -44,48 +45,18 @@ class SettingsSlotDialog(QDialog):
         layout.addWidget(button_box)
     
     def _load_slots(self):
-        """Load all settings slots from database."""
+        """Load all settings slots from API."""
         try:
-            import sys
-            import os
-            db_path = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'RaspberryPi', 'services')
-            if db_path not in sys.path:
-                sys.path.insert(0, db_path)
-            
-            from database_service import db_service
-            self.slots_data = db_service.get_all_camera_settings_slots()
-            
-            # Populate list widget
-            self.slots_list.clear()
-            sorted_slots = sorted(self.slots_data.items())
-            
-            for i, (slot_id, settings) in enumerate(sorted_slots):
-                name = settings.get('SettingsName', f"Slot {slot_id}")
-                photo_resolution = settings.get('PhotoResolution', '3280x2464')
-                video_resolution = settings.get('VideoResolution', '1920x1080')
-                
-                if slot_id == 0:
-                    display_text = f"Slot {slot_id} - {name} (Basic)\n  Photo: {photo_resolution} | Video: {video_resolution}"
-                else:
-                    display_text = f"Slot {slot_id} - {name}\n  Photo: {photo_resolution} | Video: {video_resolution}"
-                
-                item = QListWidgetItem(display_text)
-                item.setData(Qt.UserRole, slot_id)
-                self.slots_list.addItem(item)
-                
-                # Add visual separator after each item except the last one
-                if i < len(sorted_slots) - 1:
-                    separator = QListWidgetItem("")
-                    separator.setFlags(Qt.NoItemFlags)  # Make it non-selectable
-                    separator.setSizeHint(separator.sizeHint().expandedTo(separator.sizeHint() + 
-                                   separator.sizeHint().expandedTo(separator.sizeHint())))
-                    # Create a visual separator using a line character
-                    separator.setText("─" * 40)  # Horizontal line
-                    separator.setForeground(separator.foreground().color().lighter(150))  # Make it lighter
-                    self.slots_list.addItem(separator)
+            # Load slots from API
+            api_url = f"{self.api_base_url}/settings/CameraSettings"
+            thread = APIClientThread('GET', api_url)
+            thread.response_received.connect(self._on_slots_loaded)
+            thread.finished.connect(lambda: self._cleanup_thread(thread))
+            self.active_threads.append(thread)
+            thread.start()
                 
         except Exception as e:
-            print(f"Error loading slots: {e}")
+            print(f"Error loading slots from API: {e}")
             # Fallback: create empty slots
             self.slots_list.clear()
             for slot_id in range(10):
@@ -105,6 +76,77 @@ class SettingsSlotDialog(QDialog):
                     separator.setText("─" * 40)  # Horizontal line
                     separator.setForeground(separator.foreground().color().lighter(150))  # Make it lighter
                     self.slots_list.addItem(separator)
+    
+    def _on_slots_loaded(self, success, message, data):
+        """Handle slots loaded response from API."""
+        try:
+            if success and data.get('success') and 'data' in data:
+                self.slots_data = data['data']
+                
+                # Populate list widget
+                self.slots_list.clear()
+                
+                # Create slots 0-9 with data from API or defaults
+                for slot_id in range(10):
+                    if slot_id in self.slots_data:
+                        settings = self.slots_data[slot_id]
+                        name = settings.get('SettingsName', f"Slot {slot_id}")
+                        photo_resolution = settings.get('PhotoResolution', '3280x2464')
+                        video_resolution = settings.get('VideoResolution', '1920x1080')
+                    else:
+                        # Default slot data
+                        name = "Basic" if slot_id == 0 else f"Custom {slot_id}"
+                        photo_resolution = "3280x2464"
+                        video_resolution = "1920x1080"
+                    
+                    if slot_id == 0:
+                        display_text = f"Slot {slot_id} - {name} (Basic)\n  Photo: {photo_resolution} | Video: {video_resolution}"
+                    else:
+                        display_text = f"Slot {slot_id} - {name}\n  Photo: {photo_resolution} | Video: {video_resolution}"
+                    
+                    item = QListWidgetItem(display_text)
+                    item.setData(Qt.UserRole, slot_id)
+                    self.slots_list.addItem(item)
+                    
+                    # Add visual separator after each item except the last one
+                    if slot_id < 9:
+                        separator = QListWidgetItem("")
+                        separator.setFlags(Qt.NoItemFlags)  # Make it non-selectable
+                        separator.setSizeHint(separator.sizeHint().expandedTo(separator.sizeHint() + 
+                                       separator.sizeHint().expandedTo(separator.sizeHint())))
+                        # Create a visual separator using a line character
+                        separator.setText("─" * 40)  # Horizontal line
+                        separator.setForeground(separator.foreground().color().lighter(150))  # Make it lighter
+                        self.slots_list.addItem(separator)
+            else:
+                print(f"API error loading slots: {message}")
+                # Fallback to empty slots
+                self._create_fallback_slots()
+                
+        except Exception as e:
+            print(f"Error processing slots data: {e}")
+            self._create_fallback_slots()
+    
+    def _create_fallback_slots(self):
+        """Create fallback slots when API fails."""
+        self.slots_list.clear()
+        for slot_id in range(10):
+            name = "Basic" if slot_id == 0 else f"Custom {slot_id}"
+            display_text = f"Slot {slot_id} - {name}\n  Photo: 3280x2464 | Video: 1920x1080"
+            item = QListWidgetItem(display_text)
+            item.setData(Qt.UserRole, slot_id)
+            self.slots_list.addItem(item)
+            
+            # Add visual separator after each item except the last one
+            if slot_id < 9:
+                separator = QListWidgetItem("")
+                separator.setFlags(Qt.NoItemFlags)  # Make it non-selectable
+                separator.setSizeHint(separator.sizeHint().expandedTo(separator.sizeHint() + 
+                               separator.sizeHint().expandedTo(separator.sizeHint())))
+                # Create a visual separator using a line character
+                separator.setText("─" * 40)  # Horizontal line
+                separator.setForeground(separator.foreground().color().lighter(150))  # Make it lighter
+                self.slots_list.addItem(separator)
     
     def _on_slot_selected(self, item):
         """Handle slot selection."""
@@ -443,29 +485,19 @@ class CameraSettingsWidget(QWidget):
             # API failed, try database fallback
             self._load_settings_from_database()
     
-    def _load_settings_from_database(self):
-        """Load settings directly from database as fallback."""
+    def _load_settings_from_api_fallback(self):
+        """Load settings from API fallback when main API call fails."""
         try:
-            import sys
-            import os
-            db_path = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'RaspberryPi', 'services')
-            if db_path not in sys.path:
-                sys.path.insert(0, db_path)
-            
-            from database_service import db_service
-            settings = db_service.get_camera_settings()
-            
-            if settings:
-                self.current_settings = settings
-                self._update_ui_from_settings(settings)
-                self.status_label.setText("Settings loaded from database (API offline)")
-                self.status_label.setStyleSheet("QLabel { color: orange; font-weight: bold; }")
-            else:
-                self.status_label.setText("No settings found in database")
-                self.status_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
+            # Try API again with different approach
+            api_url = f"{self.api_base_url}/settings/camera"
+            thread = APIClientThread('GET', api_url)
+            thread.response_received.connect(self._on_settings_loaded)
+            thread.finished.connect(lambda: self._cleanup_thread(thread))
+            self.active_threads.append(thread)
+            thread.start()
                 
         except Exception as e:
-            self.status_label.setText(f"Failed to load from database: {str(e)}")
+            self.status_label.setText(f"Failed to load from API: {str(e)}")
             self.status_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
     
     def apply_settings(self):
@@ -498,7 +530,7 @@ class CameraSettingsWidget(QWidget):
         self._apply_settings_with_fallback(settings_to_update, 0)
     
     def _apply_settings_with_fallback(self, settings_list, index):
-        """Apply settings with API fallback to database."""
+        """Apply settings with API only (no fallback to local DB)."""
         if index >= len(settings_list):
             self.status_label.setText("All settings applied successfully")
             self.status_label.setStyleSheet("QLabel { color: green; font-weight: bold; }")
@@ -508,56 +540,39 @@ class CameraSettingsWidget(QWidget):
         
         table_name, parameter, value = settings_list[index]
         
-        # Try API first
-        thread = APIClientThread('POST', f"{self.api_base_url}/settings/update", {
-            'table_name': table_name,
-            'parameter': parameter,
-            'value': value
-        })
-        
-        # Store remaining settings for next call
-        thread.remaining_settings = settings_list
-        thread.next_index = index + 1
-        
-        thread.response_received.connect(lambda success, message, data: 
-            self._on_setting_applied_with_fallback(success, message, data, thread))
-        thread.finished.connect(lambda: self._cleanup_thread(thread))
-        self.active_threads.append(thread)
-        thread.start()
+        # Apply via API only
+        self._apply_setting_via_api(table_name, parameter, value, settings_list, index)
     
-    def _on_setting_applied_with_fallback(self, success, message, data, thread):
-        """Handle individual setting application response with fallback."""
+    def _apply_setting_via_api(self, table_name, parameter, value, settings_list, index):
+        """Apply setting via API."""
+        try:
+            thread = APIClientThread('POST', f"{self.api_base_url}/settings/update", {
+                'table_name': table_name,
+                'parameter': parameter,
+                'value': value
+            })
+            
+            # Store remaining settings for next call
+            thread.remaining_settings = settings_list
+            thread.next_index = index
+            
+            thread.response_received.connect(lambda success, message, data: 
+                self._on_setting_applied_via_api(success, message, data, thread))
+            thread.finished.connect(lambda: self._cleanup_thread(thread))
+            self.active_threads.append(thread)
+            thread.start()
+                
+        except Exception as e:
+            self.status_label.setText(f"API error for {parameter}: {str(e)}")
+            self.status_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
+    
+    def _on_setting_applied_via_api(self, success, message, data, thread):
+        """Handle individual setting application response via API."""
         if success:
             # Continue with next setting
             self._apply_settings_with_fallback(thread.remaining_settings, thread.next_index)
         else:
-            # API failed, try database fallback for this setting
-            table_name, parameter, value = thread.remaining_settings[thread.next_index - 1]
-            self._apply_setting_to_database(table_name, parameter, value, thread.remaining_settings, thread.next_index)
-    
-    def _apply_setting_to_database(self, table_name, parameter, value, settings_list, index):
-        """Apply setting directly to database."""
-        try:
-            import sys
-            import os
-            db_path = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'RaspberryPi', 'services')
-            if db_path not in sys.path:
-                sys.path.insert(0, db_path)
-            
-            from database_service import db_service
-            success, message = db_service.update_parameter(table_name, parameter, value)
-            
-            # Database update successful
-            
-            if success:
-                # Continue with next setting
-                self._apply_settings_with_fallback(settings_list, index)
-            else:
-                self.status_label.setText(f"Failed to apply {parameter}: {message}")
-                self.status_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
-                
-        except Exception as e:
-            self.status_label.setText(f"Database error for {parameter}: {str(e)}")
+            self.status_label.setText(f"Failed to apply setting: {message}")
             self.status_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
     
     def _apply_settings_sequentially(self, settings_list, index):
@@ -607,30 +622,49 @@ class CameraSettingsWidget(QWidget):
             self.status_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
     
     def load_settings_from_slot(self, slot_id):
-        """Load settings from a specific slot."""
+        """Load settings from a specific slot via API."""
         try:
-            import sys
-            import os
-            db_path = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'RaspberryPi', 'services')
-            if db_path not in sys.path:
-                sys.path.insert(0, db_path)
-            
-            from database_service import db_service
-            settings = db_service.get_camera_settings_by_slot(slot_id)
-            
-            self.current_slot_id = slot_id
-            self.current_settings = settings
-            self._update_ui_from_settings(settings)
-            
-            slot_name = settings.get('SettingsName', f"Slot {slot_id}")
-            self.status_label.setText(f"Loaded settings from: {slot_name}")
-            self.status_label.setStyleSheet("QLabel { color: green; font-weight: bold; }")
-            
-            # Emit signal that slot has changed
-            self.slot_changed.emit(slot_id)
+            # Load settings from API for current slot
+            api_url = f"{self.api_base_url}/settings/camera"
+            thread = APIClientThread('GET', api_url)
+            thread.response_received.connect(lambda success, message, data: 
+                self._on_slot_settings_loaded(success, message, data, slot_id))
+            thread.finished.connect(lambda: self._cleanup_thread(thread))
+            self.active_threads.append(thread)
+            thread.start()
             
         except Exception as e:
             self.status_label.setText(f"Error loading slot {slot_id}: {str(e)}")
+            self.status_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
+    
+    def _on_slot_settings_loaded(self, success, message, data, slot_id):
+        """Handle slot settings loaded from API."""
+        try:
+            if success and (data.get('success') or 'id' in data):
+                # Handle both formats: FastAPI direct response and wrapped response
+                if 'id' in data:
+                    # Direct FastAPI response
+                    settings = data
+                else:
+                    # Wrapped response format
+                    settings = data.get('data', {})
+                
+                self.current_slot_id = slot_id
+                self.current_settings = settings
+                self._update_ui_from_settings(settings)
+                
+                slot_name = settings.get('SettingsName', f"Slot {slot_id}")
+                self.status_label.setText(f"Loaded settings from API: {slot_name}")
+                self.status_label.setStyleSheet("QLabel { color: green; font-weight: bold; }")
+                
+                # Emit signal that slot has changed
+                self.slot_changed.emit(slot_id)
+            else:
+                self.status_label.setText(f"API error loading slot {slot_id}: {message}")
+                self.status_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
+                
+        except Exception as e:
+            self.status_label.setText(f"Error processing slot {slot_id}: {str(e)}")
             self.status_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
     
     def save_to_slot_dialog(self):
@@ -645,16 +679,8 @@ class CameraSettingsWidget(QWidget):
             self.status_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
     
     def save_current_settings_to_slot(self, slot_id):
-        """Save current settings to a specific slot."""
+        """Save current settings to a specific slot via API."""
         try:
-            import sys
-            import os
-            db_path = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'RaspberryPi', 'services')
-            if db_path not in sys.path:
-                sys.path.insert(0, db_path)
-            
-            from database_service import db_service
-            
             # Extract resolution from display text (remove aspect ratio)
             photo_resolution_text = self.photo_resolution_combo.currentText()
             photo_resolution = photo_resolution_text.split(' ')[0] if ' ' in photo_resolution_text else photo_resolution_text
@@ -676,19 +702,61 @@ class CameraSettingsWidget(QWidget):
                 'BlueGain': self.blue_gain.value()
             }
             
-            success, message = db_service.save_camera_settings_to_slot(slot_id, settings)
+            # Save each setting via API
+            settings_to_save = [
+                ("CameraSettings", f"Slot{slot_id}Name", settings['SettingsName']),
+                ("CameraSettings", f"Slot{slot_id}PhotoResolution", settings['PhotoResolution']),
+                ("CameraSettings", f"Slot{slot_id}VideoResolution", settings['VideoResolution']),
+                ("CameraSettings", f"Slot{slot_id}AeEnable", str(int(settings['AeEnable']))),
+                ("CameraSettings", f"Slot{slot_id}AwbEnable", str(int(settings['AwbEnable']))),
+                ("CameraSettings", f"Slot{slot_id}ExposureTime", str(settings['ExposureTime'])),
+                ("CameraSettings", f"Slot{slot_id}AnalogueGain", str(settings['AnalogueGain'])),
+                ("CameraSettings", f"Slot{slot_id}ExposureValue", str(settings['ExposureValue'])),
+                ("CameraSettings", f"Slot{slot_id}RedGain", str(settings['RedGain'])),
+                ("CameraSettings", f"Slot{slot_id}BlueGain", str(settings['BlueGain']))
+            ]
             
-            if success:
-                self.current_slot_id = slot_id
-                slot_name = settings['SettingsName']
-                self.status_label.setText(f"Settings saved to slot {slot_id}: {slot_name}")
-                self.status_label.setStyleSheet("QLabel { color: green; font-weight: bold; }")
-            else:
-                self.status_label.setText(f"Error saving to slot {slot_id}: {message}")
-                self.status_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
+            self._save_slot_settings_via_api(settings_to_save, 0, slot_id, settings['SettingsName'])
                 
         except Exception as e:
             self.status_label.setText(f"Error saving to slot {slot_id}: {str(e)}")
+            self.status_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
+    
+    def _save_slot_settings_via_api(self, settings_list, index, slot_id, slot_name):
+        """Save slot settings via API one by one."""
+        if index >= len(settings_list):
+            self.current_slot_id = slot_id
+            self.status_label.setText(f"Settings saved to slot {slot_id}: {slot_name}")
+            self.status_label.setStyleSheet("QLabel { color: green; font-weight: bold; }")
+            return
+        
+        table_name, parameter, value = settings_list[index]
+        
+        thread = APIClientThread('POST', f"{self.api_base_url}/settings/update", {
+            'table_name': table_name,
+            'parameter': parameter,
+            'value': value
+        })
+        
+        # Store remaining settings for next call
+        thread.remaining_settings = settings_list
+        thread.next_index = index + 1
+        thread.slot_id = slot_id
+        thread.slot_name = slot_name
+        
+        thread.response_received.connect(lambda success, message, data: 
+            self._on_slot_setting_saved(success, message, data, thread))
+        thread.finished.connect(lambda: self._cleanup_thread(thread))
+        self.active_threads.append(thread)
+        thread.start()
+    
+    def _on_slot_setting_saved(self, success, message, data, thread):
+        """Handle individual slot setting save response."""
+        if success:
+            # Continue with next setting
+            self._save_slot_settings_via_api(thread.remaining_settings, thread.next_index, thread.slot_id, thread.slot_name)
+        else:
+            self.status_label.setText(f"Error saving setting: {message}")
             self.status_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
 
 
@@ -715,21 +783,156 @@ class SpectrometerSettingsWidget(QWidget):
 class FileSettingsWidget(QWidget):
     """Widget for file saving settings configuration."""
     
+    # Signal emitted when file settings are updated
+    settings_updated = pyqtSignal()
+    
     def __init__(self, interface_text=None):
         super().__init__()
         self.interface_text = interface_text
         self._build_ui()
+        self._load_settings()
     
     def _build_ui(self):
         layout = QVBoxLayout(self)
         
-        # Placeholder for file settings
-        placeholder = QLabel("File saving settings will be implemented here")
-        placeholder.setAlignment(Qt.AlignCenter)
-        placeholder.setStyleSheet("QLabel { color: gray; font-size: 14px; }")
+        # Photo save directory
+        photo_dir_label = QLabel(self.interface_text.photo_save_directory() if self.interface_text else "Photo Save Directory:")
+        photo_dir_label.setStyleSheet("QLabel { font-weight: bold; }")
+        layout.addWidget(photo_dir_label)
         
-        layout.addWidget(placeholder)
+        photo_dir_layout = QHBoxLayout()
+        self.photo_dir_label = QLabel(self.interface_text.no_folder_selected() if self.interface_text else "No folder selected")
+        self.photo_dir_label.setWordWrap(True)
+        self.photo_dir_button = QPushButton(self.interface_text.select() if self.interface_text else "Select")
+        
+        photo_dir_layout.addWidget(self.photo_dir_label, 1)
+        photo_dir_layout.addWidget(self.photo_dir_button)
+        layout.addLayout(photo_dir_layout)
+        
+        # Spectrum save directory (placeholder for future)
+        spectrum_dir_label = QLabel(self.interface_text.spectrum_save_directory() if self.interface_text else "Spectrum Save Directory:")
+        spectrum_dir_label.setStyleSheet("QLabel { font-weight: bold; }")
+        layout.addWidget(spectrum_dir_label)
+        
+        spectrum_dir_layout = QHBoxLayout()
+        self.spectrum_dir_label = QLabel(self.interface_text.no_folder_selected() if self.interface_text else "No folder selected")
+        self.spectrum_dir_label.setWordWrap(True)
+        self.spectrum_dir_button = QPushButton(self.interface_text.select() if self.interface_text else "Select")
+        
+        spectrum_dir_layout.addWidget(self.spectrum_dir_label, 1)
+        spectrum_dir_layout.addWidget(self.spectrum_dir_button)
+        layout.addLayout(spectrum_dir_layout)
+        
+        # Progress bar for file operations
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setVisible(False)  # Hidden by default
+        layout.addWidget(self.progress_bar)
+        
+        # Status label
+        self.status_label = QLabel("Ready")
+        self.status_label.setStyleSheet("QLabel { color: green; font-weight: bold; }")
+        self.status_label.setWordWrap(True)
+        layout.addWidget(self.status_label)
+        
         layout.addStretch()
+        
+        # Connect signals
+        self.photo_dir_button.clicked.connect(self._select_photo_directory)
+        self.spectrum_dir_button.clicked.connect(self._select_spectrum_directory)
+    
+    def _select_photo_directory(self):
+        """Select photo save directory."""
+        from DesktopApp.services.directory_control import get_home_directory
+        from PyQt5.QtWidgets import QFileDialog, QMessageBox
+        
+        home_dir = get_home_directory()
+        options = QFileDialog.Option.DontUseNativeDialog
+        options |= QFileDialog.Option.ReadOnly
+        
+        current_directory = self.photo_dir_label.text() if os.path.isdir(self.photo_dir_label.text()) else home_dir
+        
+        directory = QFileDialog.getExistingDirectory(self, 
+            self.interface_text.select_save_directory() if self.interface_text else "Select Save Directory",
+            current_directory, options)
+        if directory:
+            if not directory.startswith(home_dir):
+                QMessageBox.warning(self, 
+                    self.interface_text.warning_title() if self.interface_text else "Warning",
+                    self.interface_text.warning_select_out_of_home() if self.interface_text else "Please select a directory within your home folder.")
+                return
+            
+            self.photo_dir_label.setText(directory)
+            self._save_photo_directory(directory)
+            self.settings_updated.emit()
+    
+    def _update_progress(self, value, maximum=100):
+        """Update progress bar with current value and maximum."""
+        self.progress_bar.setMaximum(maximum)
+        self.progress_bar.setValue(value)
+        if value >= maximum:
+            # Hide progress bar when complete
+            self.progress_bar.setVisible(False)
+        elif not self.progress_bar.isVisible():
+            # Show progress bar when operation starts
+            self.progress_bar.setVisible(True)
+    
+    def _select_spectrum_directory(self):
+        """Select spectrum save directory (placeholder for future implementation)."""
+        from DesktopApp.services.directory_control import get_home_directory
+        from PyQt5.QtWidgets import QFileDialog, QMessageBox
+        
+        home_dir = get_home_directory()
+        options = QFileDialog.Option.DontUseNativeDialog
+        options |= QFileDialog.Option.ReadOnly
+        
+        current_directory = self.spectrum_dir_label.text() if os.path.isdir(self.spectrum_dir_label.text()) else home_dir
+        
+        directory = QFileDialog.getExistingDirectory(self, 
+            self.interface_text.select_save_directory() if self.interface_text else "Select Save Directory",
+            current_directory, options)
+        if directory:
+            if not directory.startswith(home_dir):
+                QMessageBox.warning(self, 
+                    self.interface_text.warning_title() if self.interface_text else "Warning",
+                    self.interface_text.warning_select_out_of_home() if self.interface_text else "Please select a directory within your home folder.")
+                return
+            
+            self.spectrum_dir_label.setText(directory)
+            self.status_label.setText(f"Spectrum directory set: {directory}")
+            self.status_label.setStyleSheet("QLabel { color: green; font-weight: bold; }")
+    
+    def _save_photo_directory(self, directory):
+        """Save photo directory to path manager."""
+        try:
+            from DesktopApp.config import path_manager
+            path_manager.set_save_directory('photo', directory)
+            self.status_label.setText(f"Photo directory saved: {directory}")
+            self.status_label.setStyleSheet("QLabel { color: green; font-weight: bold; }")
+        except Exception as e:
+            self.status_label.setText(f"Error saving directory: {str(e)}")
+            self.status_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
+    
+    def _load_settings(self):
+        """Load file settings from path manager."""
+        try:
+            from DesktopApp.config import path_manager
+            # Load photo directory
+            photo_dir = path_manager.get_save_directory('photo')
+            if photo_dir:
+                self.photo_dir_label.setText(photo_dir)
+            
+            # Load spectrum directory (placeholder for future)
+            # spectrum_dir = path_manager.get_save_directory('spectrum')
+            # if spectrum_dir:
+            #     self.spectrum_dir_label.setText(spectrum_dir)
+                
+        except Exception as e:
+            print(f"Error loading file settings: {e}")
+    
+    def get_photo_save_directory(self):
+        """Get current photo save directory."""
+        dir_text = self.photo_dir_label.text()
+        return dir_text if os.path.isdir(dir_text) else None
 
 
 class DeviceSettingsWidget(QWidget):
@@ -748,7 +951,14 @@ class DeviceSettingsWidget(QWidget):
         
         # Create dropdown for settings type selection
         self.settings_type_combo = QComboBox()
-        self.settings_type_combo.addItems(["Camera", "Spectrometer", "File Settings"])
+        if self.interface_text:
+            self.settings_type_combo.addItems([
+                self.interface_text.camera(),
+                self.interface_text.spectrometer(),
+                self.interface_text.file_settings()
+            ])
+        else:
+            self.settings_type_combo.addItems(["Camera", "Spectrometer", "File Settings"])
         self.settings_type_combo.currentTextChanged.connect(self._on_settings_type_changed)
         self.settings_type_combo.setMaximumWidth(200)  # Limit width for better layout
         layout.addWidget(self.settings_type_combo)

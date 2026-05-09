@@ -44,5 +44,8 @@
     "Load": "Load",
     "Save": "Save",
     "Apply": "Apply",
-    "Refresh": "Refresh"
+    "Refresh": "Refresh",
+    "Photo_Save_Directory": "Photo Save Directory:",
+    "Spectrum_Save_Directory": "Spectrum Save Directory:",
+    "File_Settings": "File Settings"
 }

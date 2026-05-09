@@ -190,3 +190,12 @@ class Interface_text():
     def refresh(self):
         return self.text_json["Refresh"]
     
+    def photo_save_directory(self):
+        return self.text_json["Photo_Save_Directory"]
+    
+    def spectrum_save_directory(self):
+        return self.text_json["Spectrum_Save_Directory"]
+    
+    def file_settings(self):
+        return self.text_json["File_Settings"]
+    

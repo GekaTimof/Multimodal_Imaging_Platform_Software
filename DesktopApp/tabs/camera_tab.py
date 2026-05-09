@@ -10,14 +10,12 @@ Features:
 - Save directory management
 """
 
-from PyQt5.QtWidgets import QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout, QFileDialog, QMessageBox, QScrollArea
+from PyQt5.QtWidgets import QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout, QScrollArea
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QPixmap
 from DesktopApp.threads.camera_thread import CameraThread
 from DesktopApp.objects.Interface_text import Interface_text
-from DesktopApp.services.directory_control import get_home_directory
 from DesktopApp.services.save_photo import save_photo
-from DesktopApp.config import path_manager
 from DesktopApp.widgets.device_settings_widget.device_settings_widgets import DeviceSettingsWidget
 import os
 import json
@@ -56,9 +54,7 @@ class CameraTab(QWidget):
         # Control panel (right side)
         self.start_button = QPushButton(interface_text.start_camera())
         self.stop_button = QPushButton(interface_text.stop_camera())
-        self.select_folder_button = QPushButton(interface_text.select_save_directory())
         self.save_image_button = QPushButton(interface_text.save_image())
-        self.save_folder_label = QLabel(interface_text.no_folder_selected())
         self.status_label = QLabel("")
         self.status_label.setWordWrap(True)
 
@@ -73,8 +69,6 @@ class CameraTab(QWidget):
         upper_control_layout.addWidget(self.start_button)
         upper_control_layout.addWidget(self.stop_button)
         upper_control_layout.addWidget(QLabel(f"Stream URL: {self.camera_source}"))
-        upper_control_layout.addWidget(self.select_folder_button)
-        upper_control_layout.addWidget(self.save_folder_label)
         upper_control_layout.addWidget(self.save_image_button)
         upper_control_layout.addWidget(self.status_label)
         upper_control_layout.addStretch()  # Push buttons to top
@@ -118,7 +112,6 @@ class CameraTab(QWidget):
         # Connect signals
         self.start_button.clicked.connect(self.start_camera)
         self.stop_button.clicked.connect(self.stop_camera)
-        self.select_folder_button.clicked.connect(self.select_save_folder)
         self.save_image_button.clicked.connect(self.save_current_image)
 
     def start_camera(self):
@@ -181,33 +174,21 @@ class CameraTab(QWidget):
         self.start_button.setEnabled(True)
         self.stop_button.setEnabled(False)
 
-    def select_save_folder(self):
-        home_dir = get_home_directory()
-
-        options = QFileDialog.Option.DontUseNativeDialog
-        options |= QFileDialog.Option.ReadOnly
-
-        current_directory = self.save_folder_label.text() if os.path.isdir(self.save_folder_label.text()) else home_dir
-
-        directory = QFileDialog.getExistingDirectory(self, self.interface_text.select_save_directory(),
-                                                     current_directory, options)
-        if directory:
-            if not directory.startswith(home_dir):
-                QMessageBox.warning(self, self.interface_text.warning_title(),
-                                    self.interface_text.warning_select_out_of_home())
-                return
-
-            self.save_folder_label.setText(directory)
-            self.save_settings({"photo": {"save_directory": directory}})
-
     def save_current_image(self):
         if self.current_frame is None:
             return
         try:
-            saved_path = save_photo(self.current_frame)
+            # Get save directory from FileSettingsWidget
+            photo_dir = self.device_settings_widget.file_tab.get_photo_save_directory()
+            if photo_dir:
+                saved_path = save_photo(self.current_frame, photo_dir)
+            else:
+                saved_path = save_photo(self.current_frame)  # Fallback to default
             print(f"Image saved to: {saved_path}")
+            self.status_label.setText(f"Image saved: {os.path.basename(saved_path)}")
         except Exception as e:
             print(f"Error saving image: {e}")
+            self.status_label.setText(f"Error saving image: {str(e)}")
 
     def on_settings_updated(self):
         """Handle settings updated event - restart camera with new settings from database."""
@@ -234,15 +215,6 @@ class CameraTab(QWidget):
             time.sleep(0.5)
             self.start_camera()
 
-    def load_save_folder(self):
-        """Load save directory from path manager configuration."""
-        try:
-            save_dir = path_manager.get_save_directory('photo')
-            if save_dir:
-                self.save_folder_label.setText(save_dir)
-        except Exception:
-            pass
-
     def load_camera_source(self):
         settings_path = os.path.join(os.path.dirname(__file__), '..', 'settings.json')
         try:
@@ -251,14 +223,6 @@ class CameraTab(QWidget):
             return settings.get('camera', {}).get('stream_url', self.DEFAULT_STREAM_URL)
         except (FileNotFoundError, json.JSONDecodeError):
             return self.DEFAULT_STREAM_URL
-
-    def save_settings(self, updates):
-        """Save settings using path manager for photo operations."""
-        if 'photo' in updates and 'save_directory' in updates['photo']:
-            try:
-                path_manager.set_save_directory('photo', updates['photo']['save_directory'])
-            except ValueError as e:
-                print(f"Error saving directory: {e}")
 
 
     # Future enhancement: Add video stream reception from Raspberry Pi

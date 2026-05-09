@@ -44,5 +44,8 @@
     "Load": "Загрузить",
     "Save": "Сохранить",
     "Apply": "Применить",
-    "Refresh": "Обновить"
+    "Refresh": "Обновить",
+    "Photo_Save_Directory": "Папка для сохранения фото:",
+    "Spectrum_Save_Directory": "Папка для сохранения спектров:",
+    "File_Settings": "Настройки файлов"
 }
