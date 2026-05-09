@@ -72,14 +72,21 @@ class MainWindow(QMainWindow):
 
     def handle_tab_change(self, index):
         """
-        Handle tab switching by activating appropriate device mode.
+        Handle tab switching by activating appropriate device mode
+        and switching device settings to the corresponding type.
         
         Args:
             index (int): Index of selected tab (0=Spectrometer, 1=Camera, 2=Wells)
         """
         if index == 0:
             switch_to_spectrometer_mode()
+            # Switch device settings to Spectrometer
+            self.spectrometer_tab.device_settings_widget.switch_to_settings(self.interface_text.spectrometer())
         elif index == 1:
             switch_to_camera_mode()
+            # Switch device settings to Camera (this will trigger refresh)
+            self.camera_tab.device_settings_widget.switch_to_settings(self.interface_text.camera())
         elif index == 2:
             switch_to_wells_mode()
+            # Switch device settings to Positioner for wells
+            self.wells_tab.device_settings_widget.switch_to_settings(self.interface_text.positioner())

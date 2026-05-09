@@ -9,6 +9,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QFont
+from .positioner_settings_widget import PositionerSettingsWidget
 
 
 class SettingsSlotDialog(QDialog):
@@ -170,6 +171,11 @@ class SettingsSlotDialog(QDialog):
         if current_item:
             return current_item.data(Qt.UserRole)
         return None
+    
+    def _cleanup_thread(self, thread):
+        """Remove thread from active threads list when finished."""
+        if hasattr(self, 'active_threads') and thread in self.active_threads:
+            self.active_threads.remove(thread)
 
 
 class APIClientThread(QThread):
@@ -241,8 +247,15 @@ class CameraSettingsWidget(QWidget):
     def _build_ui(self):
         layout = QVBoxLayout(self)
         
+        # Set margins and spacing for better layout
+        layout.setContentsMargins(10, 10, 10, 10)  # Add padding around the widget
+        layout.setSpacing(10)  # Add spacing between elements
+        
         # Camera settings layout (no group box)
         settings_layout = QGridLayout()
+        settings_layout.setContentsMargins(5, 5, 5, 5)  # Add padding inside settings grid
+        settings_layout.setHorizontalSpacing(10)
+        settings_layout.setVerticalSpacing(8)
         
         # Settings Name
         settings_name_label = QLabel(self.interface_text.settings_name() if self.interface_text else "Settings Name:")
@@ -340,21 +353,27 @@ class CameraSettingsWidget(QWidget):
         
         layout.addLayout(settings_layout)
         
-        # Buttons
-        button_layout = QHBoxLayout()
+        # Buttons - organize in rows with max 3 buttons per row
+        button_row1_layout = QHBoxLayout()
+        button_row2_layout = QHBoxLayout()
         
         self.btn_refresh = QPushButton(self.interface_text.refresh() if self.interface_text else "Refresh")
         self.btn_load_slot = QPushButton(self.interface_text.load() if self.interface_text else "Load")
         self.btn_save_slot = QPushButton(self.interface_text.save() if self.interface_text else "Save")
         self.btn_apply = QPushButton(self.interface_text.apply() if self.interface_text else "Apply")
         
-        button_layout.addWidget(self.btn_refresh)
-        button_layout.addWidget(self.btn_load_slot)
-        button_layout.addWidget(self.btn_save_slot)
-        button_layout.addStretch()
-        button_layout.addWidget(self.btn_apply)
+        # First row: Refresh, Load, Save (3 buttons)
+        button_row1_layout.addWidget(self.btn_refresh)
+        button_row1_layout.addWidget(self.btn_load_slot)
+        button_row1_layout.addWidget(self.btn_save_slot)
+        button_row1_layout.addStretch()  # Push buttons to left
         
-        layout.addLayout(button_layout)
+        # Second row: Apply (1 button)
+        button_row2_layout.addWidget(self.btn_apply)
+        button_row2_layout.addStretch()  # Push button to left
+        
+        layout.addLayout(button_row1_layout)
+        layout.addLayout(button_row2_layout)
         
         # Status label
         self.status_label = QLabel("Ready")
@@ -712,12 +731,12 @@ class CameraSettingsWidget(QWidget):
             self.status_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
     
     def _save_slot_settings_via_api(self, settings, slot_id):
-        """Save slot settings via new API endpoint."""
+        """Save slot settings via new API endpoint with fallback."""
         try:
             thread = APIClientThread('POST', f"{self.api_base_url}/settings/camera/save-slot/{slot_id}", settings)
             
             thread.response_received.connect(lambda success, message, data: 
-                self._on_slot_settings_saved(success, message, data, slot_id))
+                self._on_slot_settings_saved_via_new_api(success, message, data, slot_id, settings))
             thread.finished.connect(lambda: self._cleanup_thread(thread))
             self.active_threads.append(thread)
             thread.start()
@@ -726,8 +745,45 @@ class CameraSettingsWidget(QWidget):
             self.status_label.setText(f"API error saving to slot {slot_id}: {str(e)}")
             self.status_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
     
+    def _on_slot_settings_saved_via_new_api(self, success, message, data, slot_id, settings):
+        """Handle slot settings save response from new API endpoint."""
+        if success:
+            self.current_slot_id = slot_id
+            slot_name = data.get('data', {}).get('settings', {}).get('SettingsName', f"Slot {slot_id}")
+            self.status_label.setText(f"Settings saved to slot {slot_id}: {slot_name}")
+            self.status_label.setStyleSheet("QLabel { color: green; font-weight: bold; }")
+        else:
+            # If new API fails, try the old method (update current settings)
+            self.status_label.setText(f"New API failed, trying fallback: {message}")
+            self.status_label.setStyleSheet("QLabel { color: orange; font-weight: bold; }")
+            self._save_slot_settings_fallback(settings, slot_id)
+    
+    def _save_slot_settings_fallback(self, settings, slot_id):
+        """Fallback method: save settings by updating current settings."""
+        try:
+            # Update current settings (not slot-specific)
+            settings_to_update = [
+                ("CameraSettings", "SettingsName", settings.get('SettingsName', f"Slot {slot_id}")),
+                ("CameraSettings", "PhotoResolution", settings.get('PhotoResolution', '3280x2464')),
+                ("CameraSettings", "VideoResolution", settings.get('VideoResolution', '1920x1080')),
+                ("CameraSettings", "AeEnable", str(int(settings.get('AeEnable', True)))),
+                ("CameraSettings", "AwbEnable", str(int(settings.get('AwbEnable', True)))),
+                ("CameraSettings", "ExposureTime", str(int(settings.get('ExposureTime', 10000)))),
+                ("CameraSettings", "AnalogueGain", str(float(settings.get('AnalogueGain', 1.0)))),
+                ("CameraSettings", "ExposureValue", str(float(settings.get('ExposureValue', 0.0)))),
+                ("CameraSettings", "RedGain", str(float(settings.get('RedGain', 1.0)))),
+                ("CameraSettings", "BlueGain", str(float(settings.get('BlueGain', 1.0))))
+            ]
+            
+            self._apply_settings_with_fallback(settings_to_update, 0)
+            
+        except Exception as e:
+            self.status_label.setText(f"Fallback save failed: {str(e)}")
+            self.status_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
+    
+        
     def _on_slot_settings_saved(self, success, message, data, slot_id):
-        """Handle slot settings save response."""
+        """Handle slot settings save response (legacy method)."""
         if success:
             self.current_slot_id = slot_id
             slot_name = data.get('data', {}).get('settings', {}).get('SettingsName', f"Slot {slot_id}")
@@ -773,15 +829,23 @@ class FileSettingsWidget(QWidget):
     def _build_ui(self):
         layout = QVBoxLayout(self)
         
+        # Set margins and spacing for better layout
+        layout.setContentsMargins(10, 10, 10, 10)  # Add padding around the widget
+        layout.setSpacing(10)  # Add spacing between elements
+        
         # Photo save directory
         photo_dir_label = QLabel(self.interface_text.photo_save_directory() if self.interface_text else "Photo Save Directory:")
         photo_dir_label.setStyleSheet("QLabel { font-weight: bold; }")
+        photo_dir_label.setWordWrap(True)
         layout.addWidget(photo_dir_label)
         
         photo_dir_layout = QHBoxLayout()
+        photo_dir_layout.setSpacing(10)  # Add spacing between label and button
         self.photo_dir_label = QLabel(self.interface_text.no_folder_selected() if self.interface_text else "No folder selected")
         self.photo_dir_label.setWordWrap(True)
+        self.photo_dir_label.setMaximumWidth(250)  # Prevent label from stretching too wide
         self.photo_dir_button = QPushButton(self.interface_text.select() if self.interface_text else "Select")
+        self.photo_dir_button.setMaximumWidth(80)  # Limit button width
         
         photo_dir_layout.addWidget(self.photo_dir_label, 1)
         photo_dir_layout.addWidget(self.photo_dir_button)
@@ -790,12 +854,16 @@ class FileSettingsWidget(QWidget):
         # Spectrum save directory (placeholder for future)
         spectrum_dir_label = QLabel(self.interface_text.spectrum_save_directory() if self.interface_text else "Spectrum Save Directory:")
         spectrum_dir_label.setStyleSheet("QLabel { font-weight: bold; }")
+        spectrum_dir_label.setWordWrap(True)
         layout.addWidget(spectrum_dir_label)
         
         spectrum_dir_layout = QHBoxLayout()
+        spectrum_dir_layout.setSpacing(10)  # Add spacing between label and button
         self.spectrum_dir_label = QLabel(self.interface_text.no_folder_selected() if self.interface_text else "No folder selected")
         self.spectrum_dir_label.setWordWrap(True)
+        self.spectrum_dir_label.setMaximumWidth(250)  # Prevent label from stretching too wide
         self.spectrum_dir_button = QPushButton(self.interface_text.select() if self.interface_text else "Select")
+        self.spectrum_dir_button.setMaximumWidth(80)  # Limit button width
         
         spectrum_dir_layout.addWidget(self.spectrum_dir_label, 1)
         spectrum_dir_layout.addWidget(self.spectrum_dir_button)
@@ -927,16 +995,21 @@ class DeviceSettingsWidget(QWidget):
     def _build_ui(self):
         layout = QVBoxLayout(self)
         
+        # Set margins and spacing for better layout
+        layout.setContentsMargins(10, 10, 10, 10)  # Add padding around the widget
+        layout.setSpacing(10)  # Add spacing between elements
+        
         # Create dropdown for settings type selection
         self.settings_type_combo = QComboBox()
         if self.interface_text:
             self.settings_type_combo.addItems([
                 self.interface_text.camera(),
                 self.interface_text.spectrometer(),
+                self.interface_text.positioner() if hasattr(self.interface_text, 'positioner') else "Positioner",
                 self.interface_text.file_settings()
             ])
         else:
-            self.settings_type_combo.addItems(["Camera", "Spectrometer", "File Settings"])
+            self.settings_type_combo.addItems(["Camera", "Spectrometer", "Positioner", "File Settings"])
         self.settings_type_combo.currentTextChanged.connect(self._on_settings_type_changed)
         self.settings_type_combo.setMaximumWidth(200)  # Limit width for better layout
         layout.addWidget(self.settings_type_combo)
@@ -947,10 +1020,12 @@ class DeviceSettingsWidget(QWidget):
         # Add settings widgets
         self.camera_tab = CameraSettingsWidget(self.interface_text)
         self.spectrometer_tab = SpectrometerSettingsWidget(self.interface_text)
+        self.positioner_tab = PositionerSettingsWidget(self.interface_text)
         self.file_tab = FileSettingsWidget(self.interface_text)
         
         self.stacked_widget.addWidget(self.camera_tab)
         self.stacked_widget.addWidget(self.spectrometer_tab)
+        self.stacked_widget.addWidget(self.positioner_tab)
         self.stacked_widget.addWidget(self.file_tab)
         
         layout.addWidget(self.stacked_widget)
@@ -966,14 +1041,62 @@ class DeviceSettingsWidget(QWidget):
     
     def _on_settings_type_changed(self, text):
         """Handle settings type dropdown change."""
-        if text == "Camera":
+        # Handle localized text comparison
+        if self.interface_text:
+            camera_text = self.interface_text.camera()
+            spectrometer_text = self.interface_text.spectrometer()
+            positioner_text = self.interface_text.positioner()
+            file_settings_text = self.interface_text.file_settings()
+        else:
+            camera_text = "Camera"
+            spectrometer_text = "Spectrometer"
+            positioner_text = "Positioner"
+            file_settings_text = "File Settings"
+        
+        if text == camera_text:
             self.stacked_widget.setCurrentWidget(self.camera_tab)
-        elif text == "Spectrometer":
+            # Call refresh when switching to camera settings
+            self.camera_tab.load_settings()
+        elif text == spectrometer_text:
             self.stacked_widget.setCurrentWidget(self.spectrometer_tab)
-        elif text == "File Settings":
+            # Placeholder for spectrometer refresh (will be implemented later)
+            self._spectrometer_refresh_placeholder()
+        elif text == positioner_text:
+            self.stacked_widget.setCurrentWidget(self.positioner_tab)
+            # Load positioner settings when switching
+            self.positioner_tab.load_settings()
+        elif text == file_settings_text:
             self.stacked_widget.setCurrentWidget(self.file_tab)
     
     def _on_slot_changed(self, slot_id):
         """Forward slot changed signal."""
         # This will be handled by parent widget
         pass
+    
+    def _spectrometer_refresh_placeholder(self):
+        """Placeholder method for spectrometer refresh functionality."""
+        # This will be implemented when spectrometer settings are fully developed
+        print("Spectrometer refresh called - placeholder implementation")
+    
+    def switch_to_settings(self, settings_type):
+        """
+        Switch to specific settings type and trigger appropriate actions.
+        
+        Args:
+            settings_type (str): Type of settings to switch to ('Camera', 'Spectrometer', 'Positioner', 'File Settings')
+        """
+        # Find the index of the requested settings type
+        index = self.settings_type_combo.findText(settings_type)
+        if index >= 0:
+            current_index = self.settings_type_combo.currentIndex()
+            if current_index != index:
+                # Only switch if different from current
+                self.settings_type_combo.setCurrentIndex(index)
+                print(f"Switched to settings: {settings_type}")
+            else:
+                # Already on correct settings, but still trigger refresh for camera
+                if settings_type == self.interface_text.camera() if self.interface_text else "Camera":
+                    print("Already on camera settings, triggering refresh anyway")
+                    self.camera_tab.load_settings()
+        else:
+            print(f"Settings type '{settings_type}' not found")

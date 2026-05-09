@@ -71,6 +71,10 @@ class Interface_text():
         """Return camera-related text."""
         return self.text_json["Camera"]
     
+    def positioner(self):
+        """Return positioner-related text."""
+        return self.text_json["Positioner"]
+    
     def spectrometer(self):
         return self.text_json["Spectrometer"]
     
