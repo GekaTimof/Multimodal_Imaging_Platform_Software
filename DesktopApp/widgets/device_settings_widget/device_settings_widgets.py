@@ -697,68 +697,44 @@ class CameraSettingsWidget(QWidget):
                 'VideoResolution': video_resolution,
                 'AeEnable': self.chk_ae.isChecked(),
                 'AwbEnable': self.chk_awb.isChecked(),
-                'ExposureTime': self.exp_time.value(),
-                'AnalogueGain': self.gain.value(),
-                'ExposureValue': self.exp_value.value(),
-                'RedGain': self.red_gain.value(),
-                'BlueGain': self.blue_gain.value()
+                'ExposureTime': int(self.exp_time.value()),
+                'AnalogueGain': float(self.gain.value()),
+                'ExposureValue': float(self.exp_value.value()),
+                'RedGain': float(self.red_gain.value()),
+                'BlueGain': float(self.blue_gain.value())
             }
             
-            # Save each setting via API
-            settings_to_save = [
-                ("CameraSettings", f"Slot{slot_id}Name", settings['SettingsName']),
-                ("CameraSettings", f"Slot{slot_id}PhotoResolution", settings['PhotoResolution']),
-                ("CameraSettings", f"Slot{slot_id}VideoResolution", settings['VideoResolution']),
-                ("CameraSettings", f"Slot{slot_id}AeEnable", str(int(settings['AeEnable']))),
-                ("CameraSettings", f"Slot{slot_id}AwbEnable", str(int(settings['AwbEnable']))),
-                ("CameraSettings", f"Slot{slot_id}ExposureTime", str(settings['ExposureTime'])),
-                ("CameraSettings", f"Slot{slot_id}AnalogueGain", str(settings['AnalogueGain'])),
-                ("CameraSettings", f"Slot{slot_id}ExposureValue", str(settings['ExposureValue'])),
-                ("CameraSettings", f"Slot{slot_id}RedGain", str(settings['RedGain'])),
-                ("CameraSettings", f"Slot{slot_id}BlueGain", str(settings['BlueGain']))
-            ]
-            
-            self._save_slot_settings_via_api(settings_to_save, 0, slot_id, settings['SettingsName'])
+            # Save all settings at once via new API endpoint
+            self._save_slot_settings_via_api(settings, slot_id)
                 
         except Exception as e:
             self.status_label.setText(f"Error saving to slot {slot_id}: {str(e)}")
             self.status_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
     
-    def _save_slot_settings_via_api(self, settings_list, index, slot_id, slot_name):
-        """Save slot settings via API one by one."""
-        if index >= len(settings_list):
+    def _save_slot_settings_via_api(self, settings, slot_id):
+        """Save slot settings via new API endpoint."""
+        try:
+            thread = APIClientThread('POST', f"{self.api_base_url}/settings/camera/save-slot/{slot_id}", settings)
+            
+            thread.response_received.connect(lambda success, message, data: 
+                self._on_slot_settings_saved(success, message, data, slot_id))
+            thread.finished.connect(lambda: self._cleanup_thread(thread))
+            self.active_threads.append(thread)
+            thread.start()
+                
+        except Exception as e:
+            self.status_label.setText(f"API error saving to slot {slot_id}: {str(e)}")
+            self.status_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
+    
+    def _on_slot_settings_saved(self, success, message, data, slot_id):
+        """Handle slot settings save response."""
+        if success:
             self.current_slot_id = slot_id
+            slot_name = data.get('data', {}).get('settings', {}).get('SettingsName', f"Slot {slot_id}")
             self.status_label.setText(f"Settings saved to slot {slot_id}: {slot_name}")
             self.status_label.setStyleSheet("QLabel { color: green; font-weight: bold; }")
-            return
-        
-        table_name, parameter, value = settings_list[index]
-        
-        thread = APIClientThread('POST', f"{self.api_base_url}/settings/update", {
-            'table_name': table_name,
-            'parameter': parameter,
-            'value': value
-        })
-        
-        # Store remaining settings for next call
-        thread.remaining_settings = settings_list
-        thread.next_index = index + 1
-        thread.slot_id = slot_id
-        thread.slot_name = slot_name
-        
-        thread.response_received.connect(lambda success, message, data: 
-            self._on_slot_setting_saved(success, message, data, thread))
-        thread.finished.connect(lambda: self._cleanup_thread(thread))
-        self.active_threads.append(thread)
-        thread.start()
-    
-    def _on_slot_setting_saved(self, success, message, data, thread):
-        """Handle individual slot setting save response."""
-        if success:
-            # Continue with next setting
-            self._save_slot_settings_via_api(thread.remaining_settings, thread.next_index, thread.slot_id, thread.slot_name)
         else:
-            self.status_label.setText(f"Error saving setting: {message}")
+            self.status_label.setText(f"Error saving to slot {slot_id}: {message}")
             self.status_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
 
 

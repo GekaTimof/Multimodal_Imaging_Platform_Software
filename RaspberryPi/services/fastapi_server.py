@@ -200,6 +200,30 @@ async def get_camera_validation_rules():
     }
 
 
+@app.post("/api/settings/camera/save-slot/{slot_id}", response_model=APIResponse)
+async def save_camera_settings_to_slot(slot_id: int, settings: CameraSettingsResponse):
+    """Save camera settings to a specific slot (0-9)."""
+    try:
+        if not 0 <= slot_id <= 9:
+            raise HTTPException(status_code=400, detail="Slot ID must be between 0 and 9")
+        
+        success, message = db_service.save_camera_settings_to_slot(slot_id, settings.dict())
+        
+        if success:
+            return APIResponse(
+                success=True,
+                message=f"Settings saved to slot {slot_id}",
+                data={"slot_id": slot_id, "settings": settings.dict()}
+            )
+        else:
+            raise HTTPException(status_code=400, detail=message)
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+
+
 @app.post("/api/settings/camera/reload", response_model=APIResponse)
 async def reload_camera_settings():
     """Signal that camera settings need to be reloaded."""
