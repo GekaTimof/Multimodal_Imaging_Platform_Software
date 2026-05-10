@@ -7,15 +7,13 @@ import os
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Try different import approaches for flexibility
-try:
-    from RaspberryPi.database_service import db_service
-    from RaspberryPi.services.camera_service import CameraService
-except ImportError:
-    # Fallback for running from services directory
-    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    from database_service import db_service
-    from camera_service import CameraService
+# Always import from the correct RaspberryPi directory
+raspberry_pi_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if raspberry_pi_dir not in sys.path:
+    sys.path.insert(0, raspberry_pi_dir)
+
+from database_service import db_service
+from services.camera_service import CameraService
 
 app = FastAPI(
     title="Device Settings API",

@@ -2,7 +2,8 @@ import sqlite3
 import os
 from typing import Dict, Any, Tuple
 
-db_folder = "."
+# Get the directory where this script is located (RaspberryPi directory)
+db_folder = os.path.dirname(os.path.abspath(__file__))
 db_name = "DevicesSettings.db"
 db_path = os.path.join(db_folder, db_name)
 
@@ -47,7 +48,12 @@ class DatabaseService:
     def _ensure_database_exists(self):
         """Ensure database and tables exist."""
         if not os.path.exists(db_path):
-            from services import database_ini
+            import sys
+            # Add services directory to path for import
+            services_dir = os.path.join(os.path.dirname(__file__), 'services')
+            if services_dir not in sys.path:
+                sys.path.insert(0, services_dir)
+            import database_ini
             database_ini.main()
     
     def _validate_parameter(self, table_name: str, parameter: str, value: Any) -> Tuple[bool, str]:
