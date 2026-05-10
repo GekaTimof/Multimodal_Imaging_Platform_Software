@@ -96,7 +96,7 @@ class APIResponse(BaseModel):
     data: Optional[Dict[str, Any]] = None
 
 
-class ErrorResponse(BaseModel):
+class ErrorApiResponse(BaseModel):
     success: bool = False
     error: str
     details: Optional[Dict[str, Any]] = None
