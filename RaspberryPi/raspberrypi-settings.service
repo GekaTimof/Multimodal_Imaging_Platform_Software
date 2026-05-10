@@ -1,0 +1,17 @@
+[Unit]
+Description=Raspberry Pi Settings API Server
+After=network.target raspberrypi-camera.service
+Wants=raspberrypi-camera.service
+
+[Service]
+Type=simple
+WorkingDirectory=/home/minilumi/Multimodal_Imaging_Platform_Software/RaspberryPi
+ExecStart=/usr/bin/python3 services/fastapi_server.py
+Restart=on-failure
+RestartSec=5
+User=minilumi
+Environment=PYTHONUNBUFFERED=1
+Environment=PATH=/home/minilumi/Multimodal_Imaging_Platform_Software/venv/bin:/usr/local/bin:/usr/bin:/bin
+
+[Install]
+WantedBy=multi-user.target
