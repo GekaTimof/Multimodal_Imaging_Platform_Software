@@ -105,8 +105,7 @@ class SettingsSlotDialog(QDialog):
     def _load_individual_slot_details(self, slot_id):
         """Load details for a specific slot via API."""
         if slot_id > 9:
-            # All slots loaded, add separators
-            self._add_separators()
+            # All slots loaded
             return
         
         try:
@@ -501,11 +500,11 @@ class CameraSettingsWidget(QWidget):
             self.status_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
     
     def load_settings(self):
-        """Load current camera settings from API or database fallback."""
+        """Load current camera settings from API."""
         self.status_label.setText("Loading settings...")
         self.status_label.setStyleSheet("QLabel { color: blue; font-weight: bold; }")
         
-        # Try API first, then fallback to database
+        # Try API
         thread = APIClientThread('GET', f"{self.api_base_url}/settings/camera")
         thread.response_received.connect(self._on_settings_loaded)
         thread.finished.connect(lambda: self._cleanup_thread(thread))
@@ -541,29 +540,19 @@ class CameraSettingsWidget(QWidget):
             self.current_settings = settings
             self._update_ui_from_settings(settings)
             
-            self.status_label.setText("Settings loaded successfully")
+            # Apply settings immediately after loading
+            self.apply_settings()
+            
+            self.status_label.setText("Settings loaded and applied successfully")
             self.status_label.setStyleSheet("QLabel { color: green; font-weight: bold; }")
         else:
-            # API failed, try database fallback
-            self._load_settings_from_api_fallback()
-    
-    def _load_settings_from_api_fallback(self):
-        """Load settings from API fallback when main API call fails."""
-        try:
-            # Try API again with different approach
-            api_url = f"{self.api_base_url}/settings/camera"
-            thread = APIClientThread('GET', api_url)
-            thread.response_received.connect(self._on_settings_loaded)
-            thread.finished.connect(lambda: self._cleanup_thread(thread))
-            self.active_threads.append(thread)
-            thread.start()
-                
-        except Exception as e:
-            self.status_label.setText(f"Failed to load from API: {str(e)}")
+            # API failed, show error
+            self.status_label.setText("Failed to load settings from API")
             self.status_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
     
+        
     def apply_settings(self):
-        """Apply current settings to the database."""
+        """Apply current settings to the API."""
         self.status_label.setText("Applying settings...")
         self.status_label.setStyleSheet("QLabel { color: blue; font-weight: bold; }")
         
@@ -588,7 +577,7 @@ class CameraSettingsWidget(QWidget):
             ("CameraSettings", "BlueGain", str(float(self.blue_gain.value()))),
         ]
         
-        # Try API first, then fallback to database
+        # Apply settings via API
         self._apply_settings_with_fallback(settings_to_update, 0)
     
     def _apply_settings_with_fallback(self, settings_list, index):

@@ -123,15 +123,15 @@ class CameraTab(QWidget):
         self.thread.status_ready.connect(self.on_camera_status)
         self.thread.start()
         
-        # Load and apply database settings after camera starts
-        def apply_db_settings():
+        # Load and apply camera settings after camera starts
+        def apply_camera_settings():
             if self.thread and self.thread.cap:
                 settings = self.thread.load_camera_settings(self.current_settings_slot)
                 if settings:
                     self.thread.apply_camera_settings(settings)
         
         # Wait a moment for camera to initialize, then apply settings
-        QTimer.singleShot(1000, apply_db_settings)
+        QTimer.singleShot(1000, apply_camera_settings)
         
         self.start_button.setEnabled(False)
         self.stop_button.setEnabled(True)
@@ -191,8 +191,8 @@ class CameraTab(QWidget):
             self.status_label.setText(f"Error saving image: {str(e)}")
 
     def on_settings_updated(self):
-        """Handle settings updated event - restart camera with new settings from database."""
-        print("Settings updated, restarting camera with new database settings...")
+        """Handle settings updated event - restart camera with new settings from API."""
+        print("Settings updated, restarting camera with new settings...")
         
         # Stop current camera if running
         if self.thread is not None and self.thread.isRunning():
@@ -201,7 +201,7 @@ class CameraTab(QWidget):
         # Wait a moment for camera to stop
         time.sleep(0.5)
         
-        # Restart camera - it will load settings from database automatically
+        # Restart camera - it will load settings from API automatically
         self.start_camera()
     
     def set_current_settings_slot(self, slot_id):

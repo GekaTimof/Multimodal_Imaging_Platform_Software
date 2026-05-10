@@ -41,7 +41,9 @@ class Interface_text():
             name = list(Languages.keys())[0]
             print(f"Falling back to language: {name}")
         
-        link = Languages[name]
+        # Get absolute path to language file relative to this script
+        script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        link = os.path.join(script_dir, Languages[name])
         self.file = link
         try:
             with open(link, 'r', encoding='utf-8') as f:

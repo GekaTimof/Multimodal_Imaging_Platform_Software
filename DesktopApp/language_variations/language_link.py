@@ -8,6 +8,6 @@ used by the Interface_text class to load appropriate UI text.
 
 # Mapping of language names to their JSON translation files
 Languages: dict = {
-    "Russian": "DesktopApp/language_variations/text_variations/russian_text.json",
-    "English": "DesktopApp/language_variations/text_variations/english_text.json"
+    "Russian": "language_variations/text_variations/russian_text.json",
+    "English": "language_variations/text_variations/english_text.json"
 }
