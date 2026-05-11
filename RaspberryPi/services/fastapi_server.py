@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field, validator
 from typing import Optional, Dict, Any, Union
 import sys
 import os
+import logging
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -13,9 +14,15 @@ raspberry_pi_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if raspberry_pi_dir not in sys.path:
     sys.path.insert(0, raspberry_pi_dir)
 
+# Import config and services
+from config import config
 from database_service import db_service
 from services.camera_service import CameraService
 from services.light_switcher_service import light_switcher_service, SwitchState
+
+# Setup logging
+logging.basicConfig(level=config.LOG_LEVEL, format=config.LOG_FORMAT)
+logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="Device Settings API",
@@ -392,7 +399,13 @@ async def get_camera_validation_rules():
     """Get validation rules for camera parameters."""
     return {
         "success": True,
-        "data": db_service.CAMERA_VALIDATION_RULES
+        "data": {
+            "exposure_time_range": [config.MIN_EXPOSURE_TIME_US, config.MAX_EXPOSURE_TIME_US],
+            "analog_gain_range": [config.MIN_ANALOG_GAIN, config.MAX_ANALOG_GAIN],
+            "exposure_value_range": [config.MIN_EXPOSURE_VALUE, config.MAX_EXPOSURE_VALUE],
+            "color_gain_range": [config.MIN_COLOR_GAIN, config.MAX_COLOR_GAIN],
+            "available_resolutions": config.AVAILABLE_RESOLUTIONS
+        }
     }
 
 
@@ -465,38 +478,26 @@ async def general_exception_handler(request, exc):
 if __name__ == "__main__":
     import uvicorn
     
-    print("Starting Device Settings FastAPI Server...")
-    print("Available endpoints:")
-    print("  GET  /api/health - Health check")
-    print("  Light Switcher:")
-    print("    GET  /api/light-switcher/status - Get connection status")
-    print("    POST /api/light-switcher/connect - Connect to Arduino")
-    print("    POST /api/light-switcher/switch - Switch to state1/state2")
-    print("    POST /api/light-switcher/disconnect - Disconnect from Arduino")
-    print("  Camera:")
-    print("    GET  /api/settings/camera - Get camera settings")
-    print("    GET  /api/settings/{table_name} - Get settings from any table")
-    print("    POST /api/settings/update - Update a single parameter")
-    print("    POST /api/settings/camera - Update all camera settings")
-    print("    GET  /api/settings/camera/validation-rules - Get validation rules")
-    print("\nExample usage:")
-    print("  curl -X GET http://localhost:8000/api/light-switcher/status")
-    print("  curl -X POST http://localhost:8000/api/light-switcher/connect")
-    print("  curl -X POST http://localhost:8000/api/light-switcher/switch \\")
-    print("       -H 'Content-Type: application/json' \\")
-    print("       -d '{\"state\":\"state1\"}'")
-    print("  curl -X GET http://localhost:8000/api/settings/camera")
-    print("  curl -X POST http://localhost:8000/api/settings/update \\")
-    print("       -H 'Content-Type: application/json' \\")
-    print("       -d '{\"table_name\":\"CameraSettings\",\"parameter\":\"ExposureTime\",\"value\":15000}'")
-    print("  curl -X POST http://localhost:8000/api/settings/camera \\")
-    print("       -H 'Content-Type: application/json' \\")
-    print("       -d '{\"AeEnable\":true,\"AwbEnable\":true,\"ExposureTime\":15000,\"AnalogueGain\":1.5,\"ExposureValue\":0.0,\"RedGain\":1.2,\"BlueGain\":1.1}'")
+    logger.info(f"Starting Device Settings FastAPI Server on {config.API_HOST}:{config.API_PORT}...")
+    logger.info(f"Database path: {config.get_database_path()}")
+    logger.info("Available endpoints:")
+    logger.info("  GET  /api/health - Health check")
+    logger.info("  Light Switcher:")
+    logger.info("    GET  /api/light-switcher/status - Get connection status")
+    logger.info("    POST /api/light-switcher/connect - Connect to Arduino")
+    logger.info("    POST /api/light-switcher/switch - Switch to state1/state2")
+    logger.info("    POST /api/light-switcher/disconnect - Disconnect from Arduino")
+    logger.info("  Camera:")
+    logger.info("    GET  /api/settings/camera - Get camera settings")
+    logger.info("    GET  /api/settings/{table_name} - Get settings from any table")
+    logger.info("    POST /api/settings/update - Update a single parameter")
+    logger.info("    POST /api/settings/camera - Update all camera settings")
+    logger.info("    GET  /api/settings/camera/validation-rules - Get validation rules")
     
     uvicorn.run(
         app,
-        host="0.0.0.0",
-        port=8000,
+        host=config.API_HOST,
+        port=config.API_PORT,
         reload=False,
-        log_level="info"
+        log_level=config.LOG_LEVEL.lower()
     )

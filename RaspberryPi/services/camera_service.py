@@ -5,9 +5,14 @@ import cv2
 import sys
 import os
 import subprocess
+import logging
+from typing import Optional, Dict, Any, Tuple, Union
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# Import config
+from config import config
 
 # Try different import approaches for flexibility
 try:
@@ -18,6 +23,9 @@ except ImportError:
     import database_service as db_service_module
     db_service = db_service_module.db_service
 
+# Setup logging
+logger = logging.getLogger(__name__)
+
 # Camera backend options
 OPENCV_AVAILABLE = True
 PICAMERA2_AVAILABLE = False  # Disabled due to libcamera issues
@@ -27,13 +35,13 @@ RPICAM_AVAILABLE = True  # Use rpicam-apps as subprocess
 class CameraService:
     """Service responsible for capturing frames from the Raspberry Pi camera."""
 
-    def __init__(self, fps=20):
-        self.fps = fps
+    def __init__(self, fps: int = config.DEFAULT_FPS):
+        self.fps: int = fps
         self.frame_lock = threading.Lock()
-        self.current_frame = None
-        self.running = False
-        self.use_real_camera = False
-        self.camera_backend = None
+        self.current_frame: Optional[np.ndarray] = None
+        self.running: bool = False
+        self.use_real_camera: bool = False
+        self.camera_backend: Optional[str] = None
         
         # Load settings from database
         self._load_settings()

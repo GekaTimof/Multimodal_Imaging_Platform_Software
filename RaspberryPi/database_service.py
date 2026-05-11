@@ -1,46 +1,21 @@
 import sqlite3
 import os
-from typing import Dict, Any, Tuple
+import logging
+from typing import Dict, Any, Tuple, Optional
 
-# Get the directory where this script is located (RaspberryPi directory)
-db_folder = os.path.dirname(os.path.abspath(__file__))
-db_name = "DevicesSettings.db"
-db_path = os.path.join(db_folder, db_name)
+# Import configuration and error handlers
+from config import config
+from utils.error_handlers import database_error_handler, api_error_handler, log_execution_time
+
+# Get database path from config
+db_path = config.get_database_path()
+
+# Setup logging
+logger = logging.getLogger(__name__)
 
 
 class DatabaseService:
     """Service for managing device settings in the database with validation."""
-    
-    # Camera parameter validation rules
-    CAMERA_VALIDATION_RULES = {
-        'SettingsName': {'type': str, 'range': None},
-        'PhotoResolution': {'type': str, 'range': None},
-        'VideoResolution': {'type': str, 'range': None},
-        'AeEnable': {'type': bool, 'range': None},
-        'AwbEnable': {'type': bool, 'range': None},
-        'ExposureTime': {'type': int, 'range': (100, 3000000)},
-        'AnalogueGain': {'type': float, 'range': (0.0, 32.0)},
-        'ExposureValue': {'type': float, 'range': (-10.0, 10.0)},
-        'RedGain': {'type': float, 'range': (0.0, 8.0)},
-        'BlueGain': {'type': float, 'range': (0.0, 8.0)}
-    }
-    
-    # Available camera resolutions for Raspberry Pi Camera Modules
-    # Based on Pi Camera v2 (8MP) and v3 (12MP) capabilities
-    # Sorted by ascending resolution (total pixels)
-    AVAILABLE_RESOLUTIONS = [
-        '640x480',      # VGA - 4:3
-        '800x600',      # SVGA - 4:3
-        '1024x768',     # XGA - 4:3
-        '1280x720',     # 720p HD - 16:9
-        '1296x972',     # 4:3 mid-resolution
-        '1640x1232',    # 4:3 aspect ratio
-        '1920x1080',    # 1080p FHD - 16:9
-        '2304x1296',    # 16:9 aspect ratio
-        '2592x1944',    # High 4:3 resolution
-        '3280x2464',    # Full 8MP resolution - 4:3
-        '4608x2592',    # Full 12MP resolution - 16:9
-    ]
     
     def __init__(self):
         self._ensure_database_exists()
@@ -57,71 +32,19 @@ class DatabaseService:
             database_ini.main()
     
     def _validate_parameter(self, table_name: str, parameter: str, value: Any) -> Tuple[bool, str]:
-        """Validate parameter value against type and range constraints."""
+        """Validate parameter value against configuration rules."""
         if table_name == 'CameraSettings':
-            if parameter not in self.CAMERA_VALIDATION_RULES:
-                return False, f"Unknown parameter: {parameter}"
-            
-            rules = self.CAMERA_VALIDATION_RULES[parameter]
-            
-            # Type validation
-            if rules['type'] is bool:
-                if isinstance(value, str):
-                    if value.lower() in ('true', '1', 'on'):
-                        value = 1  # Convert to integer for database
-                    elif value.lower() in ('false', '0', 'off'):
-                        value = 0  # Convert to integer for database
-                    else:
-                        return False, f"Invalid boolean value: {value}"
-                elif isinstance(value, bool):
-                    value = 1 if value else 0  # Convert boolean to integer for database
-                elif isinstance(value, int):
-                    # Accept integers (0/1) from Pydantic conversion
-                    value = 1 if value else 0
-                else:
-                    return False, f"Expected boolean, got {type(value).__name__}"
-            
-            elif rules['type'] is int:
-                try:
-                    value = int(value)
-                except (ValueError, TypeError):
-                    return False, f"Expected integer, got: {value}"
-            
-            elif rules['type'] is float:
-                try:
-                    value = float(value)
-                except (ValueError, TypeError):
-                    return False, f"Expected float, got: {value}"
-            
-            elif rules['type'] is str:
-                if not isinstance(value, str):
-                    # Auto-convert boolean to string for compatibility with DesktopApp
-                    if isinstance(value, bool):
-                        value = str(value).lower()
-                    else:
-                        return False, f"Expected string, got {type(value).__name__}"
-                
-                # Special validation for Resolution parameters
-                if parameter in ['PhotoResolution', 'VideoResolution'] and value not in self.AVAILABLE_RESOLUTIONS:
-                    return False, f"Invalid {parameter}: {value}. Available: {', '.join(self.AVAILABLE_RESOLUTIONS)}"
-                
-                # Special validation for SettingsName
-                if parameter == 'SettingsName':
-                    if not value.strip():
-                        return False, "Settings name cannot be empty"
-                    if len(value) > 50:
-                        return False, "Settings name too long (max 50 characters)"
-            
-            # Range validation
-            if rules['range'] is not None:
-                min_val, max_val = rules['range']
-                if not (min_val <= value <= max_val):
-                    return False, f"Value {value} out of range [{min_val}, {max_val}]"
-            
-            return True, str(value)
+            try:
+                return config.validate_camera_parameter(parameter, value)
+            except Exception as e:
+                logger.error(f"Validation error for {parameter}: {e}")
+                return False, f"Validation error: {str(e)}"
         
+        logger.error(f"Unsupported table: {table_name}")
         return False, f"Unsupported table: {table_name}"
     
+    @log_execution_time
+    @database_error_handler
     def get_camera_settings(self) -> Dict[str, Any]:
         """Get current camera settings from database (always from slot 0 - main settings)."""
         try:
@@ -140,19 +63,8 @@ class DatabaseService:
                 return settings
             else:
                 # Create default settings for slot 0 if doesn't exist
-                default_settings = {
-                    'id': 0,
-                    'SettingsName': 'Basic',
-                    'PhotoResolution': '3280x2464',
-                    'VideoResolution': '1920x1080',
-                    'AeEnable': True,
-                    'AwbEnable': True,
-                    'ExposureTime': 10000,
-                    'AnalogueGain': 1.0,
-                    'ExposureValue': 0.0,
-                    'RedGain': 1.0,
-                    'BlueGain': 1.0
-                }
+                default_settings = config.DEFAULT_CAMERA_SETTINGS.copy()
+                default_settings['id'] = 0
                 
                 # Insert the default settings into database
                 cursor.execute("""
@@ -171,10 +83,13 @@ class DatabaseService:
                 return default_settings
                 
         except sqlite3.Error as e:
+            logger.error(f"Database error in get_camera_settings: {e}")
             raise Exception(f"Database error: {e}")
         finally:
             conn.close()
     
+    @api_error_handler
+    @log_execution_time
     def update_parameter(self, table_name: str, parameter: str, value: Any) -> Tuple[bool, str]:
         """Update a single parameter in the specified table."""
         # Validate the parameter
