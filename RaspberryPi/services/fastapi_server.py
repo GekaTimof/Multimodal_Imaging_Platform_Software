@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, validator
 from typing import Optional, Dict, Any, Union
 import sys
@@ -28,16 +29,48 @@ camera_service = CameraService()
 # Pydantic Models for Request/Response
 class CameraSettingsResponse(BaseModel):
     id: Optional[int] = None
-    SettingsName: Optional[str] = Field(default="Basic", description="Settings profile name")
-    PhotoResolution: str = Field(default="3280x2464", description="Photo resolution")
-    VideoResolution: str = Field(default="1920x1080", description="Video resolution")
-    AeEnable: bool = Field(default=True, description="Auto Exposure enabled")
-    AwbEnable: bool = Field(default=True, description="Auto White Balance enabled")
-    ExposureTime: int = Field(default=10000, ge=100, le=3000000, description="Exposure time in microseconds")
-    AnalogueGain: float = Field(default=1.0, ge=0.0, le=32.0, description="Camera analog gain")
-    ExposureValue: float = Field(default=0.0, ge=-10.0, le=10.0, description="Exposure compensation")
-    RedGain: float = Field(default=1.0, ge=0.0, le=8.0, description="Red channel gain")
-    BlueGain: float = Field(default=1.0, ge=0.0, le=8.0, description="Blue channel gain")
+    SettingsName: Optional[Union[str, bool]] = Field(default="Basic", description="Settings profile name")
+    PhotoResolution: Union[str, bool] = Field(default="3280x2464", description="Photo resolution")
+    VideoResolution: Union[str, bool] = Field(default="1920x1080", description="Video resolution")
+    AeEnable: Union[bool, str, int] = Field(default=True, description="Auto Exposure enabled")
+    AwbEnable: Union[bool, str, int] = Field(default=True, description="Auto White Balance enabled")
+    ExposureTime: Union[int, str] = Field(default=10000, description="Exposure time in microseconds")
+    AnalogueGain: Union[float, str, int] = Field(default=1.0, description="Camera analog gain")
+    ExposureValue: Union[float, str, int] = Field(default=0.0, description="Exposure compensation")
+    RedGain: Union[float, str, int] = Field(default=1.0, description="Red channel gain")
+    BlueGain: Union[float, str, int] = Field(default=1.0, description="Blue channel gain")
+
+    @validator('SettingsName', pre=True)
+    def convert_settings_name(cls, v):
+        if isinstance(v, bool):
+            return str(v).lower()
+        return str(v) if v is not None else "Basic"
+
+    @validator('PhotoResolution', 'VideoResolution', pre=True)
+    def convert_resolution(cls, v):
+        if isinstance(v, bool):
+            return str(v).lower()
+        return str(v) if v is not None else "1920x1080"
+
+    @validator('AeEnable', 'AwbEnable', pre=True)
+    def convert_boolean(cls, v):
+        if isinstance(v, str):
+            return v.lower() in ('true', '1', 'on')
+        elif isinstance(v, int):
+            return bool(v)
+        return bool(v)
+
+    @validator('ExposureTime', pre=True)
+    def convert_exposure_time(cls, v):
+        if isinstance(v, (str, bool)):
+            return int(v) if v != False else 0
+        return int(v)
+
+    @validator('AnalogueGain', 'ExposureValue', 'RedGain', 'BlueGain', pre=True)
+    def convert_float(cls, v):
+        if isinstance(v, (str, bool)):
+            return float(v) if v != False else 0.0
+        return float(v)
 
     class Config:
         schema_extra = {
@@ -314,19 +347,25 @@ async def reload_camera_settings():
 # Exception handlers
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request, exc):
-    return ErrorResponse(
-        success=False,
-        error=exc.detail,
-        details={"status_code": exc.status_code}
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=ErrorApiResponse(
+            success=False,
+            error=exc.detail,
+            details={"status_code": exc.status_code}
+        ).dict()
     )
 
 
 @app.exception_handler(Exception)
 async def general_exception_handler(request, exc):
-    return ErrorResponse(
-        success=False,
-        error="Internal server error",
-        details={"exception": str(exc)}
+    return JSONResponse(
+        status_code=500,
+        content=ErrorApiResponse(
+            success=False,
+            error="Internal server error",
+            details={"exception": str(exc)}
+        ).dict()
     )
 
 

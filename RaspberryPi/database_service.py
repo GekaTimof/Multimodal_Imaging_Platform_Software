@@ -75,6 +75,9 @@ class DatabaseService:
                         return False, f"Invalid boolean value: {value}"
                 elif isinstance(value, bool):
                     value = 1 if value else 0  # Convert boolean to integer for database
+                elif isinstance(value, int):
+                    # Accept integers (0/1) from Pydantic conversion
+                    value = 1 if value else 0
                 else:
                     return False, f"Expected boolean, got {type(value).__name__}"
             
@@ -92,7 +95,11 @@ class DatabaseService:
             
             elif rules['type'] is str:
                 if not isinstance(value, str):
-                    return False, f"Expected string, got {type(value).__name__}"
+                    # Auto-convert boolean to string for compatibility with DesktopApp
+                    if isinstance(value, bool):
+                        value = str(value).lower()
+                    else:
+                        return False, f"Expected string, got {type(value).__name__}"
                 
                 # Special validation for Resolution parameters
                 if parameter in ['PhotoResolution', 'VideoResolution'] and value not in self.AVAILABLE_RESOLUTIONS:
