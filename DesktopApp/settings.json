@@ -1,16 +1,12 @@
 {
-    "photo": {
-        "save_directory": "/home/evgeniy/Downloads",
-        "filename_template": "camera_snapshot_{timestamp}.png",
-        "format": "PNG"
+    "camera": {
+        "stream_url": "http://10.43.70.189:8080/video"
     },
-    "spectrometer": {
-        "default_integration_time": 100,
-        "save_directory": "",
-        "filename_template": "spectrum_{timestamp}.txt"
+    "api": {
+        "base_url": "http://10.43.70.189:8000/api"
     },
-    "interface": {
-        "default_language": "English",
-        "theme": "light"
+    "ui": {
+        "theme": "default",
+        "language": "English"
     }
 }

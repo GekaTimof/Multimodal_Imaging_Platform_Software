@@ -10,16 +10,25 @@ Features:
 - Save directory management
 """
 
-from PyQt5.QtWidgets import QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout, QScrollArea
+import json
+import logging
+import os
+import time
+from typing import Optional
+
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QPixmap
-from DesktopApp.threads.camera_thread import CameraThread
+from PyQt5.QtWidgets import QHBoxLayout, QLabel, QPushButton, QScrollArea, QVBoxLayout, QWidget
+
+from DesktopApp.config.api_config import CAMERA_STREAM_URL
+from DesktopApp.constants.camera_constants import DEFAULT_CAMERA_SLOT
+from DesktopApp.constants.ui_strings import CameraTabStrings
 from DesktopApp.objects.Interface_text import Interface_text
 from DesktopApp.services.save_photo import save_photo
+from DesktopApp.threads.camera_thread import CameraThread
 from DesktopApp.widgets.device_settings_widget.device_settings_widgets import DeviceSettingsWidget
-import os
-import json
-import time
+
+logger = logging.getLogger(__name__)
 
 
 class CameraTab(QWidget):
@@ -32,8 +41,6 @@ class CameraTab(QWidget):
     - Image capture and saving
     - Camera parameter settings
     """
-    
-    DEFAULT_STREAM_URL = "http://10.43.70.189:8080/video"
 
     def __init__(self, interface_text: Interface_text):
         """
@@ -45,7 +52,11 @@ class CameraTab(QWidget):
         super().__init__()
 
         self.interface_text = interface_text  # Store reference to interface_text
-
+        self.camera_source = self.load_camera_source()
+        self.current_frame = None
+        self.thread: Optional[CameraThread] = None
+        self.current_settings_slot = DEFAULT_CAMERA_SLOT  # Default to slot 0 (Basic)
+        
         # Video label (left side)
         self.video_label = QLabel(interface_text.no_video())
         self.video_label.setAlignment(Qt.AlignCenter)
@@ -57,12 +68,6 @@ class CameraTab(QWidget):
         self.save_image_button = QPushButton(interface_text.save_image())
         self.status_label = QLabel("")
         self.status_label.setWordWrap(True)
-
-        # Load initial settings
-        self.camera_source = self.load_camera_source()
-        self.current_frame = None
-        self.thread = None
-        self.current_settings_slot = 0  # Default to slot 0 (Basic)
 
         # Upper control panel (basic camera controls) with scroll
         upper_control_layout = QVBoxLayout()
@@ -136,26 +141,29 @@ class CameraTab(QWidget):
         self.start_button.setEnabled(False)
         self.stop_button.setEnabled(True)
 
-    def on_camera_status(self, message):
+    def on_camera_status(self, message: str) -> None:
         """Handle camera status messages."""
         self.status_label.setText(message)
-        print(f"Camera status: {message}")
+        logger.info(f"Camera status: {message}")
 
-    def on_camera_stopped(self):
+    def on_camera_stopped(self) -> None:
+        """Handle camera stopped event."""
         self.thread = None
 
-    def update_frame(self, image):
+    def update_frame(self, image) -> None:
+        """Update video display with new frame."""
         self.current_frame = image
         # Scale image to fit the video label size while maintaining aspect ratio
         pixmap = QPixmap.fromImage(image)
         scaled_pixmap = pixmap.scaled(self.video_label.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
         self.video_label.setPixmap(scaled_pixmap)
 
-    def stop_camera(self):
+    def stop_camera(self) -> None:
+        """Stop the camera thread and clean up resources."""
         if self.thread is None:
             return
         
-        self.status_label.setText("Stopping camera...")
+        self.status_label.setText(CameraTabStrings.STOPPING_CAMERA)
         
         # Stop the thread
         self.thread.stop()
@@ -163,18 +171,20 @@ class CameraTab(QWidget):
         # Wait for thread to finish
         if self.thread.isRunning():
             if not self.thread.wait(3000):  # Wait up to 3 seconds
-                self.status_label.setText("Force terminating camera...")
+                self.status_label.setText(CameraTabStrings.FORCE_TERMINATING)
+                logger.warning("Force terminating camera thread")
                 self.thread.terminate()  # Force terminate if not stopping
                 self.thread.wait(1000)   # Additional wait for termination
         
         self.thread = None
-        self.status_label.setText("Camera stopped")
+        self.status_label.setText(CameraTabStrings.CAMERA_STOPPED)
         
         # Re-enable start button and disable stop button
         self.start_button.setEnabled(True)
         self.stop_button.setEnabled(False)
 
-    def save_current_image(self):
+    def save_current_image(self) -> None:
+        """Save the current camera frame to disk."""
         if self.current_frame is None:
             return
         try:
@@ -184,15 +194,15 @@ class CameraTab(QWidget):
                 saved_path = save_photo(self.current_frame, photo_dir)
             else:
                 saved_path = save_photo(self.current_frame)  # Fallback to default
-            print(f"Image saved to: {saved_path}")
-            self.status_label.setText(f"Image saved: {os.path.basename(saved_path)}")
+            logger.info(f"Image saved to: {saved_path}")
+            self.status_label.setText(CameraTabStrings.IMAGE_SAVED.format(os.path.basename(saved_path)))
         except Exception as e:
-            print(f"Error saving image: {e}")
-            self.status_label.setText(f"Error saving image: {str(e)}")
+            logger.error(f"Error saving image: {e}")
+            self.status_label.setText(CameraTabStrings.ERROR_SAVING_IMAGE.format(str(e)))
 
-    def on_settings_updated(self):
+    def on_settings_updated(self) -> None:
         """Handle settings updated event - restart camera with new settings from API."""
-        print("Settings updated, restarting camera with new settings...")
+        logger.info("Settings updated, restarting camera with new settings...")
         
         # Stop current camera if running
         if self.thread is not None and self.thread.isRunning():
@@ -204,10 +214,10 @@ class CameraTab(QWidget):
         # Restart camera - it will load settings from API automatically
         self.start_camera()
     
-    def set_current_settings_slot(self, slot_id):
+    def set_current_settings_slot(self, slot_id: int) -> None:
         """Set the current settings slot and restart camera if needed."""
         self.current_settings_slot = slot_id
-        print(f"Switched to settings slot {slot_id}")
+        logger.info(f"Switched to settings slot {slot_id}")
         
         # If camera is running, restart it with new slot settings
         if self.thread is not None and self.thread.isRunning():
@@ -215,14 +225,16 @@ class CameraTab(QWidget):
             time.sleep(0.5)
             self.start_camera()
 
-    def load_camera_source(self):
+    def load_camera_source(self) -> str:
+        """Load camera stream URL from settings file."""
         settings_path = os.path.join(os.path.dirname(__file__), '..', 'settings.json')
         try:
             with open(settings_path, 'r', encoding='utf-8') as f:
                 settings = json.load(f)
-            return settings.get('camera', {}).get('stream_url', self.DEFAULT_STREAM_URL)
-        except (FileNotFoundError, json.JSONDecodeError):
-            return self.DEFAULT_STREAM_URL
+            return settings.get('camera', {}).get('stream_url', CAMERA_STREAM_URL)
+        except (FileNotFoundError, json.JSONDecodeError) as e:
+            logger.warning(f"Could not load settings from {settings_path}: {e}")
+            return CAMERA_STREAM_URL
 
 
     # Future enhancement: Add video stream reception from Raspberry Pi

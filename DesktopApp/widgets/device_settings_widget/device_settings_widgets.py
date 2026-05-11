@@ -1,15 +1,36 @@
-import requests
+"""
+Device Settings Widgets
+Provides widgets for managing camera, spectrometer, and positioner settings.
+"""
+
 import json
+import logging
 import os
-from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, 
-    QLabel, QSpinBox, QDoubleSpinBox, QCheckBox, QPushButton, 
-    QGridLayout, QComboBox, QLineEdit, QDialog, QDialogButtonBox,
-    QListWidget, QListWidgetItem, QStackedWidget, QProgressBar
-)
+from typing import Dict, Any, List, Optional, Tuple
+
+import requests
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QFont
+from PyQt5.QtWidgets import (
+    QCheckBox, QComboBox, QDialog, QDialogButtonBox, QDoubleSpinBox, QGridLayout,
+    QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem, QPushButton,
+    QProgressBar, QSpinBox, QStackedWidget, QVBoxLayout, QWidget
+)
+
+from DesktopApp.config.api_config import API_BASE_URL, ENDPOINTS, TIMEOUT_SECONDS
+from DesktopApp.constants.camera_constants import (
+    ANALOGUE_GAIN_RANGE, BLUE_GAIN_RANGE, DEFAULT_ANALOGUE_GAIN, DEFAULT_BLUE_GAIN,
+    DEFAULT_EXPOSURE_TIME, DEFAULT_EXPOSURE_VALUE, DEFAULT_RED_GAIN,
+    DEFAULT_RESOLUTION_PHOTO, DEFAULT_RESOLUTION_VIDEO, EXPOSURE_TIME_RANGE,
+    EXPOSURE_VALUE_RANGE, MAX_CAMERA_SLOTS, RED_GAIN_RANGE, THREAD_TIMEOUT_MS
+)
+from DesktopApp.constants.ui_strings import (
+    DialogStrings, SettingsWidgetStrings, StatusMessages
+)
+from DesktopApp.utils.error_handler import handle_api_error, validate_slot_id
 from .positioner_settings_widget import PositionerSettingsWidget
+
+logger = logging.getLogger(__name__)
 
 
 class SettingsSlotDialog(QDialog):
@@ -19,11 +40,11 @@ class SettingsSlotDialog(QDialog):
     
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Camera Settings Slots")
+        self.setWindowTitle(DialogStrings.CAMERA_SETTINGS_SLOTS)
         self.setModal(True)
         self.resize(800, 900) 
         self.slots_data = {}
-        self.api_base_url = "http://10.43.70.189:8000/api"
+        self.api_base_url = API_BASE_URL
         self.active_threads = []
         self._build_ui()
     
@@ -36,7 +57,7 @@ class SettingsSlotDialog(QDialog):
         layout = QVBoxLayout(self)
         
         # Title
-        title = QLabel("Select a settings slot to load:")
+        title = QLabel(DialogStrings.SELECT_SETTINGS_SLOT)
         title.setStyleSheet("QLabel { font-weight: bold; font-size: 14px; }")
         layout.addWidget(title)
         
@@ -51,11 +72,11 @@ class SettingsSlotDialog(QDialog):
         button_box.rejected.connect(self.reject)
         layout.addWidget(button_box)
     
-    def _load_slots(self):
+    def _load_slots(self) -> None:
         """Load all settings slots from API."""
         try:
             # Load slots from API
-            api_url = f"{self.api_base_url}/settings/camera/slots"
+            api_url = ENDPOINTS["camera_settings_slots"]
             thread = APIClientThread('GET', api_url)
             thread.response_received.connect(self._on_slots_loaded)
             thread.finished.connect(lambda: self._cleanup_thread(thread))
@@ -63,26 +84,9 @@ class SettingsSlotDialog(QDialog):
             thread.start()
                 
         except Exception as e:
-            print(f"Error loading slots from API: {e}")
+            logger.error(f"Error loading slots from API: {e}")
             # Fallback: create empty slots
-            self.slots_list.clear()
-            for slot_id in range(10):
-                name = "Basic" if slot_id == 0 else f"Custom {slot_id}"
-                display_text = f"Slot {slot_id} - {name}\n  Photo: 3280x2464 | Video: 1920x1080"
-                item = QListWidgetItem(display_text)
-                item.setData(Qt.UserRole, slot_id)
-                self.slots_list.addItem(item)
-                
-                # Add visual separator after each item except the last one
-                if slot_id < 9:
-                    separator = QListWidgetItem("")
-                    separator.setFlags(Qt.NoItemFlags)  # Make it non-selectable
-                    separator.setSizeHint(separator.sizeHint().expandedTo(separator.sizeHint() + 
-                                   separator.sizeHint().expandedTo(separator.sizeHint())))
-                    # Create a visual separator using a line character
-                    separator.setText("─" * 40)  # Horizontal line
-                    separator.setForeground(separator.foreground().color().lighter(150))  # Make it lighter
-                    self.slots_list.addItem(separator)
+            self._create_fallback_slots()
     
     def _on_slots_loaded(self, success, message, data):
         """Handle slots loaded response from API."""
@@ -109,7 +113,7 @@ class SettingsSlotDialog(QDialog):
             return
         
         try:
-            api_url = f"{self.api_base_url}/settings/camera/slot/{slot_id}"
+            api_url = ENDPOINTS["camera_settings_slot"].format(slot_id=slot_id)
             thread = APIClientThread('GET', api_url)
             thread.response_received.connect(lambda success, message, data: 
                 self._on_slot_details_loaded(success, message, data, slot_id))
@@ -177,18 +181,18 @@ class SettingsSlotDialog(QDialog):
         separator.setForeground(separator.foreground().color().lighter(150))  # Make it lighter
         self.slots_list.addItem(separator)
     
-    def _create_fallback_slots(self):
+    def _create_fallback_slots(self) -> None:
         """Create fallback slots when API fails."""
         self.slots_list.clear()
-        for slot_id in range(10):
+        for slot_id in range(MAX_CAMERA_SLOTS):
             name = "Basic" if slot_id == 0 else f"Custom {slot_id}"
-            display_text = f"Slot {slot_id} - {name}\n  Photo: 3280x2464 | Video: 1920x1080"
+            display_text = f"Slot {slot_id} - {name}\n  Photo: {DEFAULT_RESOLUTION_PHOTO} | Video: {DEFAULT_RESOLUTION_VIDEO}"
             item = QListWidgetItem(display_text)
             item.setData(Qt.UserRole, slot_id)
             self.slots_list.addItem(item)
             
             # Add visual separator after each item except the last one
-            if slot_id < 9:
+            if slot_id < MAX_CAMERA_SLOTS - 1:
                 self._add_separator_after_current_item()
     
     def _on_slot_selected(self, item):
@@ -222,19 +226,23 @@ class APIClientThread(QThread):
     """Thread for making API calls to avoid blocking the UI."""
     response_received = pyqtSignal(bool, str, dict)
     
-    def __init__(self, method, url, data=None):
+    def __init__(self, method: str, url: str, data: Optional[Dict[str, Any]] = None):
         super().__init__()
         self.method = method.upper()
         self.url = url
         self.data = data
     
-    def run(self):
+    def run(self) -> None:
+        """Execute the API request."""
         try:
+            headers = {'Content-Type': 'application/json'}
+            
             if self.method == 'GET':
-                response = requests.get(self.url, timeout=5)
+                response = requests.get(self.url, timeout=TIMEOUT_SECONDS)
             elif self.method == 'POST':
-                response = requests.post(self.url, json=self.data, timeout=5)
+                response = requests.post(self.url, json=self.data, headers=headers, timeout=TIMEOUT_SECONDS)
             else:
+                logger.error(f"Unsupported method: {self.method}")
                 self.response_received.emit(False, f"Unsupported method: {self.method}", {})
                 return
             
@@ -248,6 +256,7 @@ class APIClientThread(QThread):
                     error_msg = f"Validation error: {detail[0].get('msg', 'Unknown validation error')}"
                 else:
                     error_msg = f"Validation error: {error_data.get('detail', 'Unknown error')}"
+                logger.warning(f"API validation error: {error_msg}")
                 self.response_received.emit(False, error_msg, {})
             else:
                 # Try to parse FastAPI error response
@@ -256,11 +265,14 @@ class APIClientThread(QThread):
                     error_msg = error_data.get('detail', f"HTTP {response.status_code}: {response.text}")
                 except (ValueError, json.JSONDecodeError):
                     error_msg = f"HTTP {response.status_code}: {response.text}"
+                logger.error(f"API error: {error_msg}")
                 self.response_received.emit(False, error_msg, {})
                 
         except requests.exceptions.RequestException as e:
+            logger.error(f"Network error: {e}")
             self.response_received.emit(False, f"Network error: {str(e)}", {})
         except Exception as e:
+            logger.error(f"Unexpected error in API request: {e}")
             self.response_received.emit(False, f"Error: {str(e)}", {})
 
 
@@ -276,9 +288,9 @@ class CameraSettingsWidget(QWidget):
     def __init__(self, interface_text=None):
         super().__init__()
         self.interface_text = interface_text
-        self.api_base_url = "http://10.43.70.189:8000/api"
-        self.current_settings = {}
-        self.active_threads = []  # Track active threads
+        self.api_base_url = API_BASE_URL
+        self.current_settings: Dict[str, Any] = {}
+        self.active_threads: List[QThread] = []  # Track active threads
         self.current_slot_id = 0  # Track current settings slot
         self._build_ui()
         # Load default settings from slot 0 on startup
@@ -298,7 +310,9 @@ class CameraSettingsWidget(QWidget):
         settings_layout.setVerticalSpacing(8)
         
         # Settings Name
-        settings_name_label = QLabel(self.interface_text.settings_name() if self.interface_text else "Settings Name:")
+        settings_name_label = QLabel(
+            self.interface_text.settings_name() if self.interface_text else SettingsWidgetStrings.SETTINGS_NAME
+        )
         settings_name_label.setStyleSheet("QLabel { font-weight: bold; }")
         settings_layout.addWidget(settings_name_label, 0, 0, 1, 2)
         
@@ -307,7 +321,9 @@ class CameraSettingsWidget(QWidget):
         settings_layout.addWidget(self.settings_name, 1, 0, 1, 2)
         
         # Photo Resolution
-        photo_resolution_label = QLabel(self.interface_text.photo_resolution() if self.interface_text else "Photo Resolution:")
+        photo_resolution_label = QLabel(
+            self.interface_text.photo_resolution() if self.interface_text else SettingsWidgetStrings.PHOTO_RESOLUTION
+        )
         photo_resolution_label.setStyleSheet("QLabel { font-weight: bold; }")
         settings_layout.addWidget(photo_resolution_label, 2, 0, 1, 2)
         
@@ -323,11 +339,13 @@ class CameraSettingsWidget(QWidget):
             '3280x2464 (4:3)',    # Full 8MP resolution
             '4608x2592 (16:9)',   # Full 12MP resolution
         ])
-        self.photo_resolution_combo.setCurrentText('3280x2464 (4:3)')
+        self.photo_resolution_combo.setCurrentText(f'{DEFAULT_RESOLUTION_PHOTO} (4:3)')
         settings_layout.addWidget(self.photo_resolution_combo, 3, 0, 1, 2)
         
         # Video Resolution
-        video_resolution_label = QLabel(self.interface_text.video_resolution() if self.interface_text else "Video Resolution:")
+        video_resolution_label = QLabel(
+            self.interface_text.video_resolution() if self.interface_text else SettingsWidgetStrings.VIDEO_RESOLUTION
+        )
         video_resolution_label.setStyleSheet("QLabel { font-weight: bold; }")
         settings_layout.addWidget(video_resolution_label, 4, 0, 1, 2)
         
@@ -343,51 +361,55 @@ class CameraSettingsWidget(QWidget):
             '2304x1296 (16:9)',   # 16:9 aspect ratio
             '2592x1944 (4:3)',    # High 4:3 resolution
         ])
-        self.video_resolution_combo.setCurrentText('1920x1080 (16:9)')
+        self.video_resolution_combo.setCurrentText(f'{DEFAULT_RESOLUTION_VIDEO} (16:9)')
         settings_layout.addWidget(self.video_resolution_combo, 5, 0, 1, 2)
         
         # Auto Exposure
-        self.chk_ae = QCheckBox(self.interface_text.auto_exposure() if self.interface_text else "Auto Exposure")
+        self.chk_ae = QCheckBox(
+            self.interface_text.auto_exposure() if self.interface_text else SettingsWidgetStrings.AUTO_EXPOSURE
+        )
         self.chk_ae.setChecked(True)
         settings_layout.addWidget(self.chk_ae, 6, 0, 1, 2)
         
         # Auto White Balance
-        self.chk_awb = QCheckBox(self.interface_text.auto_white_balance() if self.interface_text else "Auto White Balance")
+        self.chk_awb = QCheckBox(
+            self.interface_text.auto_white_balance() if self.interface_text else SettingsWidgetStrings.AUTO_WHITE_BALANCE
+        )
         self.chk_awb.setChecked(True)
         settings_layout.addWidget(self.chk_awb, 7, 0, 1, 2)
         
         # Exposure Time
         self.exp_time = QSpinBox()
-        self.exp_time.setRange(100, 3000000)
-        self.exp_time.setValue(10000)
+        self.exp_time.setRange(*EXPOSURE_TIME_RANGE)
+        self.exp_time.setValue(DEFAULT_EXPOSURE_TIME)
         self.exp_time.setSuffix(" μs")
         settings_layout.addWidget(self.exp_time, 8, 0, 1, 2)
         
         # Analogue Gain
         self.gain = QDoubleSpinBox()
-        self.gain.setRange(0.0, 32.0)
-        self.gain.setValue(1.0)
+        self.gain.setRange(*ANALOGUE_GAIN_RANGE)
+        self.gain.setValue(DEFAULT_ANALOGUE_GAIN)
         self.gain.setDecimals(2)
         settings_layout.addWidget(self.gain, 9, 0, 1, 2)
         
         # Exposure Value
         self.exp_value = QDoubleSpinBox()
-        self.exp_value.setRange(-10.0, 10.0)
-        self.exp_value.setValue(0.0)
+        self.exp_value.setRange(*EXPOSURE_VALUE_RANGE)
+        self.exp_value.setValue(DEFAULT_EXPOSURE_VALUE)
         self.exp_value.setDecimals(2)
         settings_layout.addWidget(self.exp_value, 10, 0, 1, 2)
         
         # Red Gain
         self.red_gain = QDoubleSpinBox()
-        self.red_gain.setRange(0.0, 8.0)
-        self.red_gain.setValue(1.0)
+        self.red_gain.setRange(*RED_GAIN_RANGE)
+        self.red_gain.setValue(DEFAULT_RED_GAIN)
         self.red_gain.setDecimals(2)
         settings_layout.addWidget(self.red_gain, 11, 0, 1, 2)
         
         # Blue Gain
         self.blue_gain = QDoubleSpinBox()
-        self.blue_gain.setRange(0.0, 8.0)
-        self.blue_gain.setValue(1.0)
+        self.blue_gain.setRange(*BLUE_GAIN_RANGE)
+        self.blue_gain.setValue(DEFAULT_BLUE_GAIN)
         self.blue_gain.setDecimals(2)
         settings_layout.addWidget(self.blue_gain, 12, 0, 1, 2)
         
@@ -397,10 +419,18 @@ class CameraSettingsWidget(QWidget):
         button_row1_layout = QHBoxLayout()
         button_row2_layout = QHBoxLayout()
         
-        self.btn_refresh = QPushButton(self.interface_text.refresh() if self.interface_text else "Refresh")
-        self.btn_load_slot = QPushButton(self.interface_text.load() if self.interface_text else "Load")
-        self.btn_save_slot = QPushButton(self.interface_text.save() if self.interface_text else "Save")
-        self.btn_apply = QPushButton(self.interface_text.apply() if self.interface_text else "Apply")
+        self.btn_refresh = QPushButton(
+            self.interface_text.refresh() if self.interface_text else SettingsWidgetStrings.REFRESH
+        )
+        self.btn_load_slot = QPushButton(
+            self.interface_text.load() if self.interface_text else SettingsWidgetStrings.LOAD
+        )
+        self.btn_save_slot = QPushButton(
+            self.interface_text.save() if self.interface_text else SettingsWidgetStrings.SAVE
+        )
+        self.btn_apply = QPushButton(
+            self.interface_text.apply() if self.interface_text else SettingsWidgetStrings.APPLY
+        )
         
         # First row: Refresh, Load, Save (3 buttons)
         button_row1_layout.addWidget(self.btn_refresh)
@@ -416,7 +446,7 @@ class CameraSettingsWidget(QWidget):
         layout.addLayout(button_row2_layout)
         
         # Status label
-        self.status_label = QLabel("Ready")
+        self.status_label = QLabel(SettingsWidgetStrings.READY)
         self.status_label.setStyleSheet("QLabel { color: green; font-weight: bold; }")
         self.status_label.setWordWrap(True)
         self.status_label.setMaximumWidth(300)  # Prevent screen stretching
@@ -470,7 +500,7 @@ class CameraSettingsWidget(QWidget):
                 self.photo_resolution_combo.setCurrentIndex(index)
             
             # Update video resolution
-            video_resolution = settings.get('VideoResolution', '1920x1080')
+            video_resolution = settings.get('VideoResolution', DEFAULT_RESOLUTION_VIDEO)
             index = self.video_resolution_combo.findText(video_resolution)
             if index < 0:
                 for i in range(self.video_resolution_combo.count()):
@@ -486,47 +516,48 @@ class CameraSettingsWidget(QWidget):
             self.chk_awb.setChecked(bool(settings.get('AwbEnable', True)))
             
             # Update numeric values
-            self.exp_time.setValue(int(settings.get('ExposureTime', 10000)))
-            self.gain.setValue(float(settings.get('AnalogueGain', 1.0)))
-            self.exp_value.setValue(float(settings.get('ExposureValue', 0.0)))
-            self.red_gain.setValue(float(settings.get('RedGain', 1.0)))
-            self.blue_gain.setValue(float(settings.get('BlueGain', 1.0)))
+            self.exp_time.setValue(int(settings.get('ExposureTime', DEFAULT_EXPOSURE_TIME)))
+            self.gain.setValue(float(settings.get('AnalogueGain', DEFAULT_ANALOGUE_GAIN)))
+            self.exp_value.setValue(float(settings.get('ExposureValue', DEFAULT_EXPOSURE_VALUE)))
+            self.red_gain.setValue(float(settings.get('RedGain', DEFAULT_RED_GAIN)))
+            self.blue_gain.setValue(float(settings.get('BlueGain', DEFAULT_BLUE_GAIN)))
             
             # Update control states (this will enable/disable appropriate controls)
             self._update_control_states()
             
         except Exception as e:
-            self.status_label.setText(f"Error updating UI: {str(e)}")
+            logger.error(f"Error updating UI: {e}")
+            self.status_label.setText(SettingsWidgetStrings.ERROR_UPDATING_UI.format(str(e)))
             self.status_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
     
-    def load_settings(self):
+    def load_settings(self) -> None:
         """Load current camera settings from API."""
-        self.status_label.setText("Loading settings...")
+        self.status_label.setText(SettingsWidgetStrings.LOADING_SETTINGS)
         self.status_label.setStyleSheet("QLabel { color: blue; font-weight: bold; }")
         
         # Try API
-        thread = APIClientThread('GET', f"{self.api_base_url}/settings/camera")
+        thread = APIClientThread('GET', ENDPOINTS["camera_settings"])
         thread.response_received.connect(self._on_settings_loaded)
         thread.finished.connect(lambda: self._cleanup_thread(thread))
         self.active_threads.append(thread)
         thread.start()
     
-    def _cleanup_thread(self, thread):
+    def _cleanup_thread(self, thread: QThread) -> None:
         """Remove thread from active threads list when finished."""
         if thread in self.active_threads:
             self.active_threads.remove(thread)
     
-    def closeEvent(self, event):
+    def closeEvent(self, event) -> None:
         """Clean up active threads when widget is destroyed."""
         # Terminate all active threads
         for thread in self.active_threads:
             if thread.isRunning():
                 thread.terminate()
-                thread.wait(1000)  # Wait up to 1 second for thread to finish
+                thread.wait(THREAD_TIMEOUT_MS)  # Wait up to timeout for thread to finish
         self.active_threads.clear()
         super().closeEvent(event)
     
-    def _on_settings_loaded(self, success, message, data):
+    def _on_settings_loaded(self, success: bool, message: str, data: Dict[str, Any]) -> None:
         """Handle settings load response."""
         if success and (data.get('success') or 'id' in data):  # FastAPI returns direct object for camera settings
             # Handle both formats: FastAPI direct response and wrapped response
@@ -540,20 +571,19 @@ class CameraSettingsWidget(QWidget):
             self.current_settings = settings
             self._update_ui_from_settings(settings)
             
-            # Apply settings immediately after loading
-            self.apply_settings()
-            
-            self.status_label.setText("Settings loaded and applied successfully")
+            # Settings loaded successfully - user can manually apply if needed
+            self.status_label.setText(SettingsWidgetStrings.SETTINGS_LOADED)
             self.status_label.setStyleSheet("QLabel { color: green; font-weight: bold; }")
         else:
             # API failed, show error
-            self.status_label.setText("Failed to load settings from API")
+            logger.error(f"Failed to load settings: {message}")
+            self.status_label.setText(SettingsWidgetStrings.FAILED_TO_LOAD)
             self.status_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
     
         
-    def apply_settings(self):
+    def apply_settings(self) -> None:
         """Apply current settings to the API."""
-        self.status_label.setText("Applying settings...")
+        self.status_label.setText(SettingsWidgetStrings.APPLYING_SETTINGS)
         self.status_label.setStyleSheet("QLabel { color: blue; font-weight: bold; }")
         
         # Extract resolution from display text (remove aspect ratio)
@@ -577,11 +607,14 @@ class CameraSettingsWidget(QWidget):
             ("CameraSettings", "BlueGain", str(float(self.blue_gain.value()))),
         ]
         
+        # Log settings for debugging
+        logger.info(f"Applying settings: {settings_to_update}")
+        
         # Apply settings via API
         self._apply_settings_with_fallback(settings_to_update, 0)
     
     def _apply_settings_with_fallback(self, settings_list, index):
-        """Apply settings with API only (no fallback to local DB)."""
+        """Apply settings sequentially (one at a time)."""
         if index >= len(settings_list):
             self.status_label.setText("All settings applied successfully")
             self.status_label.setStyleSheet("QLabel { color: green; font-weight: bold; }")
@@ -591,13 +624,20 @@ class CameraSettingsWidget(QWidget):
         
         table_name, parameter, value = settings_list[index]
         
-        # Apply via API only
-        self._apply_setting_via_api(table_name, parameter, value, settings_list, index)
+        # Apply via API only - but wait for response before continuing
+        self._apply_settings_sequentially(settings_list, index)
     
     def _apply_setting_via_api(self, table_name, parameter, value, settings_list, index):
         """Apply setting via API."""
         try:
-            thread = APIClientThread('POST', f"{self.api_base_url}/settings/update", {
+            logger.info(f"Applying {parameter}={value} to {table_name}")
+            
+            # Add small delay to prevent overwhelming the API
+            import time
+            if index > 0:  # Don't delay first request
+                time.sleep(0.1)  # 100ms delay between requests
+            
+            thread = APIClientThread('POST', ENDPOINTS['update_parameter'], {
                 'table_name': table_name,
                 'parameter': parameter,
                 'value': value
@@ -614,20 +654,23 @@ class CameraSettingsWidget(QWidget):
             thread.start()
                 
         except Exception as e:
+            logger.error(f"API error for {parameter}: {e}")
             self.status_label.setText(f"API error for {parameter}: {str(e)}")
             self.status_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
     
     def _on_setting_applied_via_api(self, success, message, data, thread):
         """Handle individual setting application response via API."""
         if success:
+            logger.info("Successfully applied setting, continuing with next one")
             # Continue with next setting (increment index)
             self._apply_settings_with_fallback(thread.remaining_settings, thread.next_index + 1)
         else:
+            logger.error(f"Failed to apply setting: {message}")
             self.status_label.setText(f"Failed to apply setting: {message}")
             self.status_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
     
     def _apply_settings_sequentially(self, settings_list, index):
-        """Apply settings one by one to avoid overwhelming the API."""
+        """Apply settings one by one to avoid overwhelming API."""
         if index >= len(settings_list):
             self.status_label.setText("All settings applied successfully")
             self.status_label.setStyleSheet("QLabel { color: green; font-weight: bold; }")
@@ -637,7 +680,12 @@ class CameraSettingsWidget(QWidget):
         
         table_name, parameter, value = settings_list[index]
         
-        thread = APIClientThread('POST', f"{self.api_base_url}/settings/update", {
+        # Add small delay to prevent overwhelming the API
+        import time
+        if index > 0:  # Don't delay first request
+            time.sleep(0.1)  # 100ms delay between requests
+        
+        thread = APIClientThread('POST', ENDPOINTS['update_parameter'], {
             'table_name': table_name,
             'parameter': parameter,
             'value': value
@@ -648,17 +696,19 @@ class CameraSettingsWidget(QWidget):
         thread.next_index = index + 1
         
         thread.response_received.connect(lambda success, message, data: 
-            self._on_setting_applied(success, message, data, thread))
+            self._on_setting_applied_sequentially(success, message, data, thread))
         thread.finished.connect(lambda: self._cleanup_thread(thread))
         self.active_threads.append(thread)
         thread.start()
     
-    def _on_setting_applied(self, success, message, data, thread):
-        """Handle individual setting application response."""
+    def _on_setting_applied_sequentially(self, success, message, data, thread):
+        """Handle individual setting application response in sequential mode."""
         if success:
-            # Continue with next setting
+            logger.info("Successfully applied setting, continuing with next one")
+            # Continue with next setting (increment index)
             self._apply_settings_sequentially(thread.remaining_settings, thread.next_index)
         else:
+            logger.error(f"Failed to apply setting: {message}")
             self.status_label.setText(f"Failed to apply setting: {message}")
             self.status_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
     
@@ -676,7 +726,7 @@ class CameraSettingsWidget(QWidget):
         """Load settings from a specific slot via API."""
         try:
             # Load settings from API for specific slot
-            api_url = f"{self.api_base_url}/settings/camera/slot/{slot_id}"
+            api_url = ENDPOINTS["camera_settings_slot"].format(slot_id=slot_id)
             thread = APIClientThread('GET', api_url)
             thread.response_received.connect(lambda success, message, data: 
                 self._on_slot_settings_loaded(success, message, data, slot_id))
@@ -772,7 +822,7 @@ class CameraSettingsWidget(QWidget):
     def _save_slot_settings_via_api(self, settings, slot_id):
         """Save slot settings via new API endpoint with fallback."""
         try:
-            thread = APIClientThread('POST', f"{self.api_base_url}/settings/camera/save-slot/{slot_id}", settings)
+            thread = APIClientThread('POST', ENDPOINTS["save_camera_slot"].format(slot_id=slot_id), settings)
             
             thread.response_received.connect(lambda success, message, data: 
                 self._on_slot_settings_saved_via_new_api(success, message, data, slot_id, settings))
