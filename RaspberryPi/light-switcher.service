@@ -1,0 +1,26 @@
+[Unit]
+Description=Light Switcher Service for Arduino End Switch Control
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+WorkingDirectory=/home/minilumi/Multimodal_Imaging_Platform_Software/RaspberryPi
+Environment=PYTHONPATH=/home/minilumi/Multimodal_Imaging_Platform_Software/RaspberryPi
+ExecStart=/usr/bin/python3 /home/minilumi/Multimodal_Imaging_Platform_Software/RaspberryPi/services/light_switcher_daemon.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/home/minilumi/Multimodal_Imaging_Platform_Software/RaspberryPi/logs
+
+[Install]
+WantedBy=multi-user.target

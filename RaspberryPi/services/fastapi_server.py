@@ -15,10 +15,11 @@ if raspberry_pi_dir not in sys.path:
 
 from database_service import db_service
 from services.camera_service import CameraService
+from services.light_switcher_service import light_switcher_service, SwitchState
 
 app = FastAPI(
     title="Device Settings API",
-    description="API for managing camera and spectrometer settings",
+    description="API for managing camera, spectrometer and light switcher settings",
     version="1.0.0"
 )
 
@@ -135,11 +136,103 @@ class ErrorApiResponse(BaseModel):
     details: Optional[Dict[str, Any]] = None
 
 
+class LightSwitcherStatusResponse(BaseModel):
+    connected: bool
+    port: str
+    baudrate: int
+    current_state: str
+    arduino_responsive: bool
+
+
+class LightSwitcherSwitchRequest(BaseModel):
+    state: str = Field(..., description="Target state: 'state1' or 'state2'")
+
+    @validator('state')
+    def validate_state(cls, v):
+        allowed_states = ['state1', 'state2']
+        if v not in allowed_states:
+            raise ValueError(f"State must be one of: {allowed_states}")
+        return v
+
+
 # API Endpoints
 @app.get("/api/health", response_model=Dict[str, str])
 async def health_check():
     """Health check endpoint."""
     return {"status": "healthy", "message": "FastAPI server is running"}
+
+
+# Light Switcher API Endpoints
+@app.get("/api/light-switcher/status", response_model=LightSwitcherStatusResponse)
+async def get_light_switcher_status():
+    """Get light switcher connection and status information."""
+    try:
+        status = light_switcher_service.get_status()
+        return LightSwitcherStatusResponse(**status)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting light switcher status: {str(e)}")
+
+
+@app.post("/api/light-switcher/connect", response_model=APIResponse)
+async def connect_light_switcher():
+    """Connect to Arduino light switcher."""
+    try:
+        success = light_switcher_service.connect()
+        if success:
+            return APIResponse(
+                success=True,
+                message="Successfully connected to Arduino light switcher",
+                data=light_switcher_service.get_status()
+            )
+        else:
+            raise HTTPException(status_code=500, detail="Failed to connect to Arduino light switcher")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error connecting to light switcher: {str(e)}")
+
+
+@app.post("/api/light-switcher/switch", response_model=APIResponse)
+async def switch_light_switcher(request: LightSwitcherSwitchRequest):
+    """Switch light switcher to specified state."""
+    try:
+        if request.state == "state1":
+            success, message = light_switcher_service.switch_to_state_1()
+        elif request.state == "state2":
+            success, message = light_switcher_service.switch_to_state_2()
+        else:
+            raise HTTPException(status_code=400, detail="Invalid state specified")
+        
+        if success:
+            return APIResponse(
+                success=True,
+                message=message,
+                data={
+                    "target_state": request.state,
+                    "current_state": light_switcher_service.current_state.value,
+                    "status": light_switcher_service.get_status()
+                }
+            )
+        else:
+            raise HTTPException(status_code=500, detail=message)
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error switching light switcher: {str(e)}")
+
+
+@app.post("/api/light-switcher/disconnect", response_model=APIResponse)
+async def disconnect_light_switcher():
+    """Disconnect from Arduino light switcher."""
+    try:
+        light_switcher_service.disconnect()
+        return APIResponse(
+            success=True,
+            message="Successfully disconnected from Arduino light switcher"
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error disconnecting light switcher: {str(e)}")
 
 
 @app.get("/api/settings/camera", response_model=CameraSettingsResponse)
@@ -375,12 +468,23 @@ if __name__ == "__main__":
     print("Starting Device Settings FastAPI Server...")
     print("Available endpoints:")
     print("  GET  /api/health - Health check")
-    print("  GET  /api/settings/camera - Get camera settings")
-    print("  GET  /api/settings/{table_name} - Get settings from any table")
-    print("  POST /api/settings/update - Update a single parameter")
-    print("  POST /api/settings/camera - Update all camera settings")
-    print("  GET  /api/settings/camera/validation-rules - Get validation rules")
+    print("  Light Switcher:")
+    print("    GET  /api/light-switcher/status - Get connection status")
+    print("    POST /api/light-switcher/connect - Connect to Arduino")
+    print("    POST /api/light-switcher/switch - Switch to state1/state2")
+    print("    POST /api/light-switcher/disconnect - Disconnect from Arduino")
+    print("  Camera:")
+    print("    GET  /api/settings/camera - Get camera settings")
+    print("    GET  /api/settings/{table_name} - Get settings from any table")
+    print("    POST /api/settings/update - Update a single parameter")
+    print("    POST /api/settings/camera - Update all camera settings")
+    print("    GET  /api/settings/camera/validation-rules - Get validation rules")
     print("\nExample usage:")
+    print("  curl -X GET http://localhost:8000/api/light-switcher/status")
+    print("  curl -X POST http://localhost:8000/api/light-switcher/connect")
+    print("  curl -X POST http://localhost:8000/api/light-switcher/switch \\")
+    print("       -H 'Content-Type: application/json' \\")
+    print("       -d '{\"state\":\"state1\"}'")
     print("  curl -X GET http://localhost:8000/api/settings/camera")
     print("  curl -X POST http://localhost:8000/api/settings/update \\")
     print("       -H 'Content-Type: application/json' \\")
