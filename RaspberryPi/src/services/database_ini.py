@@ -33,9 +33,11 @@ def main():
     CREATE TABLE IF NOT EXISTS SpectrometerSettings (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         SettingsName TEXT NOT NULL DEFAULT 'Basic',
-        parameter1 TEXT,
-        parameter2 TEXT,
-        parameter3 TEXT
+        IntegralTime INTEGER NOT NULL DEFAULT 100 CHECK(IntegralTime BETWEEN 1 AND 99999),
+        DarkSpectrumPath TEXT DEFAULT '',
+        AutoDarkCorrection INTEGER NOT NULL DEFAULT 1 CHECK(AutoDarkCorrection IN (0, 1)),
+        OverilluminationThreshold INTEGER NOT NULL DEFAULT 65535 CHECK(OverilluminationThreshold BETWEEN 0 AND 65535),
+        LastUpdated TEXT DEFAULT CURRENT_TIMESTAMP
     )
     """)
     
@@ -63,6 +65,33 @@ def main():
         cursor.execute("""
         INSERT INTO CameraSettings (id, SettingsName, Resolution, PhotoResolution, VideoResolution, AeEnable, AwbEnable, ExposureTime, AnalogueGain, ExposureValue, RedGain, BlueGain)
         VALUES (0, 'Basic', '1920x1080', '3280x2464', '1920x1080', 1, 1, 10000, 1.0, 0.0, 1.0, 1.0)
+        """)
+    
+    # Check if SpectrometerSettings table has the new structure, migrate if needed
+    cursor.execute("PRAGMA table_info(SpectrometerSettings)")
+    columns = [row[1] for row in cursor.fetchall()]
+    
+    # If old structure exists, drop and recreate
+    if 'parameter1' in columns:
+        cursor.execute("DROP TABLE SpectrometerSettings")
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS SpectrometerSettings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            SettingsName TEXT NOT NULL DEFAULT 'Basic',
+            IntegralTime INTEGER NOT NULL DEFAULT 100 CHECK(IntegralTime BETWEEN 1 AND 99999),
+            DarkSpectrumPath TEXT DEFAULT '',
+            AutoDarkCorrection INTEGER NOT NULL DEFAULT 1 CHECK(AutoDarkCorrection IN (0, 1)),
+            OverilluminationThreshold INTEGER NOT NULL DEFAULT 65535 CHECK(OverilluminationThreshold BETWEEN 0 AND 65535),
+            LastUpdated TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+        """)
+    
+    # Insert default spectrometer settings for slot 0 if not exists
+    cursor.execute("SELECT COUNT(*) FROM SpectrometerSettings WHERE id = 0")
+    if cursor.fetchone()[0] == 0:
+        cursor.execute("""
+        INSERT INTO SpectrometerSettings (id, SettingsName, IntegralTime, DarkSpectrumPath, AutoDarkCorrection, OverilluminationThreshold, LastUpdated)
+        VALUES (0, 'Basic', 100, '', 1, 65535, datetime('now'))
         """)
     
     conn.commit()

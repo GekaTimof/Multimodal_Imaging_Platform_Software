@@ -35,9 +35,62 @@ class DatabaseService:
             except Exception as e:
                 logger.error(f"Validation error for {parameter}: {e}")
                 return False, f"Validation error: {str(e)}"
+        elif table_name == 'SpectrometerSettings':
+            try:
+                return self._validate_spectrometer_parameter(parameter, value)
+            except Exception as e:
+                logger.error(f"Validation error for {parameter}: {e}")
+                return False, f"Validation error: {str(e)}"
         
         logger.error(f"Unsupported table: {table_name}")
         return False, f"Unsupported table: {table_name}"
+    
+    def _validate_spectrometer_parameter(self, parameter: str, value: Any) -> Tuple[bool, str]:
+        """Validate spectrometer parameter values."""
+        if parameter == 'IntegralTime':
+            try:
+                int_value = int(value)
+                if 1 <= int_value <= 99999:
+                    return True, int_value
+                else:
+                    return False, "IntegralTime must be between 1 and 99999"
+            except (ValueError, TypeError):
+                return False, "IntegralTime must be an integer"
+        
+        elif parameter == 'AutoDarkCorrection':
+            if isinstance(value, bool):
+                return True, int(value)
+            elif str(value).lower() in ('true', '1', 'yes'):
+                return True, 1
+            elif str(value).lower() in ('false', '0', 'no'):
+                return True, 0
+            else:
+                return False, "AutoDarkCorrection must be boolean (0 or 1)"
+        
+        elif parameter == 'OverilluminationThreshold':
+            try:
+                int_value = int(value)
+                if 0 <= int_value <= 65535:
+                    return True, int_value
+                else:
+                    return False, "OverilluminationThreshold must be between 0 and 65535"
+            except (ValueError, TypeError):
+                return False, "OverilluminationThreshold must be an integer"
+        
+        elif parameter == 'DarkSpectrumPath':
+            if isinstance(value, str):
+                return True, str(value)
+            else:
+                return False, "DarkSpectrumPath must be a string"
+        
+        elif parameter == 'SettingsName':
+            if isinstance(value, str) and len(value.strip()) > 0:
+                return True, str(value).strip()
+            else:
+                return False, "SettingsName must be a non-empty string"
+        
+        else:
+            return False, f"Unknown parameter: {parameter}"
     
     @log_execution_time
     @database_error_handler
@@ -307,6 +360,110 @@ class DatabaseService:
         for slot_id in range(10):
             slots[slot_id] = self.get_camera_settings_by_slot(slot_id)
         return slots
+    
+    @log_execution_time
+    @database_error_handler
+    def get_spectrometer_settings(self) -> Dict[str, Any]:
+        """Get current spectrometer settings from database (always from slot 0 - main settings)."""
+        try:
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+            
+            cursor.execute("SELECT * FROM SpectrometerSettings WHERE id = 0")
+            row = cursor.fetchone()
+            
+            if row:
+                columns = [desc[0] for desc in cursor.description]
+                settings = dict(zip(columns, row))
+                # Convert boolean fields properly
+                settings['AutoDarkCorrection'] = bool(settings['AutoDarkCorrection'])
+                return settings
+            else:
+                # Create default settings for slot 0 if doesn't exist
+                default_settings = {
+                    'id': 0,
+                    'SettingsName': 'Basic',
+                    'IntegralTime': 100,
+                    'DarkSpectrumPath': '',
+                    'AutoDarkCorrection': True,
+                    'OverilluminationThreshold': 65535,
+                    'LastUpdated': ''
+                }
+                
+                # Insert default settings into database
+                cursor.execute("""
+                INSERT OR IGNORE INTO SpectrometerSettings 
+                (id, SettingsName, IntegralTime, DarkSpectrumPath, AutoDarkCorrection, OverilluminationThreshold, LastUpdated)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    0, default_settings['SettingsName'],
+                    default_settings['IntegralTime'], default_settings['DarkSpectrumPath'],
+                    int(default_settings['AutoDarkCorrection']), default_settings['OverilluminationThreshold'],
+                    default_settings['LastUpdated']
+                ))
+                conn.commit()
+                
+                return default_settings
+                
+        except sqlite3.Error as e:
+            logger.error(f"Database error in get_spectrometer_settings: {e}")
+            raise Exception(f"Database error: {e}")
+        finally:
+            conn.close()
+    
+    @api_error_handler
+    @log_execution_time
+    def save_spectrometer_settings(self, settings: Dict[str, Any]) -> Tuple[bool, str]:
+        """Save spectrometer settings to database (always to slot 0 - main settings)."""
+        try:
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+            
+            # Check if slot 0 exists
+            cursor.execute("SELECT id FROM SpectrometerSettings WHERE id = 0")
+            exists = cursor.fetchone()
+            
+            if exists:
+                # Update existing settings
+                query = """
+                UPDATE SpectrometerSettings 
+                SET SettingsName = ?, IntegralTime = ?, DarkSpectrumPath = ?, AutoDarkCorrection = ?,
+                    OverilluminationThreshold = ?, LastUpdated = ?
+                WHERE id = ?
+                """
+                cursor.execute(query, (
+                    settings.get('SettingsName', 'Basic'),
+                    settings.get('IntegralTime', 100),
+                    settings.get('DarkSpectrumPath', ''),
+                    int(settings.get('AutoDarkCorrection', True)),
+                    settings.get('OverilluminationThreshold', 65535),
+                    settings.get('LastUpdated', ''),
+                    0
+                ))
+            else:
+                # Insert new settings
+                query = """
+                INSERT INTO SpectrometerSettings 
+                (id, SettingsName, IntegralTime, DarkSpectrumPath, AutoDarkCorrection, OverilluminationThreshold, LastUpdated)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """
+                cursor.execute(query, (
+                    0,
+                    settings.get('SettingsName', 'Basic'),
+                    settings.get('IntegralTime', 100),
+                    settings.get('DarkSpectrumPath', ''),
+                    int(settings.get('AutoDarkCorrection', True)),
+                    settings.get('OverilluminationThreshold', 65535),
+                    settings.get('LastUpdated', '')
+                ))
+            
+            conn.commit()
+            return True, "Spectrometer settings saved successfully"
+            
+        except sqlite3.Error as e:
+            return False, f"Database error: {e}"
+        finally:
+            conn.close()
 
 
 # Global instance

@@ -24,6 +24,9 @@ class Config:
     DATABASE_NAME = os.getenv('DATABASE_NAME', 'DevicesSettings.db')
     DATABASE_TIMEOUT_SECONDS = int(os.getenv('DATABASE_TIMEOUT_SECONDS', '30'))
     
+    # Data Storage Configuration
+    DATA_DIR = os.getenv('DATA_DIR', os.path.join(os.path.dirname(__file__), '..', '..', 'data'))
+    
     # API Configuration
     API_TIMEOUT_SECONDS = int(os.getenv('API_TIMEOUT_SECONDS', '5'))
     RETRY_ATTEMPTS = int(os.getenv('RETRY_ATTEMPTS', '3'))
