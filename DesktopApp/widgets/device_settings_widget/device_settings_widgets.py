@@ -6,7 +6,7 @@ Provides widgets for managing camera, spectrometer, and positioner settings.
 import json
 import logging
 import os
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 
 import requests
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
@@ -25,8 +25,9 @@ from DesktopApp.constants.camera_constants import (
     EXPOSURE_VALUE_RANGE, MAX_CAMERA_SLOTS, RED_GAIN_RANGE, THREAD_TIMEOUT_MS
 )
 from DesktopApp.constants.ui_strings import (
-    DialogStrings, SettingsWidgetStrings
+    DialogStrings, SettingsWidgetStrings, StatusMessages
 )
+from DesktopApp.utils.error_handler import handle_api_error, validate_slot_id
 from .positioner_settings_widget import PositionerSettingsWidget
 
 logger = logging.getLogger(__name__)
@@ -90,7 +91,7 @@ class SettingsSlotDialog(QDialog):
     def _on_slots_loaded(self, success, message, data):
         """Handle slots loaded response from API."""
         try:
-            if success and data.get('success') is True and 'data' in data:
+            if success and data.get('success') and 'data' in data:
                 self.slots_data = data['data']
                 
                 # Clear list and start loading individual slot details
@@ -558,7 +559,7 @@ class CameraSettingsWidget(QWidget):
     
     def _on_settings_loaded(self, success: bool, message: str, data: Dict[str, Any]) -> None:
         """Handle settings load response."""
-        if success and (data.get('success') is True or 'id' in data):  # FastAPI returns direct object for camera settings
+        if success and (data.get('success') or 'id' in data):  # FastAPI returns direct object for camera settings
             # Handle both formats: FastAPI direct response and wrapped response
             if 'id' in data:
                 # Direct FastAPI response
@@ -594,9 +595,9 @@ class CameraSettingsWidget(QWidget):
         
         # Collect all settings
         settings_to_update = [
-            ("CameraSettings", "SettingsName", str(self.settings_name.text()).strip() or "Basic"),
-            ("CameraSettings", "PhotoResolution", str(photo_resolution)),
-            ("CameraSettings", "VideoResolution", str(video_resolution)),
+            ("CameraSettings", "SettingsName", str(self.settings_name.text())),
+            ("CameraSettings", "PhotoResolution", photo_resolution),
+            ("CameraSettings", "VideoResolution", video_resolution),
             ("CameraSettings", "AeEnable", str(int(self.chk_ae.isChecked()))),
             ("CameraSettings", "AwbEnable", str(int(self.chk_awb.isChecked()))),
             ("CameraSettings", "ExposureTime", str(int(self.exp_time.value()))),
@@ -754,7 +755,7 @@ class CameraSettingsWidget(QWidget):
                 
                 # Emit signal that slot has changed
                 self.slot_changed.emit(slot_id)
-            elif success and data.get('success') is True and 'data' in data:
+            elif success and data.get('success') and 'data' in data:
                 # Wrapped response format (fallback)
                 settings = data.get('data', {})
                 
@@ -799,7 +800,7 @@ class CameraSettingsWidget(QWidget):
             
             # Collect current settings
             settings = {
-                'SettingsName': self.settings_name.text() or f"Slot {slot_id}",
+                'SettingsName': str(self.settings_name.text() or f"Slot {slot_id}"),
                 'PhotoResolution': photo_resolution,
                 'VideoResolution': video_resolution,
                 'AeEnable': self.chk_ae.isChecked(),
@@ -851,7 +852,7 @@ class CameraSettingsWidget(QWidget):
         try:
             # Update current settings (not slot-specific)
             settings_to_update = [
-                ("CameraSettings", "SettingsName", settings.get('SettingsName', f"Slot {slot_id}")),
+                ("CameraSettings", "SettingsName", str(settings.get('SettingsName', f"Slot {slot_id}"))),
                 ("CameraSettings", "PhotoResolution", settings.get('PhotoResolution', '3280x2464')),
                 ("CameraSettings", "VideoResolution", settings.get('VideoResolution', '1920x1080')),
                 ("CameraSettings", "AeEnable", str(int(settings.get('AeEnable', True)))),
