@@ -153,11 +153,15 @@ class Config:
                 return False, f"{parameter} must be boolean, got {type(value).__name__}"
         
         elif parameter == 'SettingsName':
-            if not isinstance(value, str):
-                return False, f"SettingsName must be string, got {type(value).__name__}"
-            if not value.strip():
+            # Convert numeric values to string
+            if isinstance(value, (int, float)):
+                value = str(value)
+            elif not isinstance(value, str):
+                return False, f"SettingsName must be string or number, got {type(value).__name__}"
+            
+            if not str(value).strip():
                 return False, "Settings name cannot be empty"
-            if len(value) > 50:
+            if len(str(value)) > 50:
                 return False, "Settings name too long (max 50 characters)"
             return True, str(value)
         
