@@ -6,19 +6,11 @@ import sys
 import os
 import logging
 
-# Add parent directory to path for imports
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-# Always import from the correct RaspberryPi directory
-raspberry_pi_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if raspberry_pi_dir not in sys.path:
-    sys.path.insert(0, raspberry_pi_dir)
-
 # Import config and services
-from config import config
-from database_service import db_service
-from services.camera_service import CameraService
-from services.light_switcher_service import light_switcher_service, SwitchState
+from src.config.settings import config
+from .database_service import db_service
+from .camera_service import CameraService
+from .light_switcher_service import light_switcher_service, SwitchState
 
 # Setup logging
 logging.basicConfig(level=config.LOG_LEVEL, format=config.LOG_FORMAT)

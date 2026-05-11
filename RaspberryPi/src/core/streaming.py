@@ -2,7 +2,7 @@ import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from socketserver import ThreadingMixIn
 
-from RaspberryPi.services.camera_service import CameraService
+from src.services.camera_service import CameraService
 
 
 class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):

@@ -4,8 +4,8 @@ import logging
 from typing import Dict, Any, Tuple, Optional
 
 # Import configuration and error handlers
-from config import config
-from utils.error_handlers import database_error_handler, api_error_handler, log_execution_time
+from src.config.settings import config
+from ..utils.error_handlers import database_error_handler, api_error_handler, log_execution_time
 
 # Get database path from config
 db_path = config.get_database_path()
@@ -24,11 +24,7 @@ class DatabaseService:
         """Ensure database and tables exist."""
         if not os.path.exists(db_path):
             import sys
-            # Add services directory to path for import
-            services_dir = os.path.join(os.path.dirname(__file__), 'services')
-            if services_dir not in sys.path:
-                sys.path.insert(0, services_dir)
-            import database_ini
+            from . import database_ini
             database_ini.main()
     
     def _validate_parameter(self, table_name: str, parameter: str, value: Any) -> Tuple[bool, str]:
