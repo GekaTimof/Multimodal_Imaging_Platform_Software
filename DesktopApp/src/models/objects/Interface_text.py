@@ -13,8 +13,8 @@ import json
 # Add parent directories to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from DesktopApp.language_variations.language_link import Languages
-from DesktopApp.objects.errors import Wrong_argument_exception
+from resources.language_variations.language_link import Languages
+from .errors import Wrong_argument_exception
 
 
 class Interface_text():
@@ -42,8 +42,9 @@ class Interface_text():
             print(f"Falling back to language: {name}")
         
         # Get absolute path to language file relative to this script
-        script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        link = os.path.join(script_dir, Languages[name])
+        # Go up from src/models/objects/ to DesktopApp/ then to resources/
+        desktop_app_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+        link = os.path.join(desktop_app_root, 'resources', Languages[name])
         self.file = link
         try:
             with open(link, 'r', encoding='utf-8') as f:

@@ -1,6 +1,6 @@
 import os
 from PyQt5.QtGui import QPixmap
-from DesktopApp.config import path_manager
+from config import path_manager
 
 def save_photo(image, custom_directory=None):
     """

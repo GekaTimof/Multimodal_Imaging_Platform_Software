@@ -17,17 +17,17 @@ from PyQt5.QtWidgets import (
     QProgressBar, QSpinBox, QStackedWidget, QVBoxLayout, QWidget
 )
 
-from DesktopApp.config.api_config import API_BASE_URL, ENDPOINTS, TIMEOUT_SECONDS
-from DesktopApp.constants.camera_constants import (
+from config.api_config import API_BASE_URL, ENDPOINTS, TIMEOUT_SECONDS
+from core.constants.camera_constants import (
     ANALOGUE_GAIN_RANGE, BLUE_GAIN_RANGE, DEFAULT_ANALOGUE_GAIN, DEFAULT_BLUE_GAIN,
     DEFAULT_EXPOSURE_TIME, DEFAULT_EXPOSURE_VALUE, DEFAULT_RED_GAIN,
     DEFAULT_RESOLUTION_PHOTO, DEFAULT_RESOLUTION_VIDEO, EXPOSURE_TIME_RANGE,
     EXPOSURE_VALUE_RANGE, MAX_CAMERA_SLOTS, RED_GAIN_RANGE, THREAD_TIMEOUT_MS
 )
-from DesktopApp.constants.ui_strings import (
+from core.constants.ui_strings import (
     DialogStrings, SettingsWidgetStrings, StatusMessages
 )
-from DesktopApp.utils.error_handler import handle_api_error, validate_slot_id
+from utils.error_handler import handle_api_error, validate_slot_id
 from .positioner_settings_widget import PositionerSettingsWidget
 
 logger = logging.getLogger(__name__)

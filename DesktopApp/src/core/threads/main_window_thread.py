@@ -9,12 +9,12 @@ The application provides three main tabs:
 """
 
 from PyQt5.QtWidgets import QMainWindow, QTabWidget
-from DesktopApp.tabs.spectrometer_tab import SpectrometerTab
-from DesktopApp.tabs.camera_tab import CameraTab
-from DesktopApp.tabs.wells_tab import WellsTab
-from DesktopApp.objects.Interface_text import Interface_text
-from DesktopApp.config import interface_config
-from DesktopApp.services.raspberry_mode import (
+from ui.tabs.spectrometer_tab import SpectrometerTab
+from ui.tabs.camera_tab import CameraTab
+from ui.tabs.wells_tab import WellsTab
+from models.objects.Interface_text import Interface_text
+from config import interface_config
+from services.raspberry_mode import (
     switch_to_camera_mode,
     switch_to_spectrometer_mode,
     switch_to_wells_mode,

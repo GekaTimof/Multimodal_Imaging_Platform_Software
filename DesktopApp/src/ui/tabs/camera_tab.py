@@ -20,13 +20,13 @@ from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import QHBoxLayout, QLabel, QPushButton, QScrollArea, QVBoxLayout, QWidget
 
-from DesktopApp.config.api_config import CAMERA_STREAM_URL
-from DesktopApp.constants.camera_constants import DEFAULT_CAMERA_SLOT
-from DesktopApp.constants.ui_strings import CameraTabStrings
-from DesktopApp.objects.Interface_text import Interface_text
-from DesktopApp.services.save_photo import save_photo
-from DesktopApp.threads.camera_thread import CameraThread
-from DesktopApp.widgets.device_settings_widget.device_settings_widgets import DeviceSettingsWidget
+from config.api_config import CAMERA_STREAM_URL
+from core.constants.camera_constants import DEFAULT_CAMERA_SLOT
+from core.constants.ui_strings import CameraTabStrings
+from models.objects.Interface_text import Interface_text
+from services.save_photo import save_photo
+from core.threads.camera_thread import CameraThread
+from ui.widgets.device_settings_widget.device_settings_widgets import DeviceSettingsWidget
 
 logger = logging.getLogger(__name__)
 

@@ -8,7 +8,7 @@ import os
 import json
 from datetime import datetime
 from typing import Dict, Any, Optional, List
-from DesktopApp.services.directory_control import get_home_directory
+from services.directory_control import get_home_directory
 
 
 class PathManager:

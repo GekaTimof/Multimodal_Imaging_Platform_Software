@@ -1,31 +1,28 @@
+#!/usr/bin/env python3
 """
-Multimodal Imaging Platform - Desktop Application
-Main entry point for the desktop application.
-
-This application provides a GUI for controlling spectrometer and camera devices,
-with support for multiple languages and configurable settings.
+Desktop Application Entry Point
+Main entry point for the Multimodal Imaging Platform desktop application.
 """
 
 import sys
 import os
 from PyQt5.QtWidgets import QApplication
 
-# Add parent directory to path for imports to work when running directly
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Add src directory to Python path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
-from DesktopApp.threads.main_window_thread import MainWindow
+from core.threads.main_window_thread import MainWindow
 
 
 def main():
-    """Initialize and run the desktop application."""
-    # Create Qt application instance
+    """Main application entry point."""
     app = QApplication(sys.argv)
     
     # Create and show main window
-    win = MainWindow()
-    win.show()
+    window = MainWindow()
+    window.show()
     
-    # Start the application event loop
+    # Start application event loop
     sys.exit(app.exec_())
 
 
