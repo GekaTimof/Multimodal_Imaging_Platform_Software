@@ -977,7 +977,7 @@ class FileSettingsWidget(QWidget):
     
     def _select_photo_directory(self):
         """Select photo save directory."""
-        from DesktopApp.services.directory_control import get_home_directory
+        from services.directory_control import get_home_directory
         from PyQt5.QtWidgets import QFileDialog, QMessageBox
         
         home_dir = get_home_directory()
@@ -1013,7 +1013,7 @@ class FileSettingsWidget(QWidget):
     
     def _select_spectrum_directory(self):
         """Select spectrum save directory (placeholder for future implementation)."""
-        from DesktopApp.services.directory_control import get_home_directory
+        from services.directory_control import get_home_directory
         from PyQt5.QtWidgets import QFileDialog, QMessageBox
         
         home_dir = get_home_directory()
@@ -1039,7 +1039,7 @@ class FileSettingsWidget(QWidget):
     def _save_photo_directory(self, directory):
         """Save photo directory to path manager."""
         try:
-            from DesktopApp.config import path_manager
+            from config import path_manager
             path_manager.set_save_directory('photo', directory)
             self.status_label.setText(f"Photo directory saved: {directory}")
             self.status_label.setStyleSheet("QLabel { color: green; font-weight: bold; }")
@@ -1050,7 +1050,7 @@ class FileSettingsWidget(QWidget):
     def _load_settings(self):
         """Load file settings from path manager."""
         try:
-            from DesktopApp.config import path_manager
+            from config import path_manager
             # Load photo directory
             photo_dir = path_manager.get_save_directory('photo')
             if photo_dir:

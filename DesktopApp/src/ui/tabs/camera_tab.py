@@ -227,7 +227,7 @@ class CameraTab(QWidget):
 
     def load_camera_source(self) -> str:
         """Load camera stream URL from settings file."""
-        settings_path = os.path.join(os.path.dirname(__file__), '..', 'settings.json')
+        settings_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), 'resources', 'settings.json')
         try:
             with open(settings_path, 'r', encoding='utf-8') as f:
                 settings = json.load(f)
