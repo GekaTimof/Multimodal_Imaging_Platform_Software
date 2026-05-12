@@ -11,6 +11,7 @@ from src.config.settings import config
 from .database_service import db_service
 from .camera_service import CameraService
 from .light_switcher_service import light_switcher_service, SwitchState
+from .spectrometer_service import SpectrometerService
 
 # Setup logging
 logging.basicConfig(level=config.LOG_LEVEL, format=config.LOG_FORMAT)
@@ -22,8 +23,9 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Global camera service instance
+# Global service instances
 camera_service = CameraService()
+spectrometer_service = SpectrometerService()
 
 
 # Pydantic Models for Request/Response
@@ -442,6 +444,182 @@ async def reload_camera_settings():
         raise HTTPException(status_code=500, detail=f"Error reloading camera settings: {str(e)}")
 
 
+# Spectrometer endpoints
+@app.get("/api/spectrometer/status", response_model=APIResponse)
+async def get_spectrometer_status():
+    """Get spectrometer connection status."""
+    try:
+        info = spectrometer_service.get_spectrometer_info()
+        return APIResponse(
+            success=True,
+            message="Spectrometer status retrieved",
+            data=info
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting spectrometer status: {str(e)}")
+
+
+@app.post("/api/spectrometer/connect", response_model=APIResponse)
+async def connect_spectrometer():
+    """Connect to spectrometer."""
+    try:
+        spectrometer_service.start()
+        info = spectrometer_service.get_spectrometer_info()
+        return APIResponse(
+            success=True,
+            message="Spectrometer connected successfully",
+            data=info
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error connecting spectrometer: {str(e)}")
+
+
+@app.post("/api/spectrometer/disconnect", response_model=APIResponse)
+async def disconnect_spectrometer():
+    """Disconnect from spectrometer."""
+    try:
+        spectrometer_service.stop()
+        return APIResponse(
+            success=True,
+            message="Spectrometer disconnected successfully",
+            data={"disconnected": True}
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error disconnecting spectrometer: {str(e)}")
+
+
+@app.get("/api/spectrometer/spectrum", response_model=APIResponse)
+async def get_spectrum():
+    """Get current spectrum data."""
+    try:
+        wavelength, raw_spectrum, real_spectrum = spectrometer_service.get_spectrum_data()
+        
+        if wavelength is None or real_spectrum is None:
+            return APIResponse(
+                success=False,
+                message="No spectrum data available",
+                data={}
+            )
+        
+        info = spectrometer_service.get_spectrometer_info()
+        
+        return APIResponse(
+            success=True,
+            message="Spectrum data retrieved",
+            data={
+                "wavelengths": wavelength.tolist(),
+                "intensities": real_spectrum.tolist(),
+                "raw_intensities": raw_spectrum.tolist() if raw_spectrum is not None else [],
+                "overillumination": info.get("overillumination", False),
+                "dark_spectrum_set": info.get("dark_spectrum_loaded", False)
+            }
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting spectrum: {str(e)}")
+
+
+@app.post("/api/spectrometer/integral_time", response_model=APIResponse)
+async def set_integral_time(integral_time: int):
+    """Set spectrometer integral time."""
+    try:
+        success = spectrometer_service.set_integral_time(integral_time)
+        if success:
+            return APIResponse(
+                success=True,
+                message=f"Integral time set to {integral_time}",
+                data={"integral_time": integral_time}
+            )
+        else:
+            raise HTTPException(status_code=400, detail="Failed to set integral time")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error setting integral time: {str(e)}")
+
+
+@app.post("/api/spectrometer/dark_spectrum/set", response_model=APIResponse)
+async def set_dark_spectrum():
+    """Set dark spectrum."""
+    try:
+        success = spectrometer_service.set_dark_spectrum()
+        if success:
+            return APIResponse(
+                success=True,
+                message="Dark spectrum set successfully",
+                data={"dark_spectrum_set": True}
+            )
+        else:
+            raise HTTPException(status_code=400, detail="Failed to set dark spectrum")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error setting dark spectrum: {str(e)}")
+
+
+@app.post("/api/spectrometer/dark_spectrum/clear", response_model=APIResponse)
+async def clear_dark_spectrum():
+    """Clear dark spectrum."""
+    try:
+        spectrometer_service.clear_dark_spectrum()
+        return APIResponse(
+            success=True,
+            message="Dark spectrum cleared successfully",
+            data={"dark_spectrum_set": False}
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error clearing dark spectrum: {str(e)}")
+
+
+@app.post("/api/spectrometer/save", response_model=APIResponse)
+async def save_spectrum(directory: str, filename: Optional[str] = None):
+    """Save current spectrum to file."""
+    try:
+        # This would need to be implemented in the spectrometer service
+        # For now, return a placeholder response
+        return APIResponse(
+            success=False,
+            message="Save functionality not yet implemented via API",
+            data={}
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error saving spectrum: {str(e)}")
+
+
+@app.get("/api/spectrometer/wavelength_range", response_model=APIResponse)
+async def get_wavelength_range():
+    """Get wavelength range."""
+    try:
+        wavelength, _, _ = spectrometer_service.get_spectrum_data()
+        if wavelength is not None:
+            return APIResponse(
+                success=True,
+                message="Wavelength range retrieved",
+                data={"wavelengths": wavelength.tolist()}
+            )
+        else:
+            return APIResponse(
+                success=False,
+                message="No wavelength data available",
+                data={}
+            )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting wavelength range: {str(e)}")
+
+
+@app.get("/api/spectrometer/info", response_model=APIResponse)
+async def get_spectrometer_info():
+    """Get spectrometer information."""
+    try:
+        info = spectrometer_service.get_spectrometer_info()
+        return APIResponse(
+            success=True,
+            message="Spectrometer info retrieved",
+            data=info
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting spectrometer info: {str(e)}")
+
+
 # Exception handlers
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request, exc):
@@ -485,6 +663,17 @@ if __name__ == "__main__":
     logger.info("    POST /api/settings/update - Update a single parameter")
     logger.info("    POST /api/settings/camera - Update all camera settings")
     logger.info("    GET  /api/settings/camera/validation-rules - Get validation rules")
+    logger.info("  Spectrometer:")
+    logger.info("    GET  /api/spectrometer/status - Get spectrometer status")
+    logger.info("    POST /api/spectrometer/connect - Connect to spectrometer")
+    logger.info("    POST /api/spectrometer/disconnect - Disconnect from spectrometer")
+    logger.info("    GET  /api/spectrometer/spectrum - Get current spectrum")
+    logger.info("    POST /api/spectrometer/integral_time - Set integral time")
+    logger.info("    POST /api/spectrometer/dark_spectrum/set - Set dark spectrum")
+    logger.info("    POST /api/spectrometer/dark_spectrum/clear - Clear dark spectrum")
+    logger.info("    POST /api/spectrometer/save - Save spectrum to file")
+    logger.info("    GET  /api/spectrometer/wavelength_range - Get wavelength range")
+    logger.info("    GET  /api/spectrometer/info - Get spectrometer info")
     
     uvicorn.run(
         app,

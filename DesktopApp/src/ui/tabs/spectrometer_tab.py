@@ -1,6 +1,8 @@
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel
+from PyQt5.QtWidgets import QWidget, QHBoxLayout
 from models.objects.Interface_text import Interface_text
 from ui.widgets.device_settings_widget.device_settings_widgets import DeviceSettingsWidget
+from ui.widgets.spectrometer_widget import SpectrometerWidget
+
 
 class SpectrometerTab(QWidget):
     def __init__(self, interface_text: Interface_text):
@@ -9,18 +11,18 @@ class SpectrometerTab(QWidget):
         # Main layout
         main_layout = QHBoxLayout(self)
         
-        # Left side - Spectrometer content (placeholder for now)
-        left_layout = QVBoxLayout()
-        left_layout.addWidget(QLabel(interface_text.spectrometer()))
-        left_layout.addStretch()
+        # Left side - Spectrometer widget (comprehensive interface)
+        self.spectrometer_widget = SpectrometerWidget(interface_text)
         
         # Right side - Device settings
         self.device_settings_widget = DeviceSettingsWidget(interface_text)
         
         # Add to main layout with 4:1 ratio
-        main_layout.addLayout(left_layout, 4)
+        main_layout.addWidget(self.spectrometer_widget, 4)
         main_layout.addWidget(self.device_settings_widget, 1)
-
-    # TODO добавить получение и отображение спектров из потока с Raspberry Pi
-
-    # TODO заменить комадны на отправку команды на API для управления спектрометром на Raspberry Pi, а не управление спектрометром напрямую из приложения
+    
+    def closeEvent(self, event):
+        """Handle tab close event."""
+        if hasattr(self, 'spectrometer_widget'):
+            self.spectrometer_widget.closeEvent(event)
+        super().closeEvent(event)
