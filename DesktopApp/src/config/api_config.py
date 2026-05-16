@@ -1,11 +1,26 @@
 """
 API Configuration
 Centralized configuration for API endpoints and connection settings.
+IP address of Raspberry Pi is configured in resources/settings.json ("api.base_url" and "camera.stream_url").
 """
 
-# API endpoints
-API_BASE_URL = "http://10.43.70.189:8000/api"
-CAMERA_STREAM_URL = "http://10.43.70.189:8080/video"
+import json
+import os
+
+_SETTINGS_FILE = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "resources", "settings.json"))
+
+def _load_settings() -> dict:
+    try:
+        with open(_SETTINGS_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"Warning: could not load settings.json: {e}")
+        return {}
+
+_settings = _load_settings()
+
+API_BASE_URL: str = _settings.get("api", {}).get("base_url", "http://10.78.112.189:8000/api")
+CAMERA_STREAM_URL: str = _settings.get("camera", {}).get("stream_url", "http://10.78.112.189:8080/video")
 
 # Connection settings
 TIMEOUT_SECONDS = 5

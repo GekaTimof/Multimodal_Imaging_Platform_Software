@@ -70,7 +70,7 @@ class PathManager:
             config_file: Path to paths config file. If None, uses default location.
         """
         if config_file is None:
-            config_file = os.path.join(os.path.dirname(__file__), "..", "config", "paths_config.json")
+            config_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "config", "paths_config.json")
         
         self.config_file = config_file
         self._ensure_config_dir()
@@ -267,10 +267,14 @@ class PathManager:
         """
         validation = self.paths.get('path_validation', {})
         
-        # Check forbidden characters
+        # Check forbidden characters (skip ":" for Windows drive letter, e.g. C:\)
         forbidden_chars = validation.get('forbidden_chars', [])
+        import sys as _sys
+        check_path = path
+        if _sys.platform == "win32" and len(path) >= 2 and path[1] == ":":
+            check_path = path[2:]
         for char in forbidden_chars:
-            if char in path:
+            if char in check_path:
                 return False
         
         # Check path length
@@ -280,8 +284,11 @@ class PathManager:
         
         # Check if path must be under home directory
         if validation.get('require_home_subdir', True):
+            from pathlib import Path as _Path
             home_dir = get_home_directory()
-            if not os.path.abspath(path).startswith(os.path.abspath(home_dir)):
+            try:
+                _Path(os.path.abspath(path)).relative_to(os.path.abspath(home_dir))
+            except ValueError:
                 return False
         
         return True

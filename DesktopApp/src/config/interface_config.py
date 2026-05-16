@@ -52,7 +52,7 @@ class InterfaceConfig:
             config_file: Path to config file. If None, uses default location.
         """
         if config_file is None:
-            config_file = os.path.join(os.path.dirname(__file__), "..", "config", "interface_settings.json")
+            config_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "config", "interface_settings.json")
         
         self.config_file = config_file
         self._ensure_config_dir()

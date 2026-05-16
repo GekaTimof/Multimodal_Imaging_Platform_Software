@@ -11,6 +11,7 @@ This widget provides controls for:
 
 import requests
 import json
+from config.api_config import API_BASE_URL
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, 
     QLabel, QSpinBox, QDoubleSpinBox, QPushButton, 
@@ -30,7 +31,7 @@ class PositionerSettingsWidget(QWidget):
     def __init__(self, interface_text=None):
         super().__init__()
         self.interface_text = interface_text
-        self.api_base_url = "http://10.43.70.189:8000/api"
+        self.api_base_url = API_BASE_URL
         self.current_settings = {}
         self.active_threads = []  # Track active threads
         self._build_ui()

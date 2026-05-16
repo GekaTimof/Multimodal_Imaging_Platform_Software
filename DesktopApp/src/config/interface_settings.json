@@ -23,7 +23,7 @@
         "auto_detect": false
     },
     "tabs": {
-        "default_tab": 0,
+        "default_tab": 1,
         "remember_last_tab": true,
         "tab_positions": [
             "spectrometer",

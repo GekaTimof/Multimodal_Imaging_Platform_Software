@@ -10,8 +10,8 @@ import sys
 import os
 import json
 
-# Add parent directories to path for imports
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+# Add DesktopApp root (parent of 'src/') to path so that 'resources' package is importable
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
 
 from resources.language_variations.language_link import Languages
 from .errors import Wrong_argument_exception

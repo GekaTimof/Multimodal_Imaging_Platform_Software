@@ -18,7 +18,7 @@ from typing import Optional
 
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QPixmap
-from PyQt5.QtWidgets import QHBoxLayout, QLabel, QPushButton, QScrollArea, QVBoxLayout, QWidget
+from PyQt5.QtWidgets import QHBoxLayout, QLabel, QProgressBar, QPushButton, QScrollArea, QSizePolicy, QVBoxLayout, QWidget
 
 from config.api_config import CAMERA_STREAM_URL
 from core.constants.camera_constants import DEFAULT_CAMERA_SLOT
@@ -61,6 +61,9 @@ class CameraTab(QWidget):
         self.video_label = QLabel(interface_text.no_video())
         self.video_label.setAlignment(Qt.AlignCenter)
         self.video_label.setStyleSheet("QLabel { background-color: black; color: white; }")
+        self.video_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.video_label.setMinimumSize(0, 0)
+        self.video_label.setScaledContents(False)
 
         # Control panel (right side)
         self.start_button = QPushButton(interface_text.start_camera())
@@ -69,12 +72,17 @@ class CameraTab(QWidget):
         self.status_label = QLabel("")
         self.status_label.setWordWrap(True)
 
+        # Progress bar for photo saving (hidden by default)
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setVisible(False)
+
         # Upper control panel (basic camera controls) with scroll
         upper_control_layout = QVBoxLayout()
         upper_control_layout.addWidget(self.start_button)
         upper_control_layout.addWidget(self.stop_button)
         upper_control_layout.addWidget(QLabel(f"Stream URL: {self.camera_source}"))
         upper_control_layout.addWidget(self.save_image_button)
+        upper_control_layout.addWidget(self.progress_bar)
         upper_control_layout.addWidget(self.status_label)
         upper_control_layout.addStretch()  # Push buttons to top
         
@@ -103,10 +111,16 @@ class CameraTab(QWidget):
         right_panel_layout.addWidget(upper_scroll_area, 2)  # Upper part takes 2/5 space
         right_panel_layout.addWidget(lower_scroll_area, 3)  # Lower part takes 3/5 space
 
-        # Main horizontal layout (3:1 ratio - more space for video)
+        # Right panel wrapper widget with fixed minimum width
+        right_panel_widget = QWidget()
+        right_panel_widget.setLayout(right_panel_layout)
+        right_panel_widget.setMinimumWidth(260)
+        right_panel_widget.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
+
+        # Main horizontal layout (video expands, controls stay fixed)
         main_layout = QHBoxLayout(self)
-        main_layout.addWidget(self.video_label, 3)  # Stretch factor 3 for video
-        main_layout.addLayout(right_panel_layout, 1)    # Stretch factor 1 for controls
+        main_layout.addWidget(self.video_label, 1)  # Video expands to fill remaining space
+        main_layout.addWidget(right_panel_widget)    # Controls: fixed width
 
         # Connect settings updated signal
         self.device_settings_widget.settings_updated.connect(self.on_settings_updated)
@@ -187,6 +201,8 @@ class CameraTab(QWidget):
         """Save the current camera frame to disk."""
         if self.current_frame is None:
             return
+        self.progress_bar.setVisible(True)
+        self.progress_bar.setValue(0)
         try:
             # Get save directory from FileSettingsWidget
             photo_dir = self.device_settings_widget.file_tab.get_photo_save_directory()
@@ -194,11 +210,14 @@ class CameraTab(QWidget):
                 saved_path = save_photo(self.current_frame, photo_dir)
             else:
                 saved_path = save_photo(self.current_frame)  # Fallback to default
+            self.progress_bar.setValue(100)
             logger.info(f"Image saved to: {saved_path}")
             self.status_label.setText(CameraTabStrings.IMAGE_SAVED.format(os.path.basename(saved_path)))
         except Exception as e:
             logger.error(f"Error saving image: {e}")
             self.status_label.setText(CameraTabStrings.ERROR_SAVING_IMAGE.format(str(e)))
+        finally:
+            self.progress_bar.setVisible(False)
 
     def on_settings_updated(self) -> None:
         """Handle settings updated event - restart camera with new settings from API."""
@@ -225,9 +244,18 @@ class CameraTab(QWidget):
             time.sleep(0.5)
             self.start_camera()
 
+    def resizeEvent(self, event):
+        """Limit video label to 4/5 width and 95% height of the window."""
+        super().resizeEvent(event)
+        w = self.width()
+        h = self.height()
+        max_video_w = int(w * 4 / 5)
+        max_video_h = int(h * 0.95)
+        self.video_label.setMaximumSize(max_video_w, max_video_h)
+
     def load_camera_source(self) -> str:
         """Load camera stream URL from settings file."""
-        settings_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), 'resources', 'settings.json')
+        settings_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), 'resources', 'settings.json')
         try:
             with open(settings_path, 'r', encoding='utf-8') as f:
                 settings = json.load(f)

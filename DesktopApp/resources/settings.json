@@ -1,9 +1,9 @@
 {
     "camera": {
-        "stream_url": "http://10.43.70.189:8080/video"
+        "stream_url": "http://10.78.112.189:8080/video"
     },
     "api": {
-        "base_url": "http://10.43.70.189:8000/api"
+        "base_url": "http://10.78.112.189:8000/api"
     },
     "ui": {
         "theme": "default",

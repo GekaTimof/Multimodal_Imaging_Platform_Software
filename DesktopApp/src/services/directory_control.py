@@ -1,12 +1,20 @@
 import os
-import pwd
+from pathlib import Path
 from PyQt5.QtWidgets import QFileDialog, QMessageBox
 
 def get_home_directory():
-    script_dir = os.path.dirname(os.path.realpath(__file__))
-    dir_stat = os.stat(script_dir)
-    user_info = pwd.getpwuid(dir_stat.st_uid)
-    return user_info.pw_dir
+    return str(Path.home())
+
+def is_path_inside(path: str, parent: str) -> bool:
+    """
+    Кроссплатформенная проверка: path находится внутри parent.
+    Корректно работает на Windows (регистронезависимо) и Linux.
+    """
+    try:
+        Path(os.path.abspath(path)).relative_to(os.path.abspath(parent))
+        return True
+    except ValueError:
+        return False
 
 def is_directory_allowed(directory):
     """
@@ -18,8 +26,7 @@ def is_directory_allowed(directory):
     Returns:
         bool: True, если директория разрешена, иначе False.
     """
-    home_dir = get_home_directory()
-    return directory.startswith(home_dir)
+    return is_path_inside(directory, get_home_directory())
 
 class DirectorySelector:
     def __init__(self, parent, interface_text, dir_input):
@@ -41,7 +48,7 @@ class DirectorySelector:
                                                      current_directory, options)
         if directory:
             # check that user try to select folder in home directory
-            if not directory.startswith(home_dir):
+            if not is_path_inside(directory, home_dir):
                 QMessageBox.warning(self.parent, self.interface_text.warning_title(),
                                     self.interface_text.warning_select_out_of_home())
                 return

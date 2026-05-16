@@ -885,22 +885,63 @@ class CameraSettingsWidget(QWidget):
 
 class SpectrometerSettingsWidget(QWidget):
     """Widget for spectrometer settings configuration."""
-    
+
+    integral_time_changed = pyqtSignal(int)
+    set_dark_requested = pyqtSignal()
+    clear_dark_requested = pyqtSignal()
+
     def __init__(self, interface_text=None):
         super().__init__()
         self.interface_text = interface_text
         self._build_ui()
-    
+
     def _build_ui(self):
         layout = QVBoxLayout(self)
-        
-        # Placeholder for spectrometer settings
-        placeholder = QLabel("Spectrometer settings will be implemented here")
-        placeholder.setAlignment(Qt.AlignCenter)
-        placeholder.setStyleSheet("QLabel { color: gray; font-size: 14px; }")
-        
-        layout.addWidget(placeholder)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(10)
+
+        # --- Connection status ---
+        self.connection_label = QLabel("Status: Disconnected")
+        self.connection_label.setStyleSheet("color: red; font-weight: bold;")
+        self.connection_label.setWordWrap(True)
+        layout.addWidget(self.connection_label)
+
+        # --- Integral time ---
+        it_label = QLabel(self.interface_text.integral_time() if self.interface_text else "Integral Time (ms):")
+        it_label.setStyleSheet("QLabel { font-weight: bold; }")
+        it_label.setWordWrap(True)
+        layout.addWidget(it_label)
+
+        self.integral_time_input = QSpinBox()
+        self.integral_time_input.setRange(1, 10000)
+        self.integral_time_input.setValue(100)
+        self.integral_time_input.setButtonSymbols(QSpinBox.NoButtons)
+        self.integral_time_input.valueChanged.connect(self.integral_time_changed.emit)
+        layout.addWidget(self.integral_time_input)
+
+        # --- Dark spectrum ---
+        dark_label = QLabel("Dark Spectrum:")
+        dark_label.setStyleSheet("QLabel { font-weight: bold; }")
+        layout.addWidget(dark_label)
+
+        self.set_dark_button = QPushButton(self.interface_text.set_dark_spectrum() if self.interface_text else "Set Dark Spectrum")
+        self.set_dark_button.clicked.connect(self.set_dark_requested.emit)
+        layout.addWidget(self.set_dark_button)
+
+        self.clear_dark_button = QPushButton(self.interface_text.clear_dark_spectrum() if self.interface_text else "Clear Dark Spectrum")
+        self.clear_dark_button.clicked.connect(self.clear_dark_requested.emit)
+        layout.addWidget(self.clear_dark_button)
+
         layout.addStretch()
+
+    def set_connection_status(self, connected: bool):
+        """Update connection status label."""
+        if connected:
+            self.connection_label.setText("Status: Connected")
+            self.connection_label.setStyleSheet("color: green; font-weight: bold;")
+        else:
+            self.connection_label.setText("Status: Disconnected")
+            self.connection_label.setStyleSheet("color: red; font-weight: bold;")
 
 
 class FileSettingsWidget(QWidget):
@@ -977,7 +1018,7 @@ class FileSettingsWidget(QWidget):
     
     def _select_photo_directory(self):
         """Select photo save directory."""
-        from services.directory_control import get_home_directory
+        from services.directory_control import get_home_directory, is_path_inside
         from PyQt5.QtWidgets import QFileDialog, QMessageBox
         
         home_dir = get_home_directory()
@@ -990,7 +1031,7 @@ class FileSettingsWidget(QWidget):
             self.interface_text.select_save_directory() if self.interface_text else "Select Save Directory",
             current_directory, options)
         if directory:
-            if not directory.startswith(home_dir):
+            if not is_path_inside(directory, home_dir):
                 QMessageBox.warning(self, 
                     self.interface_text.warning_title() if self.interface_text else "Warning",
                     self.interface_text.warning_select_out_of_home() if self.interface_text else "Please select a directory within your home folder.")
@@ -1013,7 +1054,7 @@ class FileSettingsWidget(QWidget):
     
     def _select_spectrum_directory(self):
         """Select spectrum save directory (placeholder for future implementation)."""
-        from services.directory_control import get_home_directory
+        from services.directory_control import get_home_directory, is_path_inside
         from PyQt5.QtWidgets import QFileDialog, QMessageBox
         
         home_dir = get_home_directory()
@@ -1026,16 +1067,26 @@ class FileSettingsWidget(QWidget):
             self.interface_text.select_save_directory() if self.interface_text else "Select Save Directory",
             current_directory, options)
         if directory:
-            if not directory.startswith(home_dir):
+            if not is_path_inside(directory, home_dir):
                 QMessageBox.warning(self, 
                     self.interface_text.warning_title() if self.interface_text else "Warning",
                     self.interface_text.warning_select_out_of_home() if self.interface_text else "Please select a directory within your home folder.")
                 return
             
             self.spectrum_dir_label.setText(directory)
+            self._save_spectrum_directory(directory)
             self.status_label.setText(f"Spectrum directory set: {directory}")
             self.status_label.setStyleSheet("QLabel { color: green; font-weight: bold; }")
     
+    def _save_spectrum_directory(self, directory):
+        """Save spectrum directory to path manager."""
+        try:
+            from config import path_manager
+            path_manager.set_save_directory('spectrum', directory)
+        except Exception as e:
+            self.status_label.setText(f"Error saving directory: {str(e)}")
+            self.status_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
+
     def _save_photo_directory(self, directory):
         """Save photo directory to path manager."""
         try:
@@ -1056,10 +1107,10 @@ class FileSettingsWidget(QWidget):
             if photo_dir:
                 self.photo_dir_label.setText(photo_dir)
             
-            # Load spectrum directory (placeholder for future)
-            # spectrum_dir = path_manager.get_save_directory('spectrum')
-            # if spectrum_dir:
-            #     self.spectrum_dir_label.setText(spectrum_dir)
+            # Load spectrum directory
+            spectrum_dir = path_manager.get_save_directory('spectrum')
+            if spectrum_dir:
+                self.spectrum_dir_label.setText(spectrum_dir)
                 
         except Exception as e:
             print(f"Error loading file settings: {e}")
@@ -1067,6 +1118,11 @@ class FileSettingsWidget(QWidget):
     def get_photo_save_directory(self):
         """Get current photo save directory."""
         dir_text = self.photo_dir_label.text()
+        return dir_text if os.path.isdir(dir_text) else None
+
+    def get_spectrum_save_directory(self):
+        """Get current spectrum save directory."""
+        dir_text = self.spectrum_dir_label.text()
         return dir_text if os.path.isdir(dir_text) else None
 
 

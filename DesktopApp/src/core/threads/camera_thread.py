@@ -2,6 +2,7 @@ import cv2
 import requests
 from PyQt5.QtCore import QThread, pyqtSignal
 from PyQt5.QtGui import QImage
+from config.api_config import API_BASE_URL
 
 class CameraThread(QThread):
     frame_ready = pyqtSignal(QImage)
@@ -17,7 +18,7 @@ class CameraThread(QThread):
         """Load camera settings from API only - called from main thread"""
         try:
             # Load settings from API only
-            api_url = "http://10.43.70.189:8000/api/settings/camera"
+            api_url = f"{API_BASE_URL}/settings/camera"
             response = requests.get(api_url, timeout=5)
             
             if response.status_code == 200:

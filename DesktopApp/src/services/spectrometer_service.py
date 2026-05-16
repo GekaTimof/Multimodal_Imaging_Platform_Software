@@ -9,7 +9,7 @@ from typing import Optional, Tuple, Dict, Any
 from PyQt5.QtCore import QObject, pyqtSignal, QTimer
 import logging
 
-from ..config.api_config import API_BASE_URL, TIMEOUT_SECONDS, RETRY_ATTEMPTS, RETRY_DELAY
+from config.api_config import API_BASE_URL, TIMEOUT_SECONDS, RETRY_ATTEMPTS, RETRY_DELAY
 
 logger = logging.getLogger(__name__)
 
