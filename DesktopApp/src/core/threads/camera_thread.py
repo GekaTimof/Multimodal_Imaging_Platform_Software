@@ -38,11 +38,17 @@ class CameraThread(QThread):
             return None
 
     def apply_camera_settings(self, settings):
-        """Apply API/database settings to camera - called from main thread"""
+        """Apply API/database settings to camera - called from main thread
+
+        IMPORTANT NOTE: This only affects the LOCAL OpenCV camera capture.
+        The video stream from RaspberryPi (rpicam-vid) uses its own settings
+        from the database. To change video stream settings, use the Settings UI
+        which updates the RaspberryPi database and restarts the stream.
+        """
         try:
             if not settings:
                 return False
-                
+
             if self.cap and self.cap.isOpened():
                 # Apply video resolution first (for streaming)
                 video_resolution = settings.get('VideoResolution', '1920x1080')

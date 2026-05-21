@@ -207,7 +207,9 @@ class CameraTab(QWidget):
         try:
             # Call API to capture photo with PhotoResolution settings
             api_url = f"{API_BASE_URL}/camera/photo"
+            logger.info(f"Sending photo capture request to: {api_url}")
             response = requests.post(api_url, timeout=310)  # Max 300s exposure + buffer
+            logger.info(f"Photo API response: status={response.status_code}")
 
             self.progress_bar.setValue(50)
 
