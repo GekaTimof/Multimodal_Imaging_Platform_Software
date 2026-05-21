@@ -222,17 +222,29 @@ class CameraTab(QWidget):
                     image_base64 = data['data']['image_base64']
                     image_bytes = base64.b64decode(image_base64)
 
-                    # Convert to QPixmap for saving
-                    image = QImage()
-                    image.loadFromData(image_bytes)
-                    pixmap = QPixmap.fromImage(image)
+                    # Convert to QImage for saving
+                    # JPEG format hint helps Qt correctly decode the image
+                    image = QImage.fromData(image_bytes, "JPEG")
+                    if image.isNull():
+                        # Fallback: try without format hint
+                        image = QImage()
+                        load_success = image.loadFromData(image_bytes)
+                        if not load_success:
+                            logger.error("Failed to load image from decoded bytes")
+                            self.status_label.setText("Error: Failed to decode image data")
+                            return
 
                     # Get save directory from FileSettingsWidget
                     photo_dir = self.device_settings_widget.file_tab.get_photo_save_directory()
-                    if photo_dir:
-                        saved_path = save_photo(pixmap, photo_dir)
-                    else:
-                        saved_path = save_photo(pixmap)  # Fallback to default
+                    try:
+                        if photo_dir:
+                            saved_path = save_photo(image, photo_dir)
+                        else:
+                            saved_path = save_photo(image)  # Fallback to default
+                    except (ValueError, RuntimeError) as save_error:
+                        logger.error(f"Failed to save photo: {save_error}")
+                        self.status_label.setText(f"Error saving photo: {save_error}")
+                        return
 
                     self.progress_bar.setValue(100)
                     photo_info = data['data']
