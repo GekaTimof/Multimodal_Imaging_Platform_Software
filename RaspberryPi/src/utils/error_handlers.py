@@ -169,7 +169,7 @@ def safe_execute(default_return: Any = None, log_error: bool = True) -> Callable
 
 # Import config for retry decorator
 try:
-    from config import config
+    from src.config.settings import config
 except ImportError:
     # Fallback values if config is not available
     class Config:

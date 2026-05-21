@@ -1,7 +1,10 @@
 import threading
 import time
+import uvicorn
 from src.core.streaming import CameraStreamServer
 from src.core.spectrum_streaming import SpectrumStreamServer
+from src.services.fastapi_server import app
+from src.config.settings import config
 
 
 def run_camera_server():
@@ -16,20 +19,34 @@ def run_spectrum_server():
     server.run()
 
 
+def run_api_server():
+    """Run FastAPI server in a separate thread"""
+    uvicorn.run(
+        app,
+        host=config.API_HOST,
+        port=config.API_PORT,
+        reload=False,
+        log_level=config.LOG_LEVEL.lower()
+    )
+
+
 if __name__ == '__main__':
     print("Starting Multimodal Imaging Platform...")
+    print(f"API server will be available at http://0.0.0.0:{config.API_PORT}/api")
     print("Camera stream will be available at http://0.0.0.0:8080/video")
     print("Spectrum stream will be available at http://0.0.0.0:8081/spectrum")
-    print("Press Ctrl+C to stop both servers")
-    
-    # Create threads for both servers
+    print("Press Ctrl+C to stop all servers")
+
+    # Create threads for all servers
+    api_thread = threading.Thread(target=run_api_server, daemon=True)
     camera_thread = threading.Thread(target=run_camera_server, daemon=True)
     spectrum_thread = threading.Thread(target=run_spectrum_server, daemon=True)
-    
-    # Start both threads
+
+    # Start all threads
+    api_thread.start()
     camera_thread.start()
     spectrum_thread.start()
-    
+
     try:
         # Keep main thread alive
         while True:

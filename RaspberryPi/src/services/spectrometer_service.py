@@ -30,6 +30,10 @@ try:
 except ImportError as e:
     logger.warning(f"Spectrometer module not available: {e}")
     SPECTROMETER_AVAILABLE = False
+    START_INTEGRAL_TIME = 100
+    MAX_INTEGRAL_TIME = 99999
+    WAVELENGTH_RANGE_LEN = 2048
+    SPECTRUM_LEN = 2048
 
 
 class SpectrometerService:

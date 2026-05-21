@@ -165,7 +165,9 @@ class DatabaseService:
             if table_name == 'CameraSettings':
                 target_id = 0
             else:
-                target_id = "(SELECT MAX(id) FROM {table_name})"
+                cursor.execute(f"SELECT MAX(id) FROM {table_name}")
+                row = cursor.fetchone()
+                target_id = row[0] if row and row[0] is not None else 0
             
             # Update the parameter
             query = f"UPDATE {table_name} SET {parameter} = ? WHERE id = ?"

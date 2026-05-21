@@ -6,9 +6,8 @@
 
 Система состоит из:
 - **Arduino** с прошивкой `light_switcher_end_switch.ino` для управления шаговым двигателем и концевиками
-- **Python сервиса** для связи с Arduino через Serial
-- **REST API** для управления переключателем
-- **Systemd демона** для постоянной работы сервиса
+- **Python сервиса** (`src/services/light_switcher_service.py`) для связи с Arduino через Serial
+- **REST API** (в составе `main.py`) для управления переключателем
 
 ## Функциональность
 
@@ -57,70 +56,17 @@ POST /api/light-switcher/disconnect
 
 ## Установка
 
-### Автоматическая установка
-
-```bash
-cd /home/minilumi/Multimodal_Imaging_Platform_Software/RaspberryPi
-sudo ./install_light_switcher_service.sh install
-```
-
-### Ручная установка
-
-1. **Установка зависимостей:**
-```bash
-sudo apt update
-sudo apt install python3 python3-pip python3-serial
-pip3 install pyserial
-```
-
-2. **Настройка systemd сервиса:**
-```bash
-sudo ./install_light_switcher_service.sh setup
-```
-
-3. **Запуск сервиса:**
-```bash
-sudo ./install_light_switcher_service.sh start
-```
-
-## Управление сервисом
-
-```bash
-# Запуск
-sudo ./install_light_switcher_service.sh start
-
-# Остановка
-sudo ./install_light_switcher_service.sh stop
-
-# Перезапуск
-sudo ./install_light_switcher_service.sh restart
-
-# Проверка статуса
-sudo ./install_light_switcher_service.sh status
-
-# Просмотр логов
-sudo ./install_light_switcher_service.sh logs
-
-# Включение автозапуска
-sudo ./install_light_switcher_service.sh enable
-
-# Отключение автозапуска
-sudo ./install_light_switcher_service.sh disable
-```
+Light Switcher управляется через API сервер (запускается через `main.py`).
+Отдельная установка не требуется.
 
 ## Тестирование
 
-### Тест подключения к Arduino
-```bash
-./install_light_switcher_service.sh test
-```
-
 ### Тестирование API
 
-1. **Запустите FastAPI сервер:**
+1. **Запустите основной сервер:**
 ```bash
-cd /home/minilumi/Multimodal_Imaging_Platform_Software/RaspberryPi/services
-python3 fastapi_server.py
+cd /home/minilumi/Multimodal_Imaging_Platform_Software/RaspberryPi
+python3 main.py
 ```
 
 2. **Проверка статуса:**
@@ -163,7 +109,7 @@ curl -X POST http://localhost:8000/api/light-switcher/switch \
 
 ### Изменение Serial порта
 
-Отредактируйте файл `services/light_switcher_service.py`:
+Отредактируйте файл `src/services/light_switcher_service.py`:
 
 ```python
 # Измените порт по умолчанию
@@ -178,9 +124,10 @@ self.baudrate = 9600  # должна соответствовать настро
 
 ## Логирование
 
-Логи сервиса сохраняются в:
-- `logs/light_switcher_daemon.log` - логи демона
-- Systemd journal: `journalctl -u light-switcher.service`
+Логи доступны через journal основного сервиса:
+```bash
+sudo journalctl -u raspberrypi-settings.service -f
+```
 
 ## Возможные проблемы
 
@@ -195,24 +142,20 @@ sudo usermod -a -G dialout pi
 - Убедитесь что Arduino запущена с правильной прошивкой
 - Проверьте правильность порта и скорости
 
-### 3. Сервис не запускается
+### 3. API не отвечает
 ```bash
-# Проверьте логи
-sudo ./install_light_switcher_service.sh status
-sudo ./install_light_switcher_service.sh logs
+# Проверьте логи основного сервиса
+sudo journalctl -u raspberrypi-settings.service -f
 ```
 
 ## Структура файлов
 
 ```
 RaspberryPi/
-├── services/
+├── src/services/
 │   ├── light_switcher_service.py      # Основной сервис
-│   ├── light_switcher_daemon.py       # Демон
-│   └── fastapi_server.py              # API сервер (с добавленными endpoints)
-├── light-switcher.service              # Systemd конфиг
-├── install_light_switcher_service.sh   # Скрипт установки
-├── logs/                              # Логи сервиса
+│   └── fastapi_server.py              # API сервер
+├── raspberrypi-settings.service        # Systemd конфиг (общий)
 └── Light_switcher/
     ├── light_switcher_end_switch.ino/  # Прошивка Arduino
     └── README.md                       # Этот файл
@@ -230,5 +173,5 @@ RaspberryPi/
 
 ```bash
 cd /home/minilumi/Multimodal_Imaging_Platform_Software/RaspberryPi
-python3 services/light_switcher_service.py
+python3 src/services/light_switcher_service.py
 ```

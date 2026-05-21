@@ -10,7 +10,7 @@ import sys
 import logging
 import os
 from threading import Event
-from services.light_switcher_service import light_switcher_service, SwitchState
+from src.services.light_switcher_service import light_switcher_service, SwitchState
 
 class LightSwitcherDaemon:
     """Демон для управления световым переключателем"""

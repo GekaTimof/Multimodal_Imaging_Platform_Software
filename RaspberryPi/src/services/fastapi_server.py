@@ -5,6 +5,8 @@ from typing import Optional, Dict, Any, Union
 import sys
 import os
 import logging
+import numpy as np
+import cv2
 
 # Import config and services
 from src.config.settings import config
@@ -56,9 +58,12 @@ class CameraSettingsResponse(BaseModel):
 
     @validator('AeEnable', 'AwbEnable', pre=True)
     def convert_boolean(cls, v):
+        # Handle numpy.bool_ and other types
+        if hasattr(v, 'item'):  # numpy scalar
+            return bool(v.item())
         if isinstance(v, str):
             return v.lower() in ('true', '1', 'on')
-        elif isinstance(v, int):
+        elif isinstance(v, (int, float)):
             return bool(v)
         return bool(v)
 
@@ -474,8 +479,8 @@ async def capture_photo(output_path: Optional[str] = None):
                     "resolution": f"{camera_service.photo_width}x{camera_service.photo_height}",
                     "exposure_time_us": camera_service.exposure_time,
                     "analogue_gain": camera_service.analogue_gain,
-                    "ae_enable": camera_service.ae_enable,
-                    "awb_enable": camera_service.awb_enable
+                    "ae_enable": bool(camera_service.ae_enable),
+                    "awb_enable": bool(camera_service.awb_enable)
                 }
             )
         else:
@@ -496,8 +501,8 @@ async def capture_photo(output_path: Optional[str] = None):
                         "resolution": f"{camera_service.photo_width}x{camera_service.photo_height}",
                         "exposure_time_us": camera_service.exposure_time,
                         "analogue_gain": camera_service.analogue_gain,
-                        "ae_enable": camera_service.ae_enable,
-                        "awb_enable": camera_service.awb_enable,
+                        "ae_enable": bool(camera_service.ae_enable),
+                        "awb_enable": bool(camera_service.awb_enable),
                         "format": "jpeg",
                         "quality": 95
                     }

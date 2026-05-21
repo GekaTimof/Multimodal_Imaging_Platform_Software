@@ -3,64 +3,43 @@
 
 # Архитектура Raspberry Pi
 
-- `main.py` — точка входа, простая обёртка для запуска потока.
-- `streaming.py` — содержит блок, который отвечает за создание MJPEG-сервера и выдачу видеопотока.
-- `services/camera_service.py` — содержит блок захвата кадров с Picamera2 и предоставляет текущий JPEG-кадр.
-- `test_camera_app/` — отдельная папка с визуальным тестовым приложением, которое остаётся для локальной проверки камеры.
+- `main.py` — точка входа, запускает API сервер (порт 8000), камеру (порт 8080) и спектрометр (порт 8081)
+- `src/core/streaming.py` — MJPEG сервер видеопотока
+- `src/core/spectrum_streaming.py` — сервер потока спектров
+- `src/services/fastapi_server.py` — API endpoints для управления настройками
+- `src/services/camera_service.py` — работа с Picamera2
+- `src/services/spectrometer_service.py` — работа со спектрометром
+- `src/services/light_switcher_service.py` — управление Arduino переключателем
+- `src/services/database_service.py` — работа с настройками в SQLite
 
-# Автозапуск видеопотока
-
-Сервер видеопотока запускается командой:
-
-```bash
-cd /home/minilumi/Multimodal_Imaging_Platform_Software
-python3 -m RaspberryPi.main
-```
-
-## Создание systemd-сервиса
-
-1. Создайте файл сервиса, например `/etc/systemd/system/raspberrypi-camera.service`.
-2. Вставьте в него:
-
-```ini
-[Unit]
-Description=Raspberry Pi camera MJPEG stream
-After=network.target
-
-[Service]
-Type=simple
-WorkingDirectory=/home/minilumi/Multimodal_Imaging_Platform_Software
-ExecStart=/usr/bin/python3 -m RaspberryPi.main
-Restart=on-failure
-User=minilumi
-Environment=PYTHONUNBUFFERED=1
-
-[Install]
-WantedBy=multi-user.target
-```
-
-3. Перезагрузите демон systemd:
+# Запуск
 
 ```bash
+cd /home/minilumi/Multimodal_Imaging_Platform_Software/RaspberryPi
+python3 main.py
+```
+
+# Автозапуск через systemd
+
+Файл сервиса уже создан: `raspberrypi-settings.service`
+
+## Установка:
+
+```bash
+sudo cp raspberrypi-settings.service /etc/systemd/system/
 sudo systemctl daemon-reload
+sudo systemctl enable raspberrypi-settings.service
+sudo systemctl start raspberrypi-settings.service
 ```
 
-4. Включите автозапуск:
+## Управление:
 
 ```bash
-sudo systemctl enable raspberrypi-camera.service
-```
-
-5. Запустите сервис:
-
-```bash
-sudo systemctl start raspberrypi-camera.service
-```
-
-6. Проверьте статус:
-
-```bash
-sudo systemctl status raspberrypi-camera.service
+sudo systemctl status raspberrypi-settings.service  # статус
+sudo systemctl start raspberrypi-settings.service   # запуск
+sudo systemctl stop raspberrypi-settings.service    # остановка
+sudo systemctl restart raspberrypi-settings.service # перезапуск
+sudo journalctl -u raspberrypi-settings.service -f  # логи
 ```
 
 ## Проверка работы
