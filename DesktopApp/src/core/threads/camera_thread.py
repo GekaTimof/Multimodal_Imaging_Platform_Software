@@ -3,6 +3,7 @@ import requests
 from PyQt5.QtCore import QThread, pyqtSignal
 from PyQt5.QtGui import QImage
 from config.api_config import API_BASE_URL
+from core.constants.camera_constants import EXPOSURE_TIME_RANGE, ANALOGUE_GAIN_RANGE
 
 class CameraThread(QThread):
     frame_ready = pyqtSignal(QImage)
@@ -70,8 +71,9 @@ class CameraThread(QThread):
                         exposure_time = settings.get('ExposureTime', 10000)
                         gain = settings.get('AnalogueGain', 1.0)
                         
-                        # Validate ranges
-                        if 0 < exposure_time <= 3000000 and 0 <= gain <= 32.0:
+                        # Validate ranges using constants from camera_constants.py
+                        if EXPOSURE_TIME_RANGE[0] <= exposure_time <= EXPOSURE_TIME_RANGE[1] and \
+                           ANALOGUE_GAIN_RANGE[0] <= gain <= ANALOGUE_GAIN_RANGE[1]:
                             # Convert exposure time from microseconds to appropriate value for OpenCV
                             exposure_value = min(max(exposure_time / 10000.0, 0.1), 100.0)  # Clamp to safe range
                             

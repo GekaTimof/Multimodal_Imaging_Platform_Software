@@ -433,15 +433,82 @@ async def reload_camera_settings():
     try:
         # Reload settings from database and reinitialize camera if needed
         camera_service.reload_settings()
-        
+
         return APIResponse(
             success=True,
             message="Camera settings reloaded successfully. Camera reinitialized if resolution changed.",
             data={"action": "reloaded"}
         )
-            
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error reloading camera settings: {str(e)}")
+
+
+@app.post("/api/camera/photo")
+async def capture_photo(output_path: Optional[str] = None):
+    """Capture a high-quality photo with all camera settings (PhotoResolution, ExposureTime, etc.).
+
+    Args:
+        output_path: Optional path to save the photo. If not provided, returns base64-encoded image.
+
+    Returns:
+        JSON response with success status, image data (base64) or file path, and metadata.
+    """
+    try:
+        import base64
+        import io
+
+        # Capture photo
+        success, result = camera_service.capture_photo(output_path=output_path)
+
+        if not success:
+            raise HTTPException(status_code=500, detail=f"Photo capture failed: {result}")
+
+        if output_path:
+            # Photo saved to file
+            return APIResponse(
+                success=True,
+                message=f"Photo captured and saved to {output_path}",
+                data={
+                    "file_path": result,
+                    "resolution": f"{camera_service.photo_width}x{camera_service.photo_height}",
+                    "exposure_time_us": camera_service.exposure_time,
+                    "analogue_gain": camera_service.analogue_gain,
+                    "ae_enable": camera_service.ae_enable,
+                    "awb_enable": camera_service.awb_enable
+                }
+            )
+        else:
+            # Return as base64 encoded JPEG
+            if isinstance(result, np.ndarray):
+                # Encode numpy array to JPEG
+                ret, jpeg_buffer = cv2.imencode('.jpg', result, [cv2.IMWRITE_JPEG_QUALITY, 95])
+                if not ret:
+                    raise HTTPException(status_code=500, detail="Failed to encode photo to JPEG")
+
+                image_base64 = base64.b64encode(jpeg_buffer).decode('utf-8')
+
+                return APIResponse(
+                    success=True,
+                    message="Photo captured successfully",
+                    data={
+                        "image_base64": image_base64,
+                        "resolution": f"{camera_service.photo_width}x{camera_service.photo_height}",
+                        "exposure_time_us": camera_service.exposure_time,
+                        "analogue_gain": camera_service.analogue_gain,
+                        "ae_enable": camera_service.ae_enable,
+                        "awb_enable": camera_service.awb_enable,
+                        "format": "jpeg",
+                        "quality": 95
+                    }
+                )
+            else:
+                raise HTTPException(status_code=500, detail=f"Unexpected result type: {type(result)}")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error capturing photo: {str(e)}")
 
 
 # Spectrometer endpoints
@@ -663,6 +730,7 @@ if __name__ == "__main__":
     logger.info("    POST /api/settings/update - Update a single parameter")
     logger.info("    POST /api/settings/camera - Update all camera settings")
     logger.info("    GET  /api/settings/camera/validation-rules - Get validation rules")
+    logger.info("    POST /api/camera/photo - Capture high-quality photo with all settings")
     logger.info("  Spectrometer:")
     logger.info("    GET  /api/spectrometer/status - Get spectrometer status")
     logger.info("    POST /api/spectrometer/connect - Connect to spectrometer")

@@ -3,11 +3,9 @@ import os
 
 def main():
     """Main function to initialize database"""
-    # Get the directory where this script is located (RaspberryPi directory)
-    db_folder = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    db_name = "DevicesSettings.db"
-    
-    db_path = os.path.join(db_folder, db_name)
+    # Use the same path as config to avoid multiple databases
+    from src.config.settings import config
+    db_path = config.get_database_path()
     
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
@@ -21,7 +19,7 @@ def main():
         VideoResolution TEXT NOT NULL DEFAULT '1920x1080',
         AeEnable INTEGER NOT NULL DEFAULT 1 CHECK(AeEnable IN (0, 1)),
         AwbEnable INTEGER NOT NULL DEFAULT 1 CHECK(AwbEnable IN (0, 1)),
-        ExposureTime INTEGER NOT NULL DEFAULT 10000 CHECK(ExposureTime BETWEEN 100 AND 3000000),
+        ExposureTime INTEGER NOT NULL DEFAULT 10000 CHECK(ExposureTime BETWEEN 100 AND 300000000),
         AnalogueGain REAL NOT NULL DEFAULT 1.0 CHECK(AnalogueGain BETWEEN 0.0 AND 32.0),
         ExposureValue REAL NOT NULL DEFAULT 0.0 CHECK(ExposureValue BETWEEN -10.0 AND 10.0),
         RedGain REAL NOT NULL DEFAULT 1.0 CHECK(RedGain BETWEEN 0.0 AND 8.0),

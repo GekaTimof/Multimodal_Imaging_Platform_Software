@@ -18,7 +18,7 @@ class Config:
     # Camera Configuration
     DEFAULT_FPS = int(os.getenv('DEFAULT_FPS', '20'))
     CAMERA_RELOAD_DELAY_MS = int(os.getenv('CAMERA_RELOAD_DELAY_MS', '1000'))
-    CAMERA_TIMEOUT_SECONDS = int(os.getenv('CAMERA_TIMEOUT_SECONDS', '5'))
+    CAMERA_TIMEOUT_SECONDS = int(os.getenv('CAMERA_TIMEOUT_SECONDS', '310'))  # 310s to support 300s long exposure
     
     # Database Configuration
     DATABASE_NAME = os.getenv('DATABASE_NAME', 'DevicesSettings.db')
@@ -38,7 +38,7 @@ class Config:
     
     # Camera validation constants
     MIN_EXPOSURE_TIME_US = 100
-    MAX_EXPOSURE_TIME_US = 3000000
+    MAX_EXPOSURE_TIME_US = 300000000  # 300 seconds (5 minutes) for IMX477 long exposure support
     MIN_ANALOG_GAIN = 0.0
     MAX_ANALOG_GAIN = 32.0
     MIN_EXPOSURE_VALUE = -10.0
@@ -88,7 +88,7 @@ class Config:
     @classmethod
     def get_database_path(cls) -> str:
         """Get full database path."""
-        return os.path.join(os.path.dirname(__file__), cls.DATABASE_NAME)
+        return os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', cls.DATABASE_NAME))
     
     @classmethod
     def validate_camera_parameter(cls, parameter: str, value: Any) -> tuple[bool, str]:

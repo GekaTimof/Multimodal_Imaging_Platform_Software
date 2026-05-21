@@ -104,7 +104,7 @@ def main():
     test_data = {
         "table_name": "CameraSettings",
         "parameter": "ExposureTime",
-        "value": 4000000  # Above maximum of 3000000
+        "value": 400000000  # Above maximum of 300000000 (300 seconds)
     }
     success, _ = test_endpoint('POST', f"{base_url}/settings/update", test_data)
     

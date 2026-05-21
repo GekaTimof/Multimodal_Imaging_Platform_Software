@@ -22,7 +22,7 @@ THREAD_TIMEOUT_MS = 3000
 THREAD_WAIT_TIMEOUT = 1000
 
 # Camera validation ranges
-EXPOSURE_TIME_RANGE = (100, 3000000)
+EXPOSURE_TIME_RANGE = (100, 300000000)  # 100 µs to 300 seconds (5 minutes)
 ANALOGUE_GAIN_RANGE = (0.0, 32.0)
 EXPOSURE_VALUE_RANGE = (-10.0, 10.0)
 RED_GAIN_RANGE = (0.0, 8.0)
@@ -33,9 +33,11 @@ AVAILABLE_PHOTO_RESOLUTIONS = [
     '640x480',      # VGA - 4:3
     '800x600',      # SVGA - 4:3
     '1024x768',     # XGA - 4:3
+    '1280x720',     # 720p HD - 16:9
     '1296x972',     # 4:3 mid-resolution
     '1640x1232',    # 4:3 aspect ratio
     '1920x1080',    # 1080p FHD - 16:9
+    '2304x1296',    # 16:9 aspect ratio
     '2592x1944',    # High 4:3 resolution
     '3280x2464',    # Full 8MP resolution - 4:3
     '4608x2592',    # Full 12MP resolution - 16:9
@@ -50,7 +52,7 @@ AVAILABLE_VIDEO_RESOLUTIONS = [
     '1640x1232',    # 4:3 aspect ratio
     '1920x1080',    # 1080p FHD - 16:9
     '2304x1296',    # 16:9 aspect ratio
-    '25921944',     # High 4:3 resolution
+    '2592x1944',    # High 4:3 resolution
 ]
 
 # Camera states

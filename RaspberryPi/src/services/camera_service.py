@@ -156,7 +156,7 @@ class CameraService:
         try:
             settings = db_service.get_camera_settings()
             if settings:
-                # Parse resolution from database (format: "1920x1080")
+                # Parse video resolution from database (format: "1920x1080")
                 video_resolution = settings.get('VideoResolution', '1280x720')
                 if 'x' in video_resolution:
                     width_str, height_str = video_resolution.split('x')
@@ -170,7 +170,16 @@ class CameraService:
                         self.width, self.height = 1280, 720  # Safe fallback
                 else:
                     self.width, self.height = 1280, 720
-                    
+
+                # Parse photo resolution from database
+                photo_resolution = settings.get('PhotoResolution', '3280x2464')
+                if 'x' in photo_resolution:
+                    width_str, height_str = photo_resolution.split('x')
+                    self.photo_width = int(width_str)
+                    self.photo_height = int(height_str)
+                else:
+                    self.photo_width, self.photo_height = 3280, 2464
+
                 # Load other camera settings
                 self.ae_enable = settings.get('AeEnable', True)
                 self.awb_enable = settings.get('AwbEnable', True)
@@ -182,6 +191,7 @@ class CameraService:
             else:
                 # Default settings if database is empty - use safe defaults
                 self.width, self.height = 1280, 720
+                self.photo_width, self.photo_height = 3280, 2464
                 self.ae_enable = True
                 self.awb_enable = True
                 self.exposure_time = 10000
@@ -189,11 +199,12 @@ class CameraService:
                 self.exposure_value = 0.0
                 self.red_gain = 1.0
                 self.blue_gain = 1.0
-                
+
         except Exception as e:
             print(f"Error loading camera settings: {e}")
             # Fallback to safe default settings
             self.width, self.height = 1280, 720
+            self.photo_width, self.photo_height = 3280, 2464
             self.ae_enable = True
             self.awb_enable = True
             self.exposure_time = 10000
@@ -273,11 +284,11 @@ class CameraService:
             time.sleep(1 / self.fps)
     
     def _capture_rpicam_frame(self):
-        """Capture frame using rpicam-still subprocess."""
+        """Capture frame using rpicam-still subprocess with all camera settings."""
         try:
             # Reload settings from database to get current resolution
             self._load_settings()
-            
+
             # Use rpicam-still to capture a single frame
             cmd = [
                 'rpicam-still',
@@ -286,20 +297,57 @@ class CameraService:
                 '--width', str(self.width),
                 '--height', str(self.height),
                 '--quality', '70',
-                '-o', '-'  # Output to stdout
             ]
-            
-            result = subprocess.run(cmd, capture_output=True, timeout=1)
+
+            # Add exposure settings
+            if self.exposure_time is not None and self.exposure_time > 0:
+                # --shutter is in microseconds
+                cmd.extend(['--shutter', str(int(self.exposure_time))])
+
+            if self.analogue_gain is not None and self.analogue_gain >= 0:
+                # --gain for analogue gain
+                cmd.extend(['--gain', str(float(self.analogue_gain))])
+
+            if self.exposure_value is not None:
+                # --ev for exposure value (compensation)
+                cmd.extend(['--ev', str(float(self.exposure_value))])
+
+            # Auto exposure setting
+            if not self.ae_enable:
+                # Disable auto exposure
+                cmd.append('--aeenable=0')
+
+            # Auto white balance settings
+            if not self.awb_enable:
+                # Disable auto white balance
+                cmd.append('--awb=0')
+                # Set manual color gains if provided
+                if self.red_gain is not None and self.blue_gain is not None:
+                    cmd.extend(['--awbgains', f"{float(self.red_gain)},{float(self.blue_gain)}"])
+            else:
+                # Enable auto white balance
+                cmd.append('--awb=1')
+
+            # Output to stdout
+            cmd.extend(['-o', '-'])
+
+            # Calculate timeout based on exposure time + buffer
+            timeout_seconds = max(5, (self.exposure_time / 1_000_000) + 2)
+
+            result = subprocess.run(cmd, capture_output=True, timeout=timeout_seconds)
             if result.returncode == 0:
                 # Decode JPEG from stdout
                 frame_array = np.frombuffer(result.stdout, dtype=np.uint8)
                 frame = cv2.imdecode(frame_array, cv2.IMREAD_COLOR)
                 if frame is not None:
                     return frame
-            
+
             # Fallback to test pattern
             return self._generate_test_pattern()
-            
+
+        except subprocess.TimeoutExpired:
+            print(f"rpicam capture timeout (exposure={self.exposure_time}us)")
+            return self._generate_test_pattern()
         except Exception as e:
             print(f"rpicam capture error: {e}")
             return self._generate_test_pattern()
@@ -308,26 +356,140 @@ class CameraService:
         """Generate a test pattern with the configured resolution."""
         # Create a colorful test pattern
         height, width = self.height, self.width
-        
+
         # Create gradient background
         x = np.linspace(0, 255, width)
         y = np.linspace(0, 255, height)
         X, Y = np.meshgrid(x, y)
-        
+
         # Create RGB channels with different patterns
         R = np.uint8(X)
         G = np.uint8(Y)
         B = np.uint8(255 - X)
-        
+
         # Stack channels to create RGB image
         frame = np.stack([R, G, B], axis=2)
-        
+
         # Add some text overlay
         text = f"Camera Test Pattern {width}x{height}"
         cv2.putText(frame, text, (50, height//2), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
         cv2.putText(frame, f"Real Camera: {self.use_real_camera}", (50, height//2 + 40), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-        
+
         return frame
+
+    def capture_photo(self, output_path: Optional[str] = None) -> Tuple[bool, Union[np.ndarray, str]]:
+        """Capture a high-quality photo using PhotoResolution and all camera settings.
+
+        Args:
+            output_path: Optional path to save the photo. If None, returns the frame as numpy array.
+
+        Returns:
+            Tuple of (success: bool, result: Union[np.ndarray, str])
+            - If output_path is None: returns (True, numpy_array) or (False, error_message)
+            - If output_path is provided: returns (True, file_path) or (False, error_message)
+        """
+        try:
+            # Reload settings to get current values
+            self._load_settings()
+
+            if self.use_real_camera and self.camera_backend == "rpicam":
+                # Build rpicam-still command with photo resolution and full quality
+                cmd = [
+                    'rpicam-still',
+                    '-n',  # No preview
+                    '--width', str(self.photo_width),
+                    '--height', str(self.photo_height),
+                    '--quality', '95',  # High quality for photos
+                ]
+
+                # Add exposure settings
+                if self.exposure_time is not None and self.exposure_time > 0:
+                    cmd.extend(['--shutter', str(int(self.exposure_time))])
+
+                if self.analogue_gain is not None and self.analogue_gain >= 0:
+                    cmd.extend(['--gain', str(float(self.analogue_gain))])
+
+                if self.exposure_value is not None:
+                    cmd.extend(['--ev', str(float(self.exposure_value))])
+
+                # Auto exposure setting
+                if not self.ae_enable:
+                    cmd.append('--aeenable=0')
+
+                # Auto white balance settings
+                if not self.awb_enable:
+                    cmd.append('--awb=0')
+                    if self.red_gain is not None and self.blue_gain is not None:
+                        cmd.extend(['--awbgains', f"{float(self.red_gain)},{float(self.blue_gain)}"])
+                else:
+                    cmd.append('--awb=1')
+
+                # Calculate timeout based on exposure time + buffer (min 10s for photos)
+                timeout_seconds = max(10, (self.exposure_time / 1_000_000) + 3)
+
+                if output_path:
+                    # Save to file
+                    cmd.extend(['-o', output_path])
+                    result = subprocess.run(cmd, capture_output=True, timeout=timeout_seconds)
+                    if result.returncode == 0:
+                        return True, output_path
+                    else:
+                        error_msg = result.stderr.decode('utf-8', errors='ignore') if result.stderr else "Unknown error"
+                        return False, f"rpicam-still failed: {error_msg}"
+                else:
+                    # Return as numpy array
+                    cmd.extend(['-o', '-'])
+                    result = subprocess.run(cmd, capture_output=True, timeout=timeout_seconds)
+                    if result.returncode == 0:
+                        frame_array = np.frombuffer(result.stdout, dtype=np.uint8)
+                        frame = cv2.imdecode(frame_array, cv2.IMREAD_COLOR)
+                        if frame is not None:
+                            return True, frame
+                        else:
+                            return False, "Failed to decode captured image"
+                    else:
+                        error_msg = result.stderr.decode('utf-8', errors='ignore') if result.stderr else "Unknown error"
+                        return False, f"rpicam-still failed: {error_msg}"
+
+            elif self.use_real_camera and self.camera_backend == "opencv":
+                # For OpenCV backend, capture frame at photo resolution if possible
+                try:
+                    # Try to set photo resolution temporarily
+                    if hasattr(self, 'cap'):
+                        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.photo_width)
+                        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.photo_height)
+                        time.sleep(0.5)  # Wait for resolution change
+
+                    ret, frame = self.cap.read()
+                    if ret and frame is not None:
+                        if output_path:
+                            cv2.imwrite(output_path, frame)
+                            return True, output_path
+                        else:
+                            return True, frame
+                    else:
+                        return False, "Failed to capture frame from OpenCV camera"
+                except Exception as e:
+                    return False, f"OpenCV capture error: {e}"
+
+            else:
+                # Test pattern - generate at photo resolution
+                # Temporarily set resolution for test pattern
+                orig_width, orig_height = self.width, self.height
+                self.width, self.height = self.photo_width, self.photo_height
+                frame = self._generate_test_pattern()
+                self.width, self.height = orig_width, orig_height
+
+                if output_path:
+                    cv2.imwrite(output_path, frame)
+                    return True, output_path
+                else:
+                    return True, frame
+
+        except subprocess.TimeoutExpired:
+            return False, f"Photo capture timeout (exposure={self.exposure_time}us)"
+        except Exception as e:
+            return False, f"Photo capture error: {e}"
 
     def get_frame(self):
         with self.frame_lock:
