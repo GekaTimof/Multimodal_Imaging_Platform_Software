@@ -16,11 +16,12 @@ import os
 import time
 from typing import Optional
 
+import requests
 from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtGui import QPixmap
+from PyQt5.QtGui import QPixmap, QImage
 from PyQt5.QtWidgets import QHBoxLayout, QLabel, QProgressBar, QPushButton, QScrollArea, QSizePolicy, QVBoxLayout, QWidget
 
-from config.api_config import CAMERA_STREAM_URL
+from config.api_config import CAMERA_STREAM_URL, API_BASE_URL
 from core.constants.camera_constants import DEFAULT_CAMERA_SLOT
 from core.constants.ui_strings import CameraTabStrings
 from models.objects.Interface_text import Interface_text
@@ -198,21 +199,62 @@ class CameraTab(QWidget):
         self.stop_button.setEnabled(False)
 
     def save_current_image(self) -> None:
-        """Save the current camera frame to disk."""
-        if self.current_frame is None:
-            return
+        """Capture and save a high-quality photo using PhotoResolution settings from API."""
         self.progress_bar.setVisible(True)
         self.progress_bar.setValue(0)
+        self.status_label.setText("Capturing high-resolution photo...")
+
         try:
-            # Get save directory from FileSettingsWidget
-            photo_dir = self.device_settings_widget.file_tab.get_photo_save_directory()
-            if photo_dir:
-                saved_path = save_photo(self.current_frame, photo_dir)
+            # Call API to capture photo with PhotoResolution settings
+            api_url = f"{API_BASE_URL}/camera/photo"
+            response = requests.post(api_url, timeout=310)  # Max 300s exposure + buffer
+
+            self.progress_bar.setValue(50)
+
+            if response.status_code == 200:
+                data = response.json()
+                if data.get('success') and 'image_base64' in data.get('data', {}):
+                    import base64
+
+                    # Decode base64 image
+                    image_base64 = data['data']['image_base64']
+                    image_bytes = base64.b64decode(image_base64)
+
+                    # Convert to QPixmap for saving
+                    image = QImage()
+                    image.loadFromData(image_bytes)
+                    pixmap = QPixmap.fromImage(image)
+
+                    # Get save directory from FileSettingsWidget
+                    photo_dir = self.device_settings_widget.file_tab.get_photo_save_directory()
+                    if photo_dir:
+                        saved_path = save_photo(pixmap, photo_dir)
+                    else:
+                        saved_path = save_photo(pixmap)  # Fallback to default
+
+                    self.progress_bar.setValue(100)
+                    photo_info = data['data']
+                    resolution = photo_info.get('resolution', 'unknown')
+                    exposure = photo_info.get('exposure_time_us', 'unknown')
+                    logger.info(f"Photo captured: {resolution}, exposure={exposure}us, saved to: {saved_path}")
+                    self.status_label.setText(f"Photo saved: {os.path.basename(saved_path)} ({resolution})")
+                else:
+                    error_msg = data.get('message', 'Unknown error')
+                    logger.error(f"API error: {error_msg}")
+                    self.status_label.setText(f"Error: {error_msg}")
             else:
-                saved_path = save_photo(self.current_frame)  # Fallback to default
-            self.progress_bar.setValue(100)
-            logger.info(f"Image saved to: {saved_path}")
-            self.status_label.setText(CameraTabStrings.IMAGE_SAVED.format(os.path.basename(saved_path)))
+                error_msg = f"HTTP {response.status_code}"
+                try:
+                    error_data = response.json()
+                    error_msg = error_data.get('error', error_msg)
+                except:
+                    pass
+                logger.error(f"API request failed: {error_msg}")
+                self.status_label.setText(f"Error capturing photo: {error_msg}")
+
+        except requests.Timeout:
+            logger.error("Photo capture timeout")
+            self.status_label.setText("Error: Photo capture timeout (exposure too long?)")
         except Exception as e:
             logger.error(f"Error saving image: {e}")
             self.status_label.setText(CameraTabStrings.ERROR_SAVING_IMAGE.format(str(e)))
