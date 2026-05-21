@@ -106,9 +106,9 @@ class DatabaseService:
             if row:
                 columns = [desc[0] for desc in cursor.description]
                 settings = dict(zip(columns, row))
-                # Convert boolean fields properly
-                settings['AeEnable'] = bool(settings['AeEnable'])
-                settings['AwbEnable'] = bool(settings['AwbEnable'])
+                # Convert boolean fields to native Python bool (avoid numpy.bool_)
+                settings['AeEnable'] = bool(int(settings['AeEnable']))
+                settings['AwbEnable'] = bool(int(settings['AwbEnable']))
                 return settings
             else:
                 # Create default settings for slot 0 if doesn't exist
@@ -225,8 +225,8 @@ class DatabaseService:
                 settings = dict(zip(columns, row))
                 # Convert boolean fields properly for CameraSettings
                 if table_name == 'CameraSettings':
-                    settings['AeEnable'] = bool(settings['AeEnable'])
-                    settings['AwbEnable'] = bool(settings['AwbEnable'])
+                    settings['AeEnable'] = bool(int(settings['AeEnable']))
+                    settings['AwbEnable'] = bool(int(settings['AwbEnable']))
                 return settings
             else:
                 return {}
@@ -251,9 +251,9 @@ class DatabaseService:
             if row:
                 columns = [desc[0] for desc in cursor.description]
                 settings = dict(zip(columns, row))
-                # Convert boolean fields properly
-                settings['AeEnable'] = bool(settings['AeEnable'])
-                settings['AwbEnable'] = bool(settings['AwbEnable'])
+                # Convert boolean fields to native Python bool (avoid numpy.bool_)
+                settings['AeEnable'] = bool(int(settings['AeEnable']))
+                settings['AwbEnable'] = bool(int(settings['AwbEnable']))
                 return settings
             else:
                 # Create default settings for slot if doesn't exist

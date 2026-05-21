@@ -57,14 +57,19 @@ class CameraSettingsResponse(BaseModel):
         return str(v) if v is not None else "1920x1080"
 
     @validator('AeEnable', 'AwbEnable', pre=True)
-    def convert_boolean(cls, v):
-        # Handle numpy.bool_ and other types
+    def convert_boolean_input(cls, v):
+        # Handle numpy.bool_ and other types on input
         if hasattr(v, 'item'):  # numpy scalar
             return bool(v.item())
         if isinstance(v, str):
             return v.lower() in ('true', '1', 'on')
         elif isinstance(v, (int, float)):
             return bool(v)
+        return bool(v)
+
+    @validator('AeEnable', 'AwbEnable')
+    def ensure_python_bool(cls, v):
+        # Ensure output is always a Python bool, not numpy.bool_
         return bool(v)
 
     @validator('ExposureTime', pre=True)
@@ -308,12 +313,15 @@ async def update_parameter(request: ParameterUpdateRequest):
         )
         
         if success:
-            # Check if camera resolution parameter was updated and reload camera if needed
-            if (request.table_name == "CameraSettings" and 
-                request.parameter in ["PhotoResolution", "VideoResolution"]):
+            # Reload camera when any camera parameter changes
+            CAMERA_STREAM_PARAMS = {
+                "AeEnable", "AwbEnable", "ExposureTime", "AnalogueGain",
+                "ExposureValue", "RedGain", "BlueGain", "VideoResolution", "PhotoResolution"
+            }
+            if request.table_name == "CameraSettings" and request.parameter in CAMERA_STREAM_PARAMS:
                 try:
                     camera_service.reload_settings()
-                    message += " Camera reinitialized with new resolution."
+                    message += " Camera settings applied."
                 except Exception as reload_error:
                     message += f" Warning: Camera reload failed: {reload_error}"
             
@@ -350,28 +358,32 @@ async def update_camera_settings(settings: CameraSettingsResponse):
         ]
         
         failed_updates = []
-        resolution_updated = False
-        
+        camera_params_changed = False
+        camera_stream_params = {
+            "PhotoResolution", "VideoResolution", "AeEnable", "AwbEnable",
+            "ExposureTime", "AnalogueGain", "ExposureValue", "RedGain", "BlueGain"
+        }
+
         for table_name, parameter, value in updates:
             success, message = db_service.update_parameter(table_name, parameter, value)
             if not success:
                 failed_updates.append(f"{parameter}: {message}")
-            elif parameter in ["PhotoResolution", "VideoResolution"]:
-                resolution_updated = True
-        
+            elif parameter in camera_stream_params:
+                camera_params_changed = True
+
         if failed_updates:
             raise HTTPException(
-                status_code=400, 
+                status_code=400,
                 detail=f"Failed to update some parameters: {'; '.join(failed_updates)}"
             )
-        
-        # Reload camera if resolution was updated
-        if resolution_updated:
+
+        # Reload camera if any streaming parameters changed
+        if camera_params_changed:
             try:
                 camera_service.reload_settings()
                 return APIResponse(
                     success=True,
-                    message="All camera settings updated successfully. Camera reinitialized with new resolution.",
+                    message="All camera settings updated and applied to camera.",
                     data=settings.dict()
                 )
             except Exception as reload_error:
@@ -463,8 +475,14 @@ async def capture_photo(output_path: Optional[str] = None):
         import base64
         import io
 
+        logger.info(f"Photo capture requested. output_path={output_path}, backend={camera_service.camera_backend}, use_real_camera={camera_service.use_real_camera}")
+        logger.info(f"Current camera settings: photo_res={camera_service.photo_width}x{camera_service.photo_height}, "
+                   f"exposure={camera_service.exposure_time}us, gain={camera_service.analogue_gain}, "
+                   f"AE={camera_service.ae_enable}, AWB={camera_service.awb_enable}")
+
         # Capture photo
         success, result = camera_service.capture_photo(output_path=output_path)
+        logger.info(f"Photo capture result: success={success}, result_type={type(result).__name__}")
 
         if not success:
             raise HTTPException(status_code=500, detail=f"Photo capture failed: {result}")

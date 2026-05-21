@@ -187,7 +187,7 @@ class SpectrometerService:
             self.current_real_spectrum = self.current_spectrum.copy()
         
         # Check for overillumination
-        self.overillumination = np.max(self.current_spectrum) >= self.overillumination_threshold
+        self.overillumination = bool(np.max(self.current_spectrum) >= self.overillumination_threshold)
     
     def get_spectrum_data(self) -> Tuple[Optional[np.ndarray], Optional[np.ndarray], Optional[np.ndarray]]:
         """Get current spectrum data (wavelength, raw spectrum, corrected spectrum)."""

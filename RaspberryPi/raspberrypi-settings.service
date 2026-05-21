@@ -1,5 +1,5 @@
 [Unit]
-Description=Raspberry Pi Settings API Server
+Description=Raspberry Pi Multimodal Imaging Platform (API + Camera + Spectrum)
 After=network.target
 Wants=network.target
 

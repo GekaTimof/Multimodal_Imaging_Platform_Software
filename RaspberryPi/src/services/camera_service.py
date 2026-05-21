@@ -4,6 +4,7 @@ import numpy as np
 import cv2
 import sys
 import os
+import signal
 import subprocess
 import logging
 from typing import Optional, Dict, Any, Tuple, Union
@@ -132,18 +133,19 @@ class CameraService:
         raise Exception("No working OpenCV camera device found")
     
     def _init_rpicam_app(self):
-        """Initialize camera using rpicam-apps subprocess."""
-        # Create a simple MJPEG stream using rpicam-vid
-        # We'll capture frames from the subprocess output
-        import tempfile
-        import os
-        
-        # Create a temporary pipe for frame capture
+        """Initialize camera using rpicam-vid continuous MJPEG stream."""
         self.rpicam_process = None
-        self.frame_pipe = None
-        
-        # For now, we'll use a simpler approach - just indicate success
-        # The actual frame capture will be handled in _capture_loop
+        self._mjpeg_buffer = b''
+        self._mjpeg_lock = threading.Lock()
+
+        # Verify camera is accessible by doing a quick test
+        test_result = subprocess.run(
+            ['rpicam-vid', '--list-cameras'],
+            capture_output=True, timeout=5
+        )
+        if test_result.returncode != 0 and b'Available cameras' not in test_result.stdout + test_result.stderr:
+            raise Exception("No cameras found by rpicam-vid")
+
         print("rpicam-apps backend selected")
         
     def _init_picamera2(self):
@@ -248,14 +250,109 @@ class CameraService:
                 print(f"Minimal configuration also failed: {e2}")
                 raise e2
 
+    def _start_rpicam_vid(self):
+        """Start rpicam-vid process for continuous MJPEG streaming."""
+        cmd = [
+            'rpicam-vid',
+            '-t', '0',
+            '--width', str(self.width),
+            '--height', str(self.height),
+            '--framerate', str(self.fps),
+            '--codec', 'mjpeg',
+            '--quality', '70',
+            '--flush',
+            '-o', '-',
+        ]
+        # Auto exposure settings
+        # rpicam-apps uses --shutter presence to control manual/auto exposure
+        if not self.ae_enable:
+            max_shutter_us = int(1_000_000 / self.fps)
+            if self.exposure_time <= max_shutter_us:
+                cmd.extend(['--shutter', str(int(self.exposure_time))])
+                cmd.extend(['--gain', str(float(self.analogue_gain))])
+            # else: exposure too long for video fps → let camera handle it
+
+        # Auto white balance settings
+        # Valid modes: auto, incandescent, tungsten, fluorescent, indoor, daylight, cloudy, custom
+        if not self.awb_enable:
+            cmd.append('--awb=custom')  # Use custom AWB mode with manual gains
+            if self.red_gain and self.blue_gain:
+                cmd.extend(['--awbgains', f"{float(self.red_gain)},{float(self.blue_gain)}"])
+        else:
+            cmd.append('--awb=auto')  # Enable auto white balance
+
+        self.rpicam_process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            bufsize=0
+        )
+        print(f"rpicam-vid started (PID {self.rpicam_process.pid}): {' '.join(cmd)}")
+
     def start(self):
         if self.running:
             return
         self.running = True
+        if self.camera_backend == "rpicam":
+            self._start_rpicam_vid()
         self.thread = threading.Thread(target=self._capture_loop, daemon=True)
         self.thread.start()
 
     def _capture_loop(self):
+        if self.camera_backend == "rpicam" and self.use_real_camera:
+            self._capture_loop_rpicam_vid()
+        else:
+            self._capture_loop_generic()
+
+    def _capture_loop_rpicam_vid(self):
+        """Read MJPEG frames from rpicam-vid stdout."""
+        SOI = b'\xff\xd8'
+        EOI = b'\xff\xd9'
+        buf = b''
+        consecutive_errors = 0
+
+        while self.running:
+            try:
+                if self.rpicam_process is None or self.rpicam_process.poll() is not None:
+                    print("rpicam-vid process died, restarting...")
+                    self._start_rpicam_vid()
+                    buf = b''
+
+                chunk = self.rpicam_process.stdout.read(65536)
+                if not chunk:
+                    time.sleep(0.01)
+                    continue
+
+                buf += chunk
+                consecutive_errors = 0
+
+                while True:
+                    start = buf.find(SOI)
+                    if start == -1:
+                        buf = b''
+                        break
+                    end = buf.find(EOI, start + 2)
+                    if end == -1:
+                        buf = buf[start:]
+                        break
+                    jpeg_bytes = buf[start:end + 2]
+                    buf = buf[end + 2:]
+                    with self.frame_lock:
+                        self.current_frame = jpeg_bytes
+
+            except Exception as e:
+                consecutive_errors += 1
+                print(f"rpicam-vid read error ({consecutive_errors}): {e}")
+                if consecutive_errors > 10:
+                    print("Too many errors, falling back to test pattern")
+                    self.use_real_camera = False
+                    self.camera_backend = "test"
+                    self._capture_loop_generic()
+                    return
+                time.sleep(0.1)
+
+    def _capture_loop_generic(self):
+        """Capture loop for OpenCV/picamera2/test backends."""
         while self.running:
             if self.use_real_camera:
                 try:
@@ -265,8 +362,6 @@ class CameraService:
                             raise Exception("Failed to read frame from OpenCV camera")
                     elif self.camera_backend == "picamera2":
                         frame = self.picam2.capture_array()
-                    elif self.camera_backend == "rpicam":
-                        frame = self._capture_rpicam_frame()
                     else:
                         raise Exception("Unknown camera backend")
                 except Exception as e:
@@ -274,9 +369,8 @@ class CameraService:
                     self.use_real_camera = False
                     self.camera_backend = "test"
             else:
-                # Generate test pattern with correct resolution
                 frame = self._generate_test_pattern()
-            
+
             ret, jpeg = cv2.imencode('.jpg', frame)
             if ret:
                 with self.frame_lock:
@@ -284,73 +378,8 @@ class CameraService:
             time.sleep(1 / self.fps)
     
     def _capture_rpicam_frame(self):
-        """Capture frame using rpicam-still subprocess with all camera settings."""
-        try:
-            # Reload settings from database to get current resolution
-            self._load_settings()
-
-            # Use rpicam-still to capture a single frame
-            cmd = [
-                'rpicam-still',
-                '-n',  # No preview
-                '-t', '100',  # Timeout 100ms
-                '--width', str(self.width),
-                '--height', str(self.height),
-                '--quality', '70',
-            ]
-
-            # Add exposure settings
-            if self.exposure_time is not None and self.exposure_time > 0:
-                # --shutter is in microseconds
-                cmd.extend(['--shutter', str(int(self.exposure_time))])
-
-            if self.analogue_gain is not None and self.analogue_gain >= 0:
-                # --gain for analogue gain
-                cmd.extend(['--gain', str(float(self.analogue_gain))])
-
-            if self.exposure_value is not None:
-                # --ev for exposure value (compensation)
-                cmd.extend(['--ev', str(float(self.exposure_value))])
-
-            # Auto exposure setting
-            if not self.ae_enable:
-                # Disable auto exposure
-                cmd.append('--aeenable=0')
-
-            # Auto white balance settings
-            if not self.awb_enable:
-                # Disable auto white balance
-                cmd.append('--awb=0')
-                # Set manual color gains if provided
-                if self.red_gain is not None and self.blue_gain is not None:
-                    cmd.extend(['--awbgains', f"{float(self.red_gain)},{float(self.blue_gain)}"])
-            else:
-                # Enable auto white balance
-                cmd.append('--awb=1')
-
-            # Output to stdout
-            cmd.extend(['-o', '-'])
-
-            # Calculate timeout based on exposure time + buffer
-            timeout_seconds = max(5, (self.exposure_time / 1_000_000) + 2)
-
-            result = subprocess.run(cmd, capture_output=True, timeout=timeout_seconds)
-            if result.returncode == 0:
-                # Decode JPEG from stdout
-                frame_array = np.frombuffer(result.stdout, dtype=np.uint8)
-                frame = cv2.imdecode(frame_array, cv2.IMREAD_COLOR)
-                if frame is not None:
-                    return frame
-
-            # Fallback to test pattern
-            return self._generate_test_pattern()
-
-        except subprocess.TimeoutExpired:
-            print(f"rpicam capture timeout (exposure={self.exposure_time}us)")
-            return self._generate_test_pattern()
-        except Exception as e:
-            print(f"rpicam capture error: {e}")
-            return self._generate_test_pattern()
+        """Legacy method - not used when rpicam-vid is running."""
+        return self._generate_test_pattern()
     
     def _generate_test_pattern(self):
         """Generate a test pattern with the configured resolution."""
@@ -377,6 +406,78 @@ class CameraService:
 
         return frame
 
+    def _pause_video_stream(self):
+        """Pause video stream by stopping rpicam-vid process and killing any remaining camera processes."""
+        # Stop our own process first - use kill immediately for faster release
+        if hasattr(self, 'rpicam_process') and self.rpicam_process is not None:
+            try:
+                # Try graceful termination first, but quickly move to kill
+                self.rpicam_process.terminate()
+                try:
+                    self.rpicam_process.wait(timeout=0.5)
+                except subprocess.TimeoutExpired:
+                    print("Process didn't terminate gracefully, killing...")
+                    self.rpicam_process.kill()
+                    try:
+                        self.rpicam_process.wait(timeout=1)
+                    except subprocess.TimeoutExpired:
+                        # Force kill with SIGKILL if still running
+                        import signal
+                        try:
+                            os.kill(self.rpicam_process.pid, signal.SIGKILL)
+                        except ProcessLookupError:
+                            pass  # Process already dead
+            except Exception as e:
+                print(f"Warning: error stopping video stream: {e}")
+            finally:
+                self.rpicam_process = None
+
+        # Kill any other rpicam processes that might be holding the camera
+        try:
+            import subprocess
+            # Find and kill any rpicam-vid or rpicam-still processes
+            # Use separate simple patterns instead of regex alternation
+            all_pids = set()
+            for pattern in ['rpicam-vid', 'rpicam-still']:
+                result = subprocess.run(['pgrep', '-f', pattern],
+                                      capture_output=True, text=True)
+                if result.returncode == 0 and result.stdout.strip():
+                    for pid in result.stdout.strip().split('\n'):
+                        if pid.strip():
+                            all_pids.add(pid.strip())
+
+            if all_pids:
+                print(f"Killing remaining rpicam processes: {sorted(all_pids)}")
+                for pid in sorted(all_pids):
+                    try:
+                        subprocess.run(['kill', '-9', pid], check=False)
+                    except Exception:
+                        pass
+                # Wait longer for processes to die and camera to be released
+                import time
+                time.sleep(1.0)
+        except Exception as e:
+            print(f"Warning: could not check for other rpicam processes: {e}")
+
+        # Additional wait to ensure camera is released
+        import time
+        time.sleep(1)
+        print("Video stream paused, camera should be free")
+
+    def _resume_video_stream(self):
+        """Resume video stream by restarting rpicam-vid process."""
+        if self.running:
+            try:
+                # Wait extra time to ensure camera is fully released by previous process
+                # libcamera needs time to clean up resources
+                import time
+                time.sleep(2)
+                print("Resuming video stream...")
+                self._start_rpicam_vid()
+                print("Video stream resumed")
+            except Exception as e:
+                print(f"Error resuming video stream: {e}")
+
     def capture_photo(self, output_path: Optional[str] = None) -> Tuple[bool, Union[np.ndarray, str]]:
         """Capture a high-quality photo using PhotoResolution and all camera settings.
 
@@ -393,63 +494,79 @@ class CameraService:
             self._load_settings()
 
             if self.use_real_camera and self.camera_backend == "rpicam":
-                # Build rpicam-still command with photo resolution and full quality
-                cmd = [
-                    'rpicam-still',
-                    '-n',  # No preview
-                    '--width', str(self.photo_width),
-                    '--height', str(self.photo_height),
-                    '--quality', '95',  # High quality for photos
-                ]
+                # Pause video stream to free camera for still capture
+                # Camera cannot be used by rpicam-vid and rpicam-still simultaneously
+                video_was_running = self.running
+                if video_was_running:
+                    print("Pausing video stream for photo capture...")
+                    self._pause_video_stream()
 
-                # Add exposure settings
-                if self.exposure_time is not None and self.exposure_time > 0:
-                    cmd.extend(['--shutter', str(int(self.exposure_time))])
+                try:
+                    # Build rpicam-still command with photo resolution and full quality
+                    cmd = [
+                        'rpicam-still',
+                        '-n',  # No preview
+                        '--width', str(self.photo_width),
+                        '--height', str(self.photo_height),
+                        '--quality', '95',  # High quality for photos
+                    ]
 
-                if self.analogue_gain is not None and self.analogue_gain >= 0:
-                    cmd.extend(['--gain', str(float(self.analogue_gain))])
+                    # Add exposure settings
+                    if self.exposure_time is not None and self.exposure_time > 0:
+                        cmd.extend(['--shutter', str(int(self.exposure_time))])
 
-                if self.exposure_value is not None:
-                    cmd.extend(['--ev', str(float(self.exposure_value))])
+                    if self.analogue_gain is not None and self.analogue_gain >= 0:
+                        cmd.extend(['--gain', str(float(self.analogue_gain))])
 
-                # Auto exposure setting
-                if not self.ae_enable:
-                    cmd.append('--aeenable=0')
+                    if self.exposure_value is not None:
+                        cmd.extend(['--ev', str(float(self.exposure_value))])
 
-                # Auto white balance settings
-                if not self.awb_enable:
-                    cmd.append('--awb=0')
-                    if self.red_gain is not None and self.blue_gain is not None:
-                        cmd.extend(['--awbgains', f"{float(self.red_gain)},{float(self.blue_gain)}"])
-                else:
-                    cmd.append('--awb=1')
-
-                # Calculate timeout based on exposure time + buffer (min 10s for photos)
-                timeout_seconds = max(10, (self.exposure_time / 1_000_000) + 3)
-
-                if output_path:
-                    # Save to file
-                    cmd.extend(['-o', output_path])
-                    result = subprocess.run(cmd, capture_output=True, timeout=timeout_seconds)
-                    if result.returncode == 0:
-                        return True, output_path
+                    # Auto white balance settings
+                    # Valid modes: auto, incandescent, tungsten, fluorescent, indoor, daylight, cloudy, custom
+                    if not self.awb_enable:
+                        # Use custom mode with manual gains
+                        cmd.append('--awb=custom')
+                        if self.red_gain is not None and self.blue_gain is not None:
+                            cmd.extend(['--awbgains', f"{float(self.red_gain)},{float(self.blue_gain)}"])
                     else:
-                        error_msg = result.stderr.decode('utf-8', errors='ignore') if result.stderr else "Unknown error"
-                        return False, f"rpicam-still failed: {error_msg}"
-                else:
-                    # Return as numpy array
-                    cmd.extend(['-o', '-'])
-                    result = subprocess.run(cmd, capture_output=True, timeout=timeout_seconds)
-                    if result.returncode == 0:
-                        frame_array = np.frombuffer(result.stdout, dtype=np.uint8)
-                        frame = cv2.imdecode(frame_array, cv2.IMREAD_COLOR)
-                        if frame is not None:
-                            return True, frame
+                        cmd.append('--awb=auto')
+
+                    # Calculate timeout based on exposure time + buffer (min 10s for photos)
+                    timeout_seconds = max(10, (self.exposure_time / 1_000_000) + 3)
+                    print(f"rpicam-still command: {' '.join(cmd)}, timeout={timeout_seconds}s")
+
+                    if output_path:
+                        # Save to file
+                        cmd.extend(['-o', output_path])
+                        result = subprocess.run(cmd, capture_output=True, timeout=timeout_seconds)
+                        if result.returncode == 0:
+                            return True, output_path
                         else:
-                            return False, "Failed to decode captured image"
+                            error_msg = result.stderr.decode('utf-8', errors='ignore') if result.stderr else "Unknown error"
+                            print(f"rpicam-still failed: {error_msg}")
+                            return False, f"rpicam-still failed: {error_msg}"
                     else:
-                        error_msg = result.stderr.decode('utf-8', errors='ignore') if result.stderr else "Unknown error"
-                        return False, f"rpicam-still failed: {error_msg}"
+                        # Return as numpy array
+                        cmd.extend(['-o', '-'])
+                        result = subprocess.run(cmd, capture_output=True, timeout=timeout_seconds)
+                        if result.returncode == 0:
+                            frame_array = np.frombuffer(result.stdout, dtype=np.uint8)
+                            frame = cv2.imdecode(frame_array, cv2.IMREAD_COLOR)
+                            if frame is not None:
+                                return True, frame
+                            else:
+                                print("Failed to decode captured image from rpicam-still output")
+                                return False, "Failed to decode captured image"
+                        else:
+                            error_msg = result.stderr.decode('utf-8', errors='ignore') if result.stderr else "Unknown error"
+                            print(f"rpicam-still failed (stdout mode): {error_msg}")
+                            return False, f"rpicam-still failed: {error_msg}"
+
+                finally:
+                    # Always resume video stream if it was running
+                    if video_was_running:
+                        print("Resuming video stream...")
+                        self._resume_video_stream()
 
             elif self.use_real_camera and self.camera_backend == "opencv":
                 # For OpenCV backend, capture frame at photo resolution if possible
@@ -498,18 +615,36 @@ class CameraService:
     def reload_settings(self):
         """Reload camera settings from database and reinitialize if needed."""
         old_resolution = (self.width, self.height)
-        
+
         # Reload settings from database
         self._load_settings()
-        
+
         # Check if resolution changed
         new_resolution = (self.width, self.height)
         if old_resolution != new_resolution and self.use_real_camera:
             print(f"Resolution changed from {old_resolution} to {new_resolution}, reinitializing camera...")
             self._reinitialize_camera()
-    
+        elif self.camera_backend == "rpicam" and self.use_real_camera:
+            # Restart rpicam-vid to apply new settings (exposure, AWB, etc.)
+            print("Restarting rpicam-vid with updated settings...")
+            self._restart_rpicam_vid()
+
+    def _restart_rpicam_vid(self):
+        """Terminate current rpicam-vid and start a new one with updated settings."""
+        if hasattr(self, 'rpicam_process') and self.rpicam_process is not None:
+            try:
+                self.rpicam_process.terminate()
+                self.rpicam_process.wait(timeout=3)
+            except Exception:
+                pass
+            self.rpicam_process = None
+        self._start_rpicam_vid()
+
     def _reinitialize_camera(self):
         """Reinitialize camera with new settings."""
+        if self.camera_backend == "rpicam":
+            self._restart_rpicam_vid()
+            return
         # Stop current camera
         if self.camera_backend == "opencv" and hasattr(self, 'cap'):
             try:
@@ -521,15 +656,23 @@ class CameraService:
                 self.picam2.stop()
             except Exception:
                 pass
-        
+
         # Reinitialize with new settings
         self._initialize_camera()
 
     def stop(self):
         self.running = False
         if hasattr(self, 'thread'):
-            self.thread.join(timeout=1.0)
-        
+            self.thread.join(timeout=2.0)
+
+        if hasattr(self, 'rpicam_process') and self.rpicam_process is not None:
+            try:
+                self.rpicam_process.terminate()
+                self.rpicam_process.wait(timeout=3)
+            except Exception:
+                pass
+            self.rpicam_process = None
+
         if self.use_real_camera:
             if self.camera_backend == "opencv" and hasattr(self, 'cap'):
                 try:
