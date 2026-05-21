@@ -379,39 +379,91 @@ class CameraSettingsWidget(QWidget):
         settings_layout.addWidget(self.chk_awb, 7, 0, 1, 2)
         
         # Exposure Time
+        exp_time_label = QLabel(
+            self.interface_text.exposure_time() if self.interface_text else SettingsWidgetStrings.EXPOSURE_TIME
+        )
+        exp_time_label.setStyleSheet("QLabel { font-weight: bold; }")
+        exp_time_range_label = QLabel(f"({EXPOSURE_TIME_RANGE[0]} - {EXPOSURE_TIME_RANGE[1]} μs)")
+        exp_time_range_label.setStyleSheet("QLabel { font-size: 10px; color: gray; }")
+        settings_layout.addWidget(exp_time_label, 8, 0)
+        settings_layout.addWidget(exp_time_range_label, 8, 1)
+        
         self.exp_time = QSpinBox()
-        self.exp_time.setRange(*EXPOSURE_TIME_RANGE)
+        self.exp_time.setRange(0, 2147483647)  # Remove Qt auto-limit, we handle clamping manually
         self.exp_time.setValue(DEFAULT_EXPOSURE_TIME)
         self.exp_time.setSuffix(" μs")
-        settings_layout.addWidget(self.exp_time, 8, 0, 1, 2)
+        settings_layout.addWidget(self.exp_time, 9, 0, 1, 2)
         
         # Analogue Gain
+        gain_label = QLabel(
+            self.interface_text.analogue_gain() if self.interface_text else SettingsWidgetStrings.ANALOGUE_GAIN
+        )
+        gain_label.setStyleSheet("QLabel { font-weight: bold; }")
+        gain_range_label = QLabel(f"({ANALOGUE_GAIN_RANGE[0]} - {ANALOGUE_GAIN_RANGE[1]})")
+        gain_range_label.setStyleSheet("QLabel { font-size: 10px; color: gray; }")
+        settings_layout.addWidget(gain_label, 10, 0)
+        settings_layout.addWidget(gain_range_label, 10, 1)
+        
         self.gain = QDoubleSpinBox()
-        self.gain.setRange(*ANALOGUE_GAIN_RANGE)
+        self.gain.setRange(-1e9, 1e9)  # Remove Qt auto-limit, we handle clamping manually
         self.gain.setValue(DEFAULT_ANALOGUE_GAIN)
         self.gain.setDecimals(2)
-        settings_layout.addWidget(self.gain, 9, 0, 1, 2)
+        settings_layout.addWidget(self.gain, 11, 0, 1, 2)
         
         # Exposure Value
+        exp_value_label = QLabel(
+            self.interface_text.exposure_value() if self.interface_text else SettingsWidgetStrings.EXPOSURE_VALUE
+        )
+        exp_value_label.setStyleSheet("QLabel { font-weight: bold; }")
+        exp_value_range_label = QLabel(f"({EXPOSURE_VALUE_RANGE[0]} - {EXPOSURE_VALUE_RANGE[1]})")
+        exp_value_range_label.setStyleSheet("QLabel { font-size: 10px; color: gray; }")
+        settings_layout.addWidget(exp_value_label, 12, 0)
+        settings_layout.addWidget(exp_value_range_label, 12, 1)
+        
         self.exp_value = QDoubleSpinBox()
-        self.exp_value.setRange(*EXPOSURE_VALUE_RANGE)
+        self.exp_value.setRange(-1e9, 1e9)  # Remove Qt auto-limit, we handle clamping manually
         self.exp_value.setValue(DEFAULT_EXPOSURE_VALUE)
         self.exp_value.setDecimals(2)
-        settings_layout.addWidget(self.exp_value, 10, 0, 1, 2)
+        settings_layout.addWidget(self.exp_value, 13, 0, 1, 2)
         
         # Red Gain
+        red_gain_label = QLabel(
+            self.interface_text.red_gain() if self.interface_text else SettingsWidgetStrings.RED_GAIN
+        )
+        red_gain_label.setStyleSheet("QLabel { font-weight: bold; }")
+        red_gain_range_label = QLabel(f"({RED_GAIN_RANGE[0]} - {RED_GAIN_RANGE[1]})")
+        red_gain_range_label.setStyleSheet("QLabel { font-size: 10px; color: gray; }")
+        settings_layout.addWidget(red_gain_label, 14, 0)
+        settings_layout.addWidget(red_gain_range_label, 14, 1)
+        
         self.red_gain = QDoubleSpinBox()
-        self.red_gain.setRange(*RED_GAIN_RANGE)
+        self.red_gain.setRange(-1e9, 1e9)  # Remove Qt auto-limit, we handle clamping manually
         self.red_gain.setValue(DEFAULT_RED_GAIN)
         self.red_gain.setDecimals(2)
-        settings_layout.addWidget(self.red_gain, 11, 0, 1, 2)
+        settings_layout.addWidget(self.red_gain, 15, 0, 1, 2)
         
         # Blue Gain
+        blue_gain_label = QLabel(
+            self.interface_text.blue_gain() if self.interface_text else SettingsWidgetStrings.BLUE_GAIN
+        )
+        blue_gain_label.setStyleSheet("QLabel { font-weight: bold; }")
+        blue_gain_range_label = QLabel(f"({BLUE_GAIN_RANGE[0]} - {BLUE_GAIN_RANGE[1]})")
+        blue_gain_range_label.setStyleSheet("QLabel { font-size: 10px; color: gray; }")
+        settings_layout.addWidget(blue_gain_label, 16, 0)
+        settings_layout.addWidget(blue_gain_range_label, 16, 1)
+        
         self.blue_gain = QDoubleSpinBox()
-        self.blue_gain.setRange(*BLUE_GAIN_RANGE)
+        self.blue_gain.setRange(-1e9, 1e9)  # Remove Qt auto-limit, we handle clamping manually
         self.blue_gain.setValue(DEFAULT_BLUE_GAIN)
         self.blue_gain.setDecimals(2)
-        settings_layout.addWidget(self.blue_gain, 12, 0, 1, 2)
+        settings_layout.addWidget(self.blue_gain, 17, 0, 1, 2)
+        
+        # Connect editingFinished to clamp values when user leaves the field
+        self.exp_time.editingFinished.connect(self._clamp_exp_time)
+        self.gain.editingFinished.connect(self._clamp_gain)
+        self.exp_value.editingFinished.connect(self._clamp_exp_value)
+        self.red_gain.editingFinished.connect(self._clamp_red_gain)
+        self.blue_gain.editingFinished.connect(self._clamp_blue_gain)
         
         layout.addLayout(settings_layout)
         
@@ -481,6 +533,85 @@ class CameraSettingsWidget(QWidget):
         self.red_gain.setEnabled(not awb_enabled)
         self.blue_gain.setEnabled(not awb_enabled)
     
+    def _clamp_exp_time(self):
+        """Clamp exposure time to valid range when editing finished."""
+        # Get raw text from lineEdit before Qt processes it
+        raw_text = self.exp_time.lineEdit().text().replace(" μs", "").strip()
+        try:
+            value = int(raw_text)
+        except (ValueError, TypeError):
+            value = self.exp_time.value()
+        clamped = self._clamp_value(value, EXPOSURE_TIME_RANGE[0], EXPOSURE_TIME_RANGE[1], DEFAULT_EXPOSURE_TIME, int)
+        if value != clamped:
+            self.exp_time.setValue(clamped)
+    
+    def _clamp_gain(self):
+        """Clamp analogue gain to valid range when editing finished."""
+        raw_text = self.gain.lineEdit().text().strip()
+        try:
+            value = float(raw_text)
+        except (ValueError, TypeError):
+            value = self.gain.value()
+        clamped = self._clamp_value(value, ANALOGUE_GAIN_RANGE[0], ANALOGUE_GAIN_RANGE[1], DEFAULT_ANALOGUE_GAIN, float)
+        if value != clamped:
+            self.gain.setValue(clamped)
+    
+    def _clamp_exp_value(self):
+        """Clamp exposure value to valid range when editing finished."""
+        raw_text = self.exp_value.lineEdit().text().strip()
+        try:
+            value = float(raw_text)
+        except (ValueError, TypeError):
+            value = self.exp_value.value()
+        clamped = self._clamp_value(value, EXPOSURE_VALUE_RANGE[0], EXPOSURE_VALUE_RANGE[1], DEFAULT_EXPOSURE_VALUE, float)
+        if value != clamped:
+            self.exp_value.setValue(clamped)
+    
+    def _clamp_red_gain(self):
+        """Clamp red gain to valid range when editing finished."""
+        raw_text = self.red_gain.lineEdit().text().strip()
+        try:
+            value = float(raw_text)
+        except (ValueError, TypeError):
+            value = self.red_gain.value()
+        clamped = self._clamp_value(value, RED_GAIN_RANGE[0], RED_GAIN_RANGE[1], DEFAULT_RED_GAIN, float)
+        if value != clamped:
+            self.red_gain.setValue(clamped)
+    
+    def _clamp_blue_gain(self):
+        """Clamp blue gain to valid range when editing finished."""
+        raw_text = self.blue_gain.lineEdit().text().strip()
+        try:
+            value = float(raw_text)
+        except (ValueError, TypeError):
+            value = self.blue_gain.value()
+        clamped = self._clamp_value(value, BLUE_GAIN_RANGE[0], BLUE_GAIN_RANGE[1], DEFAULT_BLUE_GAIN, float)
+        if value != clamped:
+            self.blue_gain.setValue(clamped)
+    
+    def _clamp_value(self, value, min_val, max_val, default_val, value_type=float):
+        """Clamp value to valid range. If value is outside range, return clamped value.
+        
+        Args:
+            value: The value to clamp
+            min_val: Minimum allowed value
+            max_val: Maximum allowed value
+            default_val: Default value if conversion fails
+            value_type: Type to convert to (int or float)
+            
+        Returns:
+            Clamped value within [min_val, max_val]
+        """
+        try:
+            converted = value_type(value)
+            if converted < min_val:
+                return min_val
+            elif converted > max_val:
+                return max_val
+            return converted
+        except (ValueError, TypeError):
+            return default_val
+    
     def _update_ui_from_settings(self, settings):
         """Update UI controls from settings dictionary."""
         try:
@@ -515,12 +646,41 @@ class CameraSettingsWidget(QWidget):
             self.chk_ae.setChecked(bool(settings.get('AeEnable', True)))
             self.chk_awb.setChecked(bool(settings.get('AwbEnable', True)))
             
-            # Update numeric values
-            self.exp_time.setValue(int(settings.get('ExposureTime', DEFAULT_EXPOSURE_TIME)))
-            self.gain.setValue(float(settings.get('AnalogueGain', DEFAULT_ANALOGUE_GAIN)))
-            self.exp_value.setValue(float(settings.get('ExposureValue', DEFAULT_EXPOSURE_VALUE)))
-            self.red_gain.setValue(float(settings.get('RedGain', DEFAULT_RED_GAIN)))
-            self.blue_gain.setValue(float(settings.get('BlueGain', DEFAULT_BLUE_GAIN)))
+            # Update numeric values with clamping to valid ranges
+            exp_time_val = self._clamp_value(
+                settings.get('ExposureTime', DEFAULT_EXPOSURE_TIME),
+                EXPOSURE_TIME_RANGE[0], EXPOSURE_TIME_RANGE[1],
+                DEFAULT_EXPOSURE_TIME, int
+            )
+            self.exp_time.setValue(exp_time_val)
+            
+            gain_val = self._clamp_value(
+                settings.get('AnalogueGain', DEFAULT_ANALOGUE_GAIN),
+                ANALOGUE_GAIN_RANGE[0], ANALOGUE_GAIN_RANGE[1],
+                DEFAULT_ANALOGUE_GAIN, float
+            )
+            self.gain.setValue(gain_val)
+            
+            exp_value_val = self._clamp_value(
+                settings.get('ExposureValue', DEFAULT_EXPOSURE_VALUE),
+                EXPOSURE_VALUE_RANGE[0], EXPOSURE_VALUE_RANGE[1],
+                DEFAULT_EXPOSURE_VALUE, float
+            )
+            self.exp_value.setValue(exp_value_val)
+            
+            red_gain_val = self._clamp_value(
+                settings.get('RedGain', DEFAULT_RED_GAIN),
+                RED_GAIN_RANGE[0], RED_GAIN_RANGE[1],
+                DEFAULT_RED_GAIN, float
+            )
+            self.red_gain.setValue(red_gain_val)
+            
+            blue_gain_val = self._clamp_value(
+                settings.get('BlueGain', DEFAULT_BLUE_GAIN),
+                BLUE_GAIN_RANGE[0], BLUE_GAIN_RANGE[1],
+                DEFAULT_BLUE_GAIN, float
+            )
+            self.blue_gain.setValue(blue_gain_val)
             
             # Update control states (this will enable/disable appropriate controls)
             self._update_control_states()
@@ -586,6 +746,13 @@ class CameraSettingsWidget(QWidget):
         self.status_label.setText(SettingsWidgetStrings.APPLYING_SETTINGS)
         self.status_label.setStyleSheet("QLabel { color: blue; font-weight: bold; }")
         
+        # Ensure all numeric values are clamped before applying
+        self._clamp_exp_time()
+        self._clamp_gain()
+        self._clamp_exp_value()
+        self._clamp_red_gain()
+        self._clamp_blue_gain()
+        
         # Extract resolution from display text (remove aspect ratio)
         photo_resolution_text = self.photo_resolution_combo.currentText()
         photo_resolution = photo_resolution_text.split(' ')[0] if ' ' in photo_resolution_text else photo_resolution_text
@@ -593,7 +760,7 @@ class CameraSettingsWidget(QWidget):
         video_resolution_text = self.video_resolution_combo.currentText()
         video_resolution = video_resolution_text.split(' ')[0] if ' ' in video_resolution_text else video_resolution_text
         
-        # Collect all settings
+        # Collect all settings with clamped values
         settings_to_update = [
             ("CameraSettings", "SettingsName", str(self.settings_name.text())),
             ("CameraSettings", "PhotoResolution", photo_resolution),
