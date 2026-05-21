@@ -354,14 +354,12 @@ class CameraSettingsWidget(QWidget):
         self.video_resolution_combo = QComboBox()
         self.video_resolution_combo.addItems([
             '640x480 (4:3)',      # VGA
-            '800x600 (4:3)',      # SVGA  
+            '800x600 (4:3)',      # SVGA
             '1024x768 (4:3)',     # XGA
             '1280x720 (16:9)',    # 720p HD
             '1296x972 (4:3)',     # 4:3 mid-resolution
             '1640x1232 (4:3)',    # 4:3 aspect ratio
             '1920x1080 (16:9)',   # 1080p FHD
-            '2304x1296 (16:9)',   # 16:9 aspect ratio
-            '2592x1944 (4:3)',    # High 4:3 resolution
         ])
         self.video_resolution_combo.setCurrentText(f'{DEFAULT_RESOLUTION_VIDEO} (16:9)')
         settings_layout.addWidget(self.video_resolution_combo, 5, 0, 1, 2)
