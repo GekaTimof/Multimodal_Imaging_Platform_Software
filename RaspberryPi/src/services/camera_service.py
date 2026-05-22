@@ -221,12 +221,20 @@ class CameraService:
 
     def _start_rpicam_vid(self):
         """Start rpicam-vid process for continuous MJPEG streaming."""
+        # When manual shutter exceeds 1/fps the sensor caps exposure at 1/fps.
+        # Lower the framerate so the requested shutter time is actually achievable.
+        effective_fps = self.fps
+        if not self.ae_enable and self.exposure_time > 0:
+            max_fps_for_shutter = 1_000_000 / self.exposure_time  # e.g. 200000us → 5fps
+            if max_fps_for_shutter < self.fps:
+                effective_fps = max(1, round(max_fps_for_shutter, 2))
+
         cmd = [
             'rpicam-vid',
             '-t', '0',
             '--width', str(self.width),
             '--height', str(self.height),
-            '--framerate', str(self.fps),
+            '--framerate', str(effective_fps),
             '--codec', 'mjpeg',
             '--quality', '70',
             '--flush',
