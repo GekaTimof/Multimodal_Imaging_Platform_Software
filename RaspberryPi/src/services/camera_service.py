@@ -423,9 +423,10 @@ class CameraService:
         _pause_for_photo_global.set()
         print("DEBUG: Set _pause_for_photo_global (before killing process)")
         
-        # Small delay to ensure capture loop sees the flag
+        # Minimal wait for capture loop to see the flag (it checks every 10-500ms)
+        # Flag is atomic, but capture loop needs one iteration to notice
         import time
-        time.sleep(0.1)
+        time.sleep(0.02)  # 20ms - one iteration of capture loop is ~10ms min
         
         # Stop our own process first - use kill immediately for faster release
         if hasattr(self, 'rpicam_process') and self.rpicam_process is not None:
@@ -473,108 +474,91 @@ class CameraService:
                     except Exception:
                         pass
                 
-                # Wait for processes to actually die
+                # Fast poll for processes to die (max 3 seconds)
                 import time
-                time.sleep(2.0)
-                
-                # Verify processes are gone, if not wait more
-                for _ in range(10):
+                start_kill_wait = time.time()
+                while time.time() - start_kill_wait < 3.0:
                     still_alive = []
                     for pattern in ['rpicam-vid', 'rpicam-still']:
                         result = subprocess.run(['pgrep', '-f', pattern], capture_output=True, text=True)
                         if result.returncode == 0 and result.stdout.strip():
                             still_alive.extend(result.stdout.strip().split('\n'))
                     if not still_alive:
+                        print(f"Processes died after {time.time() - start_kill_wait:.2f}s")
                         break
-                    print(f"Waiting for processes to die: {still_alive}")
-                    time.sleep(0.5)
+                    time.sleep(0.05)  # Fast poll 50ms
+                else:
+                    print(f"Warning: Some processes may still be alive after 3s")
         except Exception as e:
             print(f"Warning: could not check for other camera processes: {e}")
 
-        # Adaptive wait with longer initial delay for RPi 5 + IMX477
-        # libcamera on RPi 5 needs more time to release resources
-        self._wait_for_camera_release(max_wait_time=20.0, initial_delay=1.0, max_delay=3.0)
+        # Fast poll wait for camera release
+        self._wait_for_camera_release(max_wait_time=20.0, check_interval=0.05)
 
         print("Video stream paused, camera should be free")
 
-    def _wait_for_camera_release(self, max_wait_time=15.0, initial_delay=0.5, max_delay=3.0):
+    def _wait_for_camera_release(self, max_wait_time=30.0, check_interval=0.05):
         """
-        Wait for camera to be fully released using adaptive exponential backoff.
+        Fast polling wait for camera release. Returns immediately when camera is free.
         
-        Checks multiple indicators:
-        1. No libcamera/rpicam processes holding the camera
-        2. /dev/media devices are free
-        3. rpicam-still can list cameras successfully
+        Uses busy-wait with minimal sleep for maximum responsiveness.
+        Timeout is only a safety net for error conditions.
         
         Args:
-            max_wait_time: Maximum total time to wait (seconds)
-            initial_delay: Initial delay between checks (seconds)
-            max_delay: Maximum delay between checks (seconds)
+            max_wait_time: Maximum total time to wait (seconds) - safety timeout only
+            check_interval: Seconds between polls (default 50ms for fast response)
         """
         import subprocess
         import time
-        import glob
         
         start_time = time.time()
-        delay = initial_delay
         attempt = 0
+        last_log_time = 0
         
-        print(f"Starting camera release wait (max {max_wait_time}s, initial delay {delay}s)")
+        print(f"Fast polling for camera release (max {max_wait_time}s, interval {check_interval}s)")
         
         while time.time() - start_time < max_wait_time:
             attempt += 1
             elapsed = time.time() - start_time
             
-            # Check 1: No camera processes running
+            # Quick check: No camera processes running
             camera_processes = self._get_camera_processes()
             if camera_processes:
-                print(f"[Attempt {attempt}, {elapsed:.1f}s] Camera processes still running: {camera_processes}")
-                time.sleep(delay)
-                delay = min(delay * 1.5, max_delay)  # Exponential backoff
+                # Log only every second to avoid spam
+                if elapsed - last_log_time >= 1.0:
+                    print(f"[{elapsed:.1f}s] Waiting for processes: {camera_processes}")
+                    last_log_time = elapsed
+                time.sleep(check_interval)
                 continue
             
-            print(f"[Attempt {attempt}, {elapsed:.1f}s] No camera processes running")
-            
-            # Check 2: /dev/media devices not held by any process
+            # Media devices check (lightweight)
             media_busy = self._check_media_devices_busy()
             if media_busy:
-                print(f"[Attempt {attempt}, {elapsed:.1f}s] Media devices still busy: {media_busy}")
-                time.sleep(delay)
-                delay = min(delay * 1.5, max_delay)
+                if elapsed - last_log_time >= 1.0:
+                    print(f"[{elapsed:.1f}s] Media busy: {media_busy}")
+                    last_log_time = elapsed
+                time.sleep(check_interval)
                 continue
             
-            print(f"[Attempt {attempt}, {elapsed:.1f}s] Media devices free")
-            
-            # Check 3: rpicam-still can access camera
+            # Final check: rpicam-still can actually access camera
             try:
-                print(f"[Attempt {attempt}, {elapsed:.1f}s] Testing rpicam-still --list-cameras...")
                 result = subprocess.run(
                     ['rpicam-still', '--list-cameras'],
                     capture_output=True,
-                    timeout=5
+                    timeout=2
                 )
                 if result.returncode == 0 and b'Available cameras' in result.stdout:
-                    print(f"Camera released successfully after {elapsed:.1f}s ({attempt} attempts)")
+                    print(f"Camera ready after {elapsed:.2f}s")
                     return True
-                else:
-                    # Camera might be initializing, check stderr
-                    stderr = result.stderr.decode('utf-8', errors='ignore') if result.stderr else ""
-                    stdout = result.stdout.decode('utf-8', errors='ignore') if result.stdout else ""
-                    print(f"[Attempt {attempt}, {elapsed:.1f}s] rpicam-still output: stdout={stdout[:100]}, stderr={stderr[:100]}")
-                    if 'in use by another process' in stderr or 'failed to acquire' in stderr:
-                        print(f"[Attempt {attempt}, {elapsed:.1f}s] Camera still in use (libcamera)")
-                    else:
-                        print(f"[Attempt {attempt}, {elapsed:.1f}s] rpicam-still check failed: {stderr[:100]}")
             except subprocess.TimeoutExpired:
-                print(f"[Attempt {attempt}, {elapsed:.1f}s] rpicam-still --list-cameras timeout")
-            except Exception as e:
-                print(f"[Attempt {attempt}, {elapsed:.1f}s] Camera check error: {e}")
+                pass  # Still initializing, continue polling
+            except Exception:
+                pass  # Ignore errors, continue polling
             
-            time.sleep(delay)
-            delay = min(delay * 1.5, max_delay)  # Exponential backoff
+            time.sleep(check_interval)
         
         elapsed = time.time() - start_time
-        print(f"Warning: Camera may still be busy after {elapsed:.1f}s ({attempt} attempts)")
+        print(f"Warning: Camera wait timeout after {elapsed:.1f}s")
         return False
     
     def _is_rpicam_vid_running(self):
@@ -639,9 +623,9 @@ class CameraService:
             import time
             print("Waiting for camera release before resuming video stream...")
             
-            # Quick initial delay then adaptive wait
-            time.sleep(1.0)
-            if not self._wait_for_camera_release(max_wait_time=10.0, initial_delay=0.5, max_delay=2.0):
+            # Minimal initial delay before fast polling for camera release
+            time.sleep(0.02)  # 20ms - let rpicam-still start cleanup
+            if not self._wait_for_camera_release(max_wait_time=10.0, check_interval=0.05):
                 print("Warning: Camera may not be fully released, attempting to resume anyway...")
             
             print("Resuming video stream...")
@@ -686,15 +670,20 @@ class CameraService:
                     print("DEBUG: Video stream not running, skipping pause")
 
                 try:
+                    exposure_sec = self.exposure_time / 1_000_000
+                    
                     # Build rpicam-still command with photo resolution and full quality
                     cmd = [
                         'rpicam-still',
                         '-n',  # No preview
-                        '--zsl',  # Zero Shutter Lag - faster capture, uses pre-buffered frames
                         '--width', str(self.photo_width),
                         '--height', str(self.photo_height),
                         '--quality', '95',  # High quality for photos
                     ]
+                    
+                    # ZSL only for short exposures (<1s) - it conflicts with long exposures
+                    if exposure_sec < 1.0:
+                        cmd.append('--zsl')  # Zero Shutter Lag for fast capture
 
                     # Add exposure settings
                     if self.exposure_time is not None and self.exposure_time > 0:
@@ -717,22 +706,30 @@ class CameraService:
                         cmd.append('--awb=auto')
 
                     # Calculate timeout based on exposure time + buffer
-                    # For long exposures, need more buffer time for camera initialization + exposure
-                    exposure_sec = self.exposure_time / 1_000_000
-                    if exposure_sec > 3:
-                        # Long exposure: exposure time + 10s buffer for init + capture overhead
-                        timeout_seconds = exposure_sec + 10
-                    elif exposure_sec > 1:
-                        # Medium exposure: exposure time + 5s buffer
-                        timeout_seconds = exposure_sec + 5
+                    # Camera init takes ~3-5s, then actual exposure, then processing
+                    if exposure_sec >= 60:
+                        # Extreme long exposure (60s+): exposure + 30s buffer
+                        # Must exceed CAMERA_TIMEOUT_SECONDS (340s) at max exposure (300s)
+                        timeout_seconds = exposure_sec + 30
+                    elif exposure_sec >= 10:
+                        # Very long exposure (10-60s): exposure + 15s buffer
+                        timeout_seconds = exposure_sec + 15
+                    elif exposure_sec >= 3:
+                        # Long exposure (3-10s): exposure + 15s buffer
+                        # Need extra time for camera init with long shutter settings
+                        timeout_seconds = exposure_sec + 15
+                    elif exposure_sec >= 1:
+                        # Medium exposure (1-3s): exposure + 8s buffer
+                        timeout_seconds = exposure_sec + 8
                     else:
-                        # Short exposure: minimum 15s for initialization + capture
-                        timeout_seconds = 15
+                        # Short exposure (<1s): 10s total (fast init + ZSL)
+                        timeout_seconds = 10
                     print(f"rpicam-still command: {' '.join(cmd)}, timeout={timeout_seconds}s")
 
                     # Retry logic for camera acquisition race condition
                     max_retries = 3
-                    retry_delay = 2.0  # seconds between retries
+                    # Fast retry for short exposures, longer for long exposures
+                    retry_delay = min(2.0, max(0.5, exposure_sec * 0.2))  # 0.5s to 2s based on exposure
                     
                     for attempt in range(max_retries):
                         if attempt > 0:

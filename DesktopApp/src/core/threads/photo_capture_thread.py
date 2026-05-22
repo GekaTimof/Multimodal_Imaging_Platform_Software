@@ -21,7 +21,7 @@ class PhotoCaptureThread(QThread):
     finished = pyqtSignal(QImage, dict)
     failed = pyqtSignal(str)
 
-    def __init__(self, timeout: float = 70.0):
+    def __init__(self, timeout: float = 350.0):
         super().__init__()
         self.timeout = timeout
 

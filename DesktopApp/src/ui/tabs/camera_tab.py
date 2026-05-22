@@ -213,12 +213,16 @@ class CameraTab(QWidget):
     def _rpicam_still_timeout(exposure_us: int) -> float:
         """Mirror the timeout formula in RaspberryPi camera_service.py capture_photo()."""
         exposure_sec = exposure_us / 1_000_000
-        if exposure_sec > 3:
-            return exposure_sec + 10
-        elif exposure_sec > 1:
-            return exposure_sec + 5
+        if exposure_sec >= 60:
+            return exposure_sec + 30  # Extreme long exposure (60s+)
+        elif exposure_sec >= 10:
+            return exposure_sec + 15  # Very long exposure (10-60s)
+        elif exposure_sec >= 3:
+            return exposure_sec + 15  # Long exposure (3-10s) - extra buffer for init
+        elif exposure_sec >= 1:
+            return exposure_sec + 8   # Medium exposure (1-3s)
         else:
-            return 15.0
+            return 10.0  # Short exposure (<1s) - fast with ZSL
 
     def _get_expected_capture_duration_ms(self) -> tuple:
         """Fetch current exposure settings and compute:

@@ -18,7 +18,7 @@ class Config:
     # Camera Configuration
     DEFAULT_FPS = int(os.getenv('DEFAULT_FPS', '20'))
     CAMERA_RELOAD_DELAY_MS = int(os.getenv('CAMERA_RELOAD_DELAY_MS', '1000'))
-    CAMERA_TIMEOUT_SECONDS = int(os.getenv('CAMERA_TIMEOUT_SECONDS', '310'))  # 310s to support 300s long exposure
+    CAMERA_TIMEOUT_SECONDS = int(os.getenv('CAMERA_TIMEOUT_SECONDS', '340'))  # 340s to support 300s max exposure + 30s buffer + processing
     
     # Database Configuration
     DATABASE_NAME = os.getenv('DATABASE_NAME', 'DevicesSettings.db')
