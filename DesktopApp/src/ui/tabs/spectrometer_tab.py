@@ -49,7 +49,7 @@ class SpectrometerTab(QWidget):
         upper_tools_layout.addWidget(self.load_button)
 
         # Spectrum list
-        upper_tools_layout.addWidget(QLabel("Loaded Spectra:"))
+        upper_tools_layout.addWidget(QLabel(interface_text.loaded_spectra() if interface_text else "Loaded Spectra:"))
         self.spectrum_list = QListWidget()
         self.spectrum_list.setSelectionMode(QListWidget.MultiSelection)
         upper_tools_layout.addWidget(self.spectrum_list)

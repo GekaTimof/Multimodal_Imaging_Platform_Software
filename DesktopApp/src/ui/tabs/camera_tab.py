@@ -253,12 +253,13 @@ class CameraTab(QWidget):
             response = requests.get(api_url, timeout=5)
             if response.status_code == 200:
                 settings = response.json()
-                exposure_us = int(settings.get("ExposureTime", 10000))
+                from core.constants.camera_constants import DEFAULT_EXPOSURE_TIME
+                exposure_us = int(settings.get("ExposureTime", DEFAULT_EXPOSURE_TIME))
                 ae_enable = settings.get("AeEnable", True)
 
                 if ae_enable:
-                    # Auto-exposure: camera picks a fast shutter, assume ~10000 us
-                    exposure_us = 10000
+                    # Auto-exposure: camera picks a fast shutter, assume ~DEFAULT_EXPOSURE_TIME us
+                    exposure_us = DEFAULT_EXPOSURE_TIME
 
                 # Expected real duration of rpicam-still (for progress bar)
                 still_expected_s = self._rpicam_still_expected(exposure_us)

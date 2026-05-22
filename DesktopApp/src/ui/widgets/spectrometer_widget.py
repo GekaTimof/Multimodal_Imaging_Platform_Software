@@ -11,6 +11,9 @@ from PyQt5.QtGui import QPen, QFont
 
 from services.spectrometer_service import SpectrometerService
 from models.objects.Interface_text import Interface_text
+from core.constants.spectrometer_constants import (
+    DEFAULT_STREAM_INTERVAL_MS, SPECTRUM_THREAD_SLEEP_MS
+)
 
 
 class SpectrumDataThread(QThread):
@@ -65,7 +68,7 @@ class SpectrumDataThread(QThread):
                 self.service.start_spectrum_stream()
         
         while self.running:
-            self.msleep(100)
+            self.msleep(SPECTRUM_THREAD_SLEEP_MS)
 
 
 class SpectrometerWidget(QWidget):
@@ -110,8 +113,12 @@ class SpectrometerWidget(QWidget):
         vb = self.graph_widget.getViewBox()
         vb.disableAutoRange()
         vb.setMouseMode(pg.ViewBox.PanMode)
-        self.graph_widget.setXRange(200, 1100, padding=0)
-        self.graph_widget.setYRange(0, 65535, padding=0)
+        from core.constants.spectrometer_constants import (
+            WAVELENGTH_MIN, WAVELENGTH_MAX, SPECTRUM_Y_MAX, GRAPH_PADDING,
+            OVERILLUMINATION_TEXT, OVERILLUMINATION_COLOR, OVERILLUMINATION_FONT, OVERILLUMINATION_FONT_SIZE
+        )
+        self.graph_widget.setXRange(WAVELENGTH_MIN, WAVELENGTH_MAX, padding=GRAPH_PADDING)
+        self.graph_widget.setYRange(0, SPECTRUM_Y_MAX, padding=GRAPH_PADDING)
 
         self.light_theme_pen = QPen(Qt.blue)
         self.light_theme_pen.setWidth(2)
@@ -120,14 +127,18 @@ class SpectrometerWidget(QWidget):
 
         self.curve = self.graph_widget.plot(pen=self.light_theme_pen)
 
-        self.overillumination_label = pg.TextItem("OVERILLUMINATION WARNING", color='r', anchor=(0.5, 0))
-        self.overillumination_label.setFont(QFont("Arial", 12))
+        self.overillumination_label = pg.TextItem(
+            self.interface_text.overillumination_warning() if self.interface_text else OVERILLUMINATION_TEXT, 
+            color=OVERILLUMINATION_COLOR, anchor=(0.5, 0)
+        )
+        self.overillumination_label.setFont(QFont(OVERILLUMINATION_FONT, OVERILLUMINATION_FONT_SIZE))
         self.overillumination_label.setZValue(2)
         self.overillumination_label.hide()
         self.graph_widget.addItem(self.overillumination_label)
 
         self.coord_label = pg.TextItem("", anchor=(0, 1), color='k')
-        self.coord_label.setFont(QFont("Arial", 8))
+        from core.constants.spectrometer_constants import COORD_FONT, COORD_FONT_SIZE, COORD_COLOR
+        self.coord_label.setFont(QFont(COORD_FONT, COORD_FONT_SIZE))
         self.coord_label.setFlag(self.coord_label.GraphicsItemFlag.ItemIsMovable, False)
         self.graph_widget.addItem(self.coord_label)
         self.coord_label.hide()

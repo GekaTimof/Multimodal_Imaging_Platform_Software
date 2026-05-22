@@ -206,3 +206,79 @@ class Interface_text():
     def file_settings(self):
         return self.text_json["File_Settings"]
     
+    # Positioner settings methods
+    def position_settings(self):
+        return self.text_json["Position_Settings"]
+    
+    def x_position(self):
+        return self.text_json["X_Position"]
+    
+    def y_position(self):
+        return self.text_json["Y_Position"]
+    
+    def z_position(self):
+        return self.text_json["Z_Position"]
+    
+    def movement_settings(self):
+        return self.text_json["Movement_Settings"]
+    
+    def speed(self):
+        return self.text_json["Speed"]
+    
+    def acceleration(self):
+        return self.text_json["Acceleration"]
+    
+    def position_presets(self):
+        return self.text_json["Position_Presets"]
+    
+    def presets(self):
+        return self.text_json["Presets"]
+    
+    def go_home(self):
+        return self.text_json["Go_Home"]
+    
+    def move_to(self):
+        return self.text_json["Move_To"]
+    
+    def save_preset(self):
+        return self.text_json["Save_Preset"]
+    
+    def ready(self):
+        return self.text_json["Ready"]
+    
+    def overillumination_warning(self):
+        return self.text_json["Overillumination_Warning"]
+    
+    def loaded_spectra(self):
+        return self.text_json["Loaded_Spectra"]
+    
+    def status_disconnected(self):
+        return self.text_json["Status_Disconnected"]
+    
+    def loading_positioner_settings(self):
+        return self.text_json["Loading_Positioner_Settings"]
+    
+    def positioner_settings_loaded(self):
+        return self.text_json["Positioner_Settings_Loaded"]
+    
+    def applying_positioner_settings(self):
+        return self.text_json["Applying_Positioner_Settings"]
+    
+    def positioner_settings_applied(self):
+        return self.text_json["Positioner_Settings_Applied"]
+    
+    def moving_to_home(self):
+        return self.text_json["Moving_To_Home"]
+    
+    def positioner_moved_home(self):
+        return self.text_json["Positioner_Moved_Home"]
+    
+    def moving_to_position(self):
+        return self.text_json["Moving_To_Position"]
+    
+    def moved_to_position(self):
+        return self.text_json["Moved_To_Position"]
+    
+    def position_saved(self):
+        return self.text_json["Position_Saved"]
+    

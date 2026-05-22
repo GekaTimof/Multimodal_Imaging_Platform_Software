@@ -142,9 +142,9 @@ class SettingsSlotDialog(QDialog):
                 # Real slot data from API
                 settings = data
                 name = settings.get('SettingsName', f"Slot {slot_id}")
-                photo_resolution = settings.get('PhotoResolution', '3280x2464')
-                video_resolution = settings.get('VideoResolution', '1920x1080')
-                exposure_time = settings.get('ExposureTime', 10000)
+                photo_resolution = settings.get('PhotoResolution', DEFAULT_RESOLUTION_PHOTO)
+                video_resolution = settings.get('VideoResolution', DEFAULT_RESOLUTION_VIDEO)
+                exposure_time = settings.get('ExposureTime', DEFAULT_EXPOSURE_TIME)
                 ae_enable = settings.get('AeEnable', True)
 
                 # Create display text with real parameters
@@ -163,13 +163,13 @@ class SettingsSlotDialog(QDialog):
                     pass
                 elif slot_id == 0:
                     name = "Current Session"
-                    display_text = f"[CURRENT SESSION] {name}\n  Photo: 3280x2464 | Video: 1920x1080\n  Active camera settings"
+                    display_text = f"[CURRENT SESSION] {name}\n  Photo: {DEFAULT_RESOLUTION_PHOTO} | Video: {DEFAULT_RESOLUTION_VIDEO}\n  Active camera settings"
                     item = QListWidgetItem(display_text)
                     item.setData(Qt.UserRole, slot_id)
                     self.slots_list.addItem(item)
                 else:
                     name = f"Slot {slot_id}"
-                    display_text = f"Slot {slot_id} - {name}\n  Photo: 3280x2464 | Video: 1920x1080\n  Empty slot"
+                    display_text = f"Slot {slot_id} - {name}\n  Photo: {DEFAULT_RESOLUTION_PHOTO} | Video: {DEFAULT_RESOLUTION_VIDEO}\n  Empty slot"
                     item = QListWidgetItem(display_text)
                     item.setData(Qt.UserRole, slot_id)
                     self.slots_list.addItem(item)
@@ -646,7 +646,7 @@ class CameraSettingsWidget(QWidget):
             self.settings_name.setText(settings.get('SettingsName', 'Basic'))
             
             # Update photo resolution
-            photo_resolution = settings.get('PhotoResolution', '3280x2464')
+            photo_resolution = settings.get('PhotoResolution', DEFAULT_RESOLUTION_PHOTO)
             index = self.photo_resolution_combo.findText(photo_resolution)
             if index < 0:
                 for i in range(self.photo_resolution_combo.count()):
@@ -1077,7 +1077,7 @@ class SpectrometerSettingsWidget(QWidget):
         layout.setSpacing(10)
 
         # --- Connection status ---
-        self.connection_label = QLabel("Status: Disconnected")
+        self.connection_label = QLabel(self.interface_text.status_disconnected() if self.interface_text else "Status: Disconnected")
         self.connection_label.setStyleSheet("color: red; font-weight: bold;")
         self.connection_label.setWordWrap(True)
         layout.addWidget(self.connection_label)

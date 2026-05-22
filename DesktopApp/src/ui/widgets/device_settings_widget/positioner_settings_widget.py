@@ -46,14 +46,14 @@ class PositionerSettingsWidget(QWidget):
         layout.setSpacing(10)  # Add spacing between elements
         
         # Position Settings Group
-        position_group = QGroupBox("Position Settings")
+        position_group = QGroupBox(self.interface_text.position_settings() if self.interface_text else "Position Settings")
         position_layout = QGridLayout(position_group)
         position_layout.setContentsMargins(5, 5, 5, 5)  # Add padding inside group
         position_layout.setHorizontalSpacing(10)
         position_layout.setVerticalSpacing(8)
         
         # X Position
-        x_label = QLabel("X Position (mm):")
+        x_label = QLabel(self.interface_text.x_position() if self.interface_text else "X Position (mm):")
         x_label.setStyleSheet("QLabel { font-weight: bold; }")
         position_layout.addWidget(x_label, 0, 0)
         
@@ -64,7 +64,7 @@ class PositionerSettingsWidget(QWidget):
         position_layout.addWidget(self.x_position, 0, 1)
         
         # Y Position
-        y_label = QLabel("Y Position (mm):")
+        y_label = QLabel(self.interface_text.y_position() if self.interface_text else "Y Position (mm):")
         y_label.setStyleSheet("QLabel { font-weight: bold; }")
         position_layout.addWidget(y_label, 1, 0)
         
@@ -75,7 +75,7 @@ class PositionerSettingsWidget(QWidget):
         position_layout.addWidget(self.y_position, 1, 1)
         
         # Z Position
-        z_label = QLabel("Z Position (mm):")
+        z_label = QLabel(self.interface_text.z_position() if self.interface_text else "Z Position (mm):")
         z_label.setStyleSheet("QLabel { font-weight: bold; }")
         position_layout.addWidget(z_label, 2, 0)
         
@@ -88,14 +88,14 @@ class PositionerSettingsWidget(QWidget):
         layout.addWidget(position_group)
         
         # Movement Settings Group
-        movement_group = QGroupBox("Movement Settings")
+        movement_group = QGroupBox(self.interface_text.movement_settings() if self.interface_text else "Movement Settings")
         movement_layout = QGridLayout(movement_group)
         movement_layout.setContentsMargins(5, 5, 5, 5)  # Add padding inside group
         movement_layout.setHorizontalSpacing(10)
         movement_layout.setVerticalSpacing(8)
         
         # Movement Speed
-        speed_label = QLabel("Speed (mm/s):")
+        speed_label = QLabel(self.interface_text.speed() if self.interface_text else "Speed (mm/s):")
         speed_label.setStyleSheet("QLabel { font-weight: bold; }")
         movement_layout.addWidget(speed_label, 0, 0)
         
@@ -106,7 +106,7 @@ class PositionerSettingsWidget(QWidget):
         movement_layout.addWidget(self.movement_speed, 0, 1)
         
         # Acceleration
-        accel_label = QLabel("Acceleration (mm/s²):")
+        accel_label = QLabel(self.interface_text.acceleration() if self.interface_text else "Acceleration (mm/s²):")
         accel_label.setStyleSheet("QLabel { font-weight: bold; }")
         movement_layout.addWidget(accel_label, 1, 0)
         
@@ -119,14 +119,14 @@ class PositionerSettingsWidget(QWidget):
         layout.addWidget(movement_group)
         
         # Position Presets
-        presets_group = QGroupBox("Position Presets")
+        presets_group = QGroupBox(self.interface_text.position_presets() if self.interface_text else "Position Presets")
         presets_layout = QGridLayout(presets_group)
         presets_layout.setContentsMargins(5, 5, 5, 5)  # Add padding inside group
         presets_layout.setHorizontalSpacing(10)
         presets_layout.setVerticalSpacing(8)
         
         # Preset selection
-        preset_label = QLabel("Presets:")
+        preset_label = QLabel(self.interface_text.presets() if self.interface_text else "Presets:")
         preset_label.setStyleSheet("QLabel { font-weight: bold; }")
         presets_layout.addWidget(preset_label, 0, 0)
         
@@ -148,9 +148,9 @@ class PositionerSettingsWidget(QWidget):
         button_row2_layout = QHBoxLayout()
         
         self.btn_refresh = QPushButton(self.interface_text.refresh() if self.interface_text else "Refresh")
-        self.btn_home = QPushButton("Go Home")
-        self.btn_move_to = QPushButton("Move To")
-        self.btn_save_preset = QPushButton("Save Preset")
+        self.btn_home = QPushButton(self.interface_text.go_home() if self.interface_text else "Go Home")
+        self.btn_move_to = QPushButton(self.interface_text.move_to() if self.interface_text else "Move To")
+        self.btn_save_preset = QPushButton(self.interface_text.save_preset() if self.interface_text else "Save Preset")
         self.btn_apply = QPushButton(self.interface_text.apply() if self.interface_text else "Apply")
         
         # First row: Refresh, Go Home, Move To (3 buttons)
@@ -168,7 +168,7 @@ class PositionerSettingsWidget(QWidget):
         layout.addLayout(button_row2_layout)
         
         # Status label
-        self.status_label = QLabel("Ready")
+        self.status_label = QLabel(self.interface_text.ready() if self.interface_text else "Ready")
         self.status_label.setStyleSheet("QLabel { color: green; font-weight: bold; }")
         self.status_label.setWordWrap(True)
         self.status_label.setMaximumWidth(300)  # Prevent screen stretching
@@ -185,7 +185,7 @@ class PositionerSettingsWidget(QWidget):
     
     def load_settings(self):
         """Load current positioner settings from API."""
-        self.status_label.setText("Loading positioner settings...")
+        self.status_label.setText(self.interface_text.loading_positioner_settings() if self.interface_text else "Loading positioner settings...")
         self.status_label.setStyleSheet("QLabel { color: blue; font-weight: bold; }")
         
         # For now, use placeholder logic since positioner API might not exist yet
