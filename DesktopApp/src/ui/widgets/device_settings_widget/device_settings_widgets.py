@@ -483,7 +483,15 @@ class CameraSettingsWidget(QWidget):
         self.btn_apply = QPushButton(
             self.interface_text.apply() if self.interface_text else SettingsWidgetStrings.APPLY
         )
-        
+        self.btn_apply.setToolTip(
+            "Apply current settings to camera immediately. "
+            "Restarts camera stream. Settings are NOT saved to database."
+        )
+        self.btn_save_slot.setToolTip(
+            "Save current settings to a database slot. "
+            "Does NOT affect the running camera. Use Apply to update camera."
+        )
+
         # First row: Refresh, Load, Save (3 buttons)
         button_row1_layout.addWidget(self.btn_refresh)
         button_row1_layout.addWidget(self.btn_load_slot)
@@ -742,76 +750,76 @@ class CameraSettingsWidget(QWidget):
     
         
     def apply_settings(self) -> None:
-        """Apply current settings to the API."""
+        """Apply current settings to the camera without saving to database.
+
+        This updates the camera's operational parameters and restarts the
+        camera stream to apply changes immediately. Settings are NOT saved
+        to any database slot - use save_to_slot_dialog() to persist settings.
+        """
         self.status_label.setText(SettingsWidgetStrings.APPLYING_SETTINGS)
         self.status_label.setStyleSheet("QLabel { color: blue; font-weight: bold; }")
-        
+
         # Ensure all numeric values are clamped before applying
         self._clamp_exp_time()
         self._clamp_gain()
         self._clamp_exp_value()
         self._clamp_red_gain()
         self._clamp_blue_gain()
-        
+
         # Extract resolution from display text (remove aspect ratio)
         photo_resolution_text = self.photo_resolution_combo.currentText()
         photo_resolution = photo_resolution_text.split(' ')[0] if ' ' in photo_resolution_text else photo_resolution_text
-        
+
         video_resolution_text = self.video_resolution_combo.currentText()
         video_resolution = video_resolution_text.split(' ')[0] if ' ' in video_resolution_text else video_resolution_text
-        
-        # Collect all settings with clamped values
-        settings_to_update = [
-            ("CameraSettings", "SettingsName", str(self.settings_name.text())),
-            ("CameraSettings", "PhotoResolution", photo_resolution),
-            ("CameraSettings", "VideoResolution", video_resolution),
-            ("CameraSettings", "AeEnable", str(int(self.chk_ae.isChecked()))),
-            ("CameraSettings", "AwbEnable", str(int(self.chk_awb.isChecked()))),
-            ("CameraSettings", "ExposureTime", str(int(self.exp_time.value()))),
-            ("CameraSettings", "AnalogueGain", str(float(self.gain.value()))),
-            ("CameraSettings", "ExposureValue", str(float(self.exp_value.value()))),
-            ("CameraSettings", "RedGain", str(float(self.red_gain.value()))),
-            ("CameraSettings", "BlueGain", str(float(self.blue_gain.value()))),
-        ]
-        
+
+        # Collect all settings into a dictionary for the new API
+        settings = {
+            'SettingsName': str(self.settings_name.text()),
+            'PhotoResolution': photo_resolution,
+            'VideoResolution': video_resolution,
+            'AeEnable': self.chk_ae.isChecked(),
+            'AwbEnable': self.chk_awb.isChecked(),
+            'ExposureTime': int(self.exp_time.value()),
+            'AnalogueGain': float(self.gain.value()),
+            'ExposureValue': float(self.exp_value.value()),
+            'RedGain': float(self.red_gain.value()),
+            'BlueGain': float(self.blue_gain.value())
+        }
+
         # Log settings for debugging
-        logger.info(f"Applying settings: {settings_to_update}")
-        
-        # Apply settings via API
-        self._apply_settings_sequentially(settings_to_update, 0)
+        logger.info(f"Applying session settings to camera: {settings}")
+
+        # Apply settings via new API endpoint (no database save)
+        self._apply_session_settings_via_api(settings)
     
-    def _apply_settings_sequentially(self, settings_list, index):
-        """Apply settings one by one to avoid overwhelming API."""
-        if index >= len(settings_list):
-            self.status_label.setText("All settings applied successfully")
-            self.status_label.setStyleSheet("QLabel { color: green; font-weight: bold; }")
-            self.settings_updated.emit()
-            return
-        
-        table_name, parameter, value = settings_list[index]
-        logger.info(f"Applying {parameter}={value} to {table_name}")
-        
-        thread = APIClientThread('POST', ENDPOINTS['update_parameter'], {
-            'table_name': table_name,
-            'parameter': parameter,
-            'value': value
-        })
-        thread.remaining_settings = settings_list
-        thread.next_index = index + 1
-        thread.response_received.connect(lambda success, message, data:
-            self._on_setting_applied_sequentially(success, message, data, thread))
-        thread.finished.connect(lambda: self._cleanup_thread(thread))
-        self.active_threads.append(thread)
-        thread.start()
-    
-    def _on_setting_applied_sequentially(self, success, message, data, thread):
-        """Handle individual setting application response in sequential mode."""
+    def _apply_session_settings_via_api(self, settings: Dict[str, Any]) -> None:
+        """Apply session settings via API without saving to database.
+
+        Args:
+            settings: Dictionary containing camera settings to apply
+        """
+        try:
+            thread = APIClientThread('POST', ENDPOINTS["apply_camera"], settings)
+            thread.response_received.connect(self._on_session_settings_applied)
+            thread.finished.connect(lambda: self._cleanup_thread(thread))
+            self.active_threads.append(thread)
+            thread.start()
+        except Exception as e:
+            logger.error(f"Error applying session settings: {e}")
+            self.status_label.setText(f"Error applying settings: {str(e)}")
+            self.status_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
+
+    def _on_session_settings_applied(self, success: bool, message: str, data: Dict[str, Any]) -> None:
+        """Handle session settings application response."""
         if success:
-            logger.info("Successfully applied setting, continuing with next one")
-            self._apply_settings_sequentially(thread.remaining_settings, thread.next_index)
+            self.status_label.setText(SettingsWidgetStrings.ALL_SETTINGS_APPLIED)
+            self.status_label.setStyleSheet("QLabel { color: green; font-weight: bold; }")
+            # Emit signal that settings were updated (camera will be restarted)
+            self.settings_updated.emit()
         else:
-            logger.error(f"Failed to apply setting: {message}")
-            self.status_label.setText(f"Failed to apply setting: {message}")
+            logger.error(f"Failed to apply session settings: {message}")
+            self.status_label.setText(f"Failed to apply: {message}")
             self.status_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
     
     def show_slot_selection_dialog(self):
@@ -941,8 +949,9 @@ class CameraSettingsWidget(QWidget):
         if success:
             self.current_slot_id = slot_id
             slot_name = data.get('data', {}).get('settings', {}).get('SettingsName', f"Slot {slot_id}")
-            self.status_label.setText(f"Settings saved to slot {slot_id}: {slot_name}")
+            self.status_label.setText(f"Saved to slot {slot_id}: {slot_name} (camera not affected)")
             self.status_label.setStyleSheet("QLabel { color: green; font-weight: bold; }")
+            # Note: Save does NOT restart camera - only Apply does that
         else:
             # If new API fails, try the old method (update current settings)
             self.status_label.setText(f"New API failed, trying fallback: {message}")

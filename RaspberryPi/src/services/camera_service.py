@@ -157,67 +157,108 @@ class CameraService:
         """Load camera settings from database."""
         try:
             settings = db_service.get_camera_settings()
-            if settings:
-                # Parse video resolution from database (format: "1920x1080")
-                video_resolution = settings.get('VideoResolution', '1280x720')
-                if 'x' in video_resolution:
-                    width_str, height_str = video_resolution.split('x')
-                    width = int(width_str)
-                    height = int(height_str)
-                    # Accept any resolution from the known config list; fallback for truly unknown ones
-                    from src.config.settings import config as _cfg
-                    known_resolutions = [
-                        (int(r.split('x')[0]), int(r.split('x')[1]))
-                        for r in _cfg.AVAILABLE_RESOLUTIONS
-                    ]
-                    if (width, height) in known_resolutions:
-                        self.width, self.height = width, height
-                    else:
-                        self.width, self.height = 1280, 720  # Safe fallback
-                else:
-                    self.width, self.height = 1280, 720
-
-                # Parse photo resolution from database
-                photo_resolution = settings.get('PhotoResolution', '3280x2464')
-                if 'x' in photo_resolution:
-                    width_str, height_str = photo_resolution.split('x')
-                    self.photo_width = int(width_str)
-                    self.photo_height = int(height_str)
-                else:
-                    self.photo_width, self.photo_height = 3280, 2464
-
-                # Load other camera settings
-                self.ae_enable = settings.get('AeEnable', True)
-                self.awb_enable = settings.get('AwbEnable', True)
-                self.exposure_time = settings.get('ExposureTime', 10000)
-                self.analogue_gain = settings.get('AnalogueGain', 1.0)
-                self.exposure_value = settings.get('ExposureValue', 0.0)
-                self.red_gain = settings.get('RedGain', 2.0)
-                self.blue_gain = settings.get('BlueGain', 2.0)
-            else:
-                # Default settings if database is empty - use safe defaults
-                self.width, self.height = 1280, 720
-                self.photo_width, self.photo_height = 3280, 2464
-                self.ae_enable = True
-                self.awb_enable = True
-                self.exposure_time = 10000
-                self.analogue_gain = 1.0
-                self.exposure_value = 0.0
-                self.red_gain = 2.0
-                self.blue_gain = 2.0
-
+            self._apply_settings_to_attributes(settings)
         except Exception as e:
             print(f"Error loading camera settings: {e}")
             # Fallback to safe default settings
-            self.width, self.height = 1280, 720
-            self.photo_width, self.photo_height = 3280, 2464
-            self.ae_enable = True
-            self.awb_enable = True
-            self.exposure_time = 10000
-            self.analogue_gain = 1.0
-            self.exposure_value = 0.0
-            self.red_gain = 2.0
-            self.blue_gain = 2.0
+            self._set_default_settings()
+
+    def _apply_settings_to_attributes(self, settings: Dict[str, Any]):
+        """Apply settings dictionary to instance attributes."""
+        if settings:
+            # Parse video resolution from database (format: "1920x1080")
+            video_resolution = settings.get('VideoResolution', '1280x720')
+            if 'x' in video_resolution:
+                width_str, height_str = video_resolution.split('x')
+                width = int(width_str)
+                height = int(height_str)
+                # Accept any resolution from the known config list; fallback for truly unknown ones
+                from src.config.settings import config as _cfg
+                known_resolutions = [
+                    (int(r.split('x')[0]), int(r.split('x')[1]))
+                    for r in _cfg.AVAILABLE_RESOLUTIONS
+                ]
+                if (width, height) in known_resolutions:
+                    self.width, self.height = width, height
+                else:
+                    self.width, self.height = 1280, 720  # Safe fallback
+            else:
+                self.width, self.height = 1280, 720
+
+            # Parse photo resolution from database
+            photo_resolution = settings.get('PhotoResolution', '3280x2464')
+            if 'x' in photo_resolution:
+                width_str, height_str = photo_resolution.split('x')
+                self.photo_width = int(width_str)
+                self.photo_height = int(height_str)
+            else:
+                self.photo_width, self.photo_height = 3280, 2464
+
+            # Load other camera settings
+            self.ae_enable = settings.get('AeEnable', True)
+            self.awb_enable = settings.get('AwbEnable', True)
+            self.exposure_time = settings.get('ExposureTime', 10000)
+            self.analogue_gain = settings.get('AnalogueGain', 1.0)
+            self.exposure_value = settings.get('ExposureValue', 0.0)
+            self.red_gain = settings.get('RedGain', 2.0)
+            self.blue_gain = settings.get('BlueGain', 2.0)
+        else:
+            # Default settings if database is empty - use safe defaults
+            self._set_default_settings()
+
+    def _set_default_settings(self):
+        """Set default camera settings."""
+        self.width, self.height = 1280, 720
+        self.photo_width, self.photo_height = 3280, 2464
+        self.ae_enable = True
+        self.awb_enable = True
+        self.exposure_time = 10000
+        self.analogue_gain = 1.0
+        self.exposure_value = 0.0
+        self.red_gain = 2.0
+        self.blue_gain = 2.0
+
+    def apply_session_settings(self, settings: Dict[str, Any]) -> bool:
+        """Apply session settings to camera without saving to database.
+
+        This updates the camera's current operational parameters and restarts
+        the camera stream to apply the new settings immediately.
+
+        Args:
+            settings: Dictionary containing camera settings to apply
+
+        Returns:
+            True if settings were applied successfully, False otherwise
+        """
+        try:
+            print(f"Applying session settings: {settings}")
+
+            # Store old resolution to check if camera needs reinitialization
+            old_resolution = (self.width, self.height)
+
+            # Apply settings to instance attributes
+            self._apply_settings_to_attributes(settings)
+
+            # Check if resolution changed
+            new_resolution = (self.width, self.height)
+            resolution_changed = old_resolution != new_resolution
+
+            # Restart camera to apply new settings
+            if self.camera_backend == "rpicam" and self.use_real_camera:
+                print("Restarting rpicam-vid with session settings...")
+                self._restart_rpicam_vid()
+            elif resolution_changed and self.use_real_camera:
+                print("Resolution changed, reinitializing camera...")
+                self._reinitialize_camera()
+            else:
+                print("Settings applied to camera session")
+
+            return True
+
+        except Exception as e:
+            print(f"Error applying session settings: {e}")
+            logger.error(f"Failed to apply session settings: {e}")
+            return False
 
     def _start_rpicam_vid(self):
         """Start rpicam-vid process for continuous MJPEG streaming."""

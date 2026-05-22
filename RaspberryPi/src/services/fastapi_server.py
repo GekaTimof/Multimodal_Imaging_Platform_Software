@@ -480,6 +480,37 @@ async def reload_camera_settings():
         raise HTTPException(status_code=500, detail=f"Error reloading camera settings: {str(e)}")
 
 
+@app.post("/api/settings/camera/apply", response_model=APIResponse)
+async def apply_camera_session_settings(settings: CameraSettingsResponse):
+    """Apply camera settings to the camera without saving to database.
+
+    This updates the camera's current operational parameters and restarts
+    the camera stream to apply the new settings immediately. Settings are NOT
+    persisted to the database - use /api/settings/camera/save-slot/{slot_id}
+    to save settings to a slot.
+    """
+    try:
+        # Convert settings to dictionary
+        settings_dict = settings.dict()
+
+        # Apply settings to camera without saving to database
+        success = camera_service.apply_session_settings(settings_dict)
+
+        if success:
+            return APIResponse(
+                success=True,
+                message="Camera settings applied successfully (not saved to database).",
+                data=settings_dict
+            )
+        else:
+            raise HTTPException(status_code=500, detail="Failed to apply camera settings")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error applying camera settings: {str(e)}")
+
+
 @app.get("/api/camera/awb-gains")
 async def get_current_awb_gains():
     """Read current ColourGains from camera using auto-AWB metadata.
@@ -816,7 +847,9 @@ if __name__ == "__main__":
     logger.info("    GET  /api/settings/camera - Get camera settings")
     logger.info("    GET  /api/settings/{table_name} - Get settings from any table")
     logger.info("    POST /api/settings/update - Update a single parameter")
-    logger.info("    POST /api/settings/camera - Update all camera settings")
+    logger.info("    POST /api/settings/camera - Update all camera settings (saves to DB slot 0)")
+    logger.info("    POST /api/settings/camera/apply - Apply settings to camera (no DB save)")
+    logger.info("    POST /api/settings/camera/save-slot/{slot_id} - Save settings to slot")
     logger.info("    GET  /api/settings/camera/validation-rules - Get validation rules")
     logger.info("    POST /api/camera/photo - Capture high-quality photo with all settings")
     logger.info("  Spectrometer:")
