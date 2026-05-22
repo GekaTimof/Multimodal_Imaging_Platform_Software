@@ -373,15 +373,13 @@ class CameraTab(QWidget):
         self.start_camera()
     
     def set_current_settings_slot(self, slot_id: int) -> None:
-        """Set the current settings slot and restart camera if needed."""
+        """Set the current settings slot for next camera start.
+
+        Does NOT restart the camera if running - use apply_settings or
+        on_settings_updated to restart camera with new settings.
+        """
         self.current_settings_slot = slot_id
         logger.info(f"Switched to settings slot {slot_id}")
-        
-        # If camera is running, restart it with new slot settings
-        if self.thread is not None and self.thread.isRunning():
-            self.stop_camera()
-            time.sleep(0.5)
-            self.start_camera()
 
     def resizeEvent(self, event):
         """Limit video label to 4/5 width and 95% height of the window."""

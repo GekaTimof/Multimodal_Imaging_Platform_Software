@@ -42,7 +42,7 @@ class SettingsSlotDialog(QDialog):
     
     slot_selected = pyqtSignal(int)
     
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, exclude_slot_0=False):
         super().__init__(parent)
         self.setWindowTitle(DialogStrings.CAMERA_SETTINGS_SLOTS)
         self.setModal(True)
@@ -50,6 +50,7 @@ class SettingsSlotDialog(QDialog):
         self.slots_data = {}
         self.api_base_url = API_BASE_URL
         self.active_threads = []
+        self.exclude_slot_0 = exclude_slot_0
         self._build_ui()
     
     def showEvent(self, event):
@@ -112,6 +113,11 @@ class SettingsSlotDialog(QDialog):
     
     def _load_individual_slot_details(self, slot_id):
         """Load details for a specific slot via API."""
+        # Skip slot 0 if excluded
+        if slot_id == 0 and self.exclude_slot_0:
+            self._load_individual_slot_details(slot_id + 1)
+            return
+        
         if slot_id >= MAX_CAMERA_SLOTS:
             # All slots loaded (0-10)
             return
@@ -152,19 +158,26 @@ class SettingsSlotDialog(QDialog):
                 self.slots_list.addItem(item)
             else:
                 # Slot doesn't exist or API error, use defaults
-                if slot_id == 0:
+                # Skip slot 0 if excluded
+                if slot_id == 0 and self.exclude_slot_0:
+                    pass
+                elif slot_id == 0:
                     name = "Current Session"
                     display_text = f"[CURRENT SESSION] {name}\n  Photo: 3280x2464 | Video: 1920x1080\n  Active camera settings"
+                    item = QListWidgetItem(display_text)
+                    item.setData(Qt.UserRole, slot_id)
+                    self.slots_list.addItem(item)
                 else:
                     name = f"Slot {slot_id}"
                     display_text = f"Slot {slot_id} - {name}\n  Photo: 3280x2464 | Video: 1920x1080\n  Empty slot"
-                
-                item = QListWidgetItem(display_text)
-                item.setData(Qt.UserRole, slot_id)
-                self.slots_list.addItem(item)
+                    item = QListWidgetItem(display_text)
+                    item.setData(Qt.UserRole, slot_id)
+                    self.slots_list.addItem(item)
             
             # Add separator after each slot except the last one
-            if slot_id < 9:
+            # Last slot is 9 when showing 0-9, or 10 when showing 1-10 (exclude_slot_0)
+            last_slot = 10 if self.exclude_slot_0 else 9
+            if slot_id < last_slot:
                 self._add_separator_after_current_item()
             
             # Continue with next slot
@@ -189,13 +202,10 @@ class SettingsSlotDialog(QDialog):
     def _create_fallback_slots(self) -> None:
         """Create fallback slots when API fails."""
         self.slots_list.clear()
-        for slot_id in range(MAX_CAMERA_SLOTS):
-            if slot_id == 0:
-                name = "Current Session"
-                display_text = f"[CURRENT SESSION] {name}\n  Photo: {DEFAULT_RESOLUTION_PHOTO} | Video: {DEFAULT_RESOLUTION_VIDEO}\n  Active camera settings"
-            else:
-                name = f"Slot {slot_id}"
-                display_text = f"Slot {slot_id} - {name}\n  Photo: {DEFAULT_RESOLUTION_PHOTO} | Video: {DEFAULT_RESOLUTION_VIDEO}"
+        start_slot = 1 if self.exclude_slot_0 else 0
+        for slot_id in range(start_slot, MAX_CAMERA_SLOTS):
+            name = f"Slot {slot_id}"
+            display_text = f"Slot {slot_id} - {name}\n  Photo: {DEFAULT_RESOLUTION_PHOTO} | Video: {DEFAULT_RESOLUTION_VIDEO}"
             item = QListWidgetItem(display_text)
             item.setData(Qt.UserRole, slot_id)
             self.slots_list.addItem(item)
@@ -834,7 +844,7 @@ class CameraSettingsWidget(QWidget):
     def show_slot_selection_dialog(self):
         """Show dialog for selecting a settings slot to load."""
         try:
-            dialog = SettingsSlotDialog(self)
+            dialog = SettingsSlotDialog(self, exclude_slot_0=True)
             dialog.slot_selected.connect(self.load_settings_from_slot)
             dialog.exec_()
         except Exception as e:
@@ -947,7 +957,7 @@ class CameraSettingsWidget(QWidget):
     def save_to_slot_dialog(self):
         """Show dialog for selecting a slot to save current settings."""
         try:
-            dialog = SettingsSlotDialog(self)
+            dialog = SettingsSlotDialog(self, exclude_slot_0=True)
             dialog.setWindowTitle("Save to Settings Slot")
             dialog.slot_selected.connect(self.save_current_settings_to_slot)
             dialog.exec_()
