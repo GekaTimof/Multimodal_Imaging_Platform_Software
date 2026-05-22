@@ -204,10 +204,10 @@ class CameraTab(QWidget):
         self.stop_button.setEnabled(False)
 
     # Overhead constants matching RaspberryPi camera_service.py behaviour:
-    #   _pause_video_stream  → kill processes + _wait_for_camera_release(max=20s) ≈ 22s
-    #   _resume_video_stream → 1s sleep   + _wait_for_camera_release(max=10s)    ≈ 12s
-    _PAUSE_OVERHEAD_S: float = 22.0
-    _RESUME_OVERHEAD_S: float = 12.0
+    #   _pause_video_stream  → sleep(0.02) + terminate + wait(1s) + _wait_for_camera_release ≈ 2-3s
+    #   _resume_video_stream → only clears flag, capture loop restarts rpicam-vid itself  ≈ 0s
+    _PAUSE_OVERHEAD_S: float = 3.0
+    _RESUME_OVERHEAD_S: float = 0.0
 
     @staticmethod
     def _rpicam_still_timeout(exposure_us: int) -> float:
@@ -223,6 +223,24 @@ class CameraTab(QWidget):
             return exposure_sec + 8   # Medium exposure (1-3s)
         else:
             return 10.0  # Short exposure (<1s) - fast with ZSL
+
+    @staticmethod
+    def _rpicam_still_expected(exposure_us: int) -> float:
+        """Expected REAL duration of rpicam-still for progress bar estimation.
+        Shorter than the subprocess timeout — reflects typical observed wall-clock time.
+        Camera init (IMX477): ~3-5s; ZSL after video pause is not active so init always runs.
+        """
+        exposure_sec = exposure_us / 1_000_000
+        if exposure_sec >= 60:
+            return exposure_sec + 10
+        elif exposure_sec >= 10:
+            return exposure_sec + 7
+        elif exposure_sec >= 3:
+            return exposure_sec + 6
+        elif exposure_sec >= 1:
+            return exposure_sec + 5
+        else:
+            return 6.0  # Short exposure (<1s): ~3-5s init + capture + encode
 
     def _get_expected_capture_duration_ms(self) -> tuple:
         """Fetch current exposure settings and compute:
@@ -242,26 +260,29 @@ class CameraTab(QWidget):
                     # Auto-exposure: camera picks a fast shutter, assume ~10000 us
                     exposure_us = 10000
 
-                # rpicam-still subprocess timeout (same formula as RPi)
-                still_s = self._rpicam_still_timeout(exposure_us)
+                # Expected real duration of rpicam-still (for progress bar)
+                still_expected_s = self._rpicam_still_expected(exposure_us)
+
+                # Max subprocess timeout (for HTTP timeout calculation)
+                still_timeout_s = self._rpicam_still_timeout(exposure_us)
 
                 # Total expected wall-clock time = pause + still + resume
-                total_s = self._PAUSE_OVERHEAD_S + still_s + self._RESUME_OVERHEAD_S
+                total_s = self._PAUSE_OVERHEAD_S + still_expected_s + self._RESUME_OVERHEAD_S
 
-                # HTTP timeout = total + 20 s safety margin
-                http_timeout_s = total_s + 20.0
+                # HTTP timeout = max subprocess timeout + overheads + 20s safety margin
+                http_timeout_s = self._PAUSE_OVERHEAD_S + still_timeout_s + self._RESUME_OVERHEAD_S + 20.0
 
                 logger.info(
                     f"Capture estimate: exposure={exposure_us}us, "
-                    f"still={still_s:.0f}s, total={total_s:.0f}s, "
+                    f"still_expected={still_expected_s:.0f}s, total={total_s:.0f}s, "
                     f"http_timeout={http_timeout_s:.0f}s"
                 )
                 return int(total_s * 1000), http_timeout_s
         except Exception as e:
             logger.warning(f"Could not fetch exposure settings for progress estimate: {e}")
 
-        # Fallback: ~50 s total, 70 s timeout
-        return 50_000, 70.0
+        # Fallback: ~9s total (pause 3s + still 6s + resume 0s), 33s timeout
+        return 9_000, 33.0
 
     def save_current_image(self) -> None:
         """Capture and save a high-quality photo using PhotoResolution settings from API."""

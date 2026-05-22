@@ -778,91 +778,27 @@ class CameraSettingsWidget(QWidget):
         logger.info(f"Applying settings: {settings_to_update}")
         
         # Apply settings via API
-        self._apply_settings_with_fallback(settings_to_update, 0)
-    
-    def _apply_settings_with_fallback(self, settings_list, index):
-        """Apply settings sequentially (one at a time)."""
-        if index >= len(settings_list):
-            self.status_label.setText("All settings applied successfully")
-            self.status_label.setStyleSheet("QLabel { color: green; font-weight: bold; }")
-            # Emit signal that settings were updated
-            self.settings_updated.emit()
-            return
-        
-        table_name, parameter, value = settings_list[index]
-        
-        # Apply via API only - but wait for response before continuing
-        self._apply_settings_sequentially(settings_list, index)
-    
-    def _apply_setting_via_api(self, table_name, parameter, value, settings_list, index):
-        """Apply setting via API."""
-        try:
-            logger.info(f"Applying {parameter}={value} to {table_name}")
-            
-            # Add small delay to prevent overwhelming the API
-            import time
-            if index > 0:  # Don't delay first request
-                time.sleep(0.1)  # 100ms delay between requests
-            
-            thread = APIClientThread('POST', ENDPOINTS['update_parameter'], {
-                'table_name': table_name,
-                'parameter': parameter,
-                'value': value
-            })
-            
-            # Store remaining settings for next call
-            thread.remaining_settings = settings_list
-            thread.next_index = index
-            
-            thread.response_received.connect(lambda success, message, data: 
-                self._on_setting_applied_via_api(success, message, data, thread))
-            thread.finished.connect(lambda: self._cleanup_thread(thread))
-            self.active_threads.append(thread)
-            thread.start()
-                
-        except Exception as e:
-            logger.error(f"API error for {parameter}: {e}")
-            self.status_label.setText(f"API error for {parameter}: {str(e)}")
-            self.status_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
-    
-    def _on_setting_applied_via_api(self, success, message, data, thread):
-        """Handle individual setting application response via API."""
-        if success:
-            logger.info("Successfully applied setting, continuing with next one")
-            # Continue with next setting (increment index)
-            self._apply_settings_with_fallback(thread.remaining_settings, thread.next_index + 1)
-        else:
-            logger.error(f"Failed to apply setting: {message}")
-            self.status_label.setText(f"Failed to apply setting: {message}")
-            self.status_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
+        self._apply_settings_sequentially(settings_to_update, 0)
     
     def _apply_settings_sequentially(self, settings_list, index):
         """Apply settings one by one to avoid overwhelming API."""
         if index >= len(settings_list):
             self.status_label.setText("All settings applied successfully")
             self.status_label.setStyleSheet("QLabel { color: green; font-weight: bold; }")
-            # Emit signal that settings were updated
             self.settings_updated.emit()
             return
         
         table_name, parameter, value = settings_list[index]
-        
-        # Add small delay to prevent overwhelming the API
-        import time
-        if index > 0:  # Don't delay first request
-            time.sleep(0.1)  # 100ms delay between requests
+        logger.info(f"Applying {parameter}={value} to {table_name}")
         
         thread = APIClientThread('POST', ENDPOINTS['update_parameter'], {
             'table_name': table_name,
             'parameter': parameter,
             'value': value
         })
-        
-        # Store remaining settings for next call
         thread.remaining_settings = settings_list
         thread.next_index = index + 1
-        
-        thread.response_received.connect(lambda success, message, data: 
+        thread.response_received.connect(lambda success, message, data:
             self._on_setting_applied_sequentially(success, message, data, thread))
         thread.finished.connect(lambda: self._cleanup_thread(thread))
         self.active_threads.append(thread)
@@ -872,7 +808,6 @@ class CameraSettingsWidget(QWidget):
         """Handle individual setting application response in sequential mode."""
         if success:
             logger.info("Successfully applied setting, continuing with next one")
-            # Continue with next setting (increment index)
             self._apply_settings_sequentially(thread.remaining_settings, thread.next_index)
         else:
             logger.error(f"Failed to apply setting: {message}")
@@ -1015,24 +950,11 @@ class CameraSettingsWidget(QWidget):
             self._save_slot_settings_fallback(settings, slot_id)
     
     def _save_slot_settings_fallback(self, settings, slot_id):
-        """Fallback method: save settings by updating current settings."""
+        """Fallback: re-attempt save to the correct slot via direct POST."""
         try:
-            # Update current settings (not slot-specific)
-            settings_to_update = [
-                ("CameraSettings", "SettingsName", str(settings.get('SettingsName', f"Slot {slot_id}"))),
-                ("CameraSettings", "PhotoResolution", settings.get('PhotoResolution', '3280x2464')),
-                ("CameraSettings", "VideoResolution", settings.get('VideoResolution', '1920x1080')),
-                ("CameraSettings", "AeEnable", str(int(settings.get('AeEnable', True)))),
-                ("CameraSettings", "AwbEnable", str(int(settings.get('AwbEnable', True)))),
-                ("CameraSettings", "ExposureTime", str(int(settings.get('ExposureTime', 10000)))),
-                ("CameraSettings", "AnalogueGain", str(float(settings.get('AnalogueGain', 1.0)))),
-                ("CameraSettings", "ExposureValue", str(float(settings.get('ExposureValue', 0.0)))),
-                ("CameraSettings", "RedGain", str(float(settings.get('RedGain', 1.0)))),
-                ("CameraSettings", "BlueGain", str(float(settings.get('BlueGain', 1.0))))
-            ]
-            
-            self._apply_settings_with_fallback(settings_to_update, 0)
-            
+            self.status_label.setText(f"Retrying save to slot {slot_id}...")
+            self.status_label.setStyleSheet("QLabel { color: orange; font-weight: bold; }")
+            self._save_slot_settings_via_api(settings, slot_id)
         except Exception as e:
             self.status_label.setText(f"Fallback save failed: {str(e)}")
             self.status_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")

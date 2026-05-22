@@ -25,8 +25,8 @@ THREAD_WAIT_TIMEOUT = 1000
 EXPOSURE_TIME_RANGE = (100, 300000000)  # 100 µs to 300 seconds (5 minutes)
 ANALOGUE_GAIN_RANGE = (0.0, 32.0)
 EXPOSURE_VALUE_RANGE = (-10.0, 10.0)
-RED_GAIN_RANGE = (0.0, 8.0)
-BLUE_GAIN_RANGE = (0.0, 8.0)
+RED_GAIN_RANGE = (0.1, 32.0)
+BLUE_GAIN_RANGE = (0.1, 32.0)
 
 # Available resolutions (sorted by ascending resolution)
 AVAILABLE_PHOTO_RESOLUTIONS = [
