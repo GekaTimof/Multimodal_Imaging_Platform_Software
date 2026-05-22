@@ -27,6 +27,7 @@ from core.constants.ui_strings import CameraTabStrings
 from models.objects.Interface_text import Interface_text
 from services.save_photo import save_photo
 from core.threads.camera_thread import CameraThread
+from core.threads.photo_capture_thread import PhotoCaptureThread
 from ui.widgets.device_settings_widget.device_settings_widgets import DeviceSettingsWidget
 
 logger = logging.getLogger(__name__)
@@ -56,6 +57,10 @@ class CameraTab(QWidget):
         self.camera_source = self.load_camera_source()
         self.current_frame = None
         self.thread: Optional[CameraThread] = None
+        self.photo_thread: Optional[PhotoCaptureThread] = None
+        self._progress_timer: Optional[QTimer] = None
+        self._progress_elapsed_ms: int = 0
+        self._progress_total_ms: int = 1000
         self.current_settings_slot = DEFAULT_CAMERA_SLOT  # Default to slot 0 (Basic)
         
         # Video label (left side)
@@ -198,82 +203,135 @@ class CameraTab(QWidget):
         self.start_button.setEnabled(True)
         self.stop_button.setEnabled(False)
 
+    # Overhead constants matching RaspberryPi camera_service.py behaviour:
+    #   _pause_video_stream  → kill processes + _wait_for_camera_release(max=20s) ≈ 22s
+    #   _resume_video_stream → 1s sleep   + _wait_for_camera_release(max=10s)    ≈ 12s
+    _PAUSE_OVERHEAD_S: float = 22.0
+    _RESUME_OVERHEAD_S: float = 12.0
+
+    @staticmethod
+    def _rpicam_still_timeout(exposure_us: int) -> float:
+        """Mirror the timeout formula in RaspberryPi camera_service.py capture_photo()."""
+        exposure_sec = exposure_us / 1_000_000
+        if exposure_sec > 3:
+            return exposure_sec + 10
+        elif exposure_sec > 1:
+            return exposure_sec + 5
+        else:
+            return 15.0
+
+    def _get_expected_capture_duration_ms(self) -> tuple:
+        """Fetch current exposure settings and compute:
+        - expected total duration in ms (for progress bar)
+        - HTTP request timeout in seconds (for PhotoCaptureThread)
+        Returns (duration_ms, http_timeout_s).
+        """
+        try:
+            api_url = f"{API_BASE_URL}/settings/camera"
+            response = requests.get(api_url, timeout=5)
+            if response.status_code == 200:
+                settings = response.json()
+                exposure_us = int(settings.get("ExposureTime", 10000))
+                ae_enable = settings.get("AeEnable", True)
+
+                if ae_enable:
+                    # Auto-exposure: camera picks a fast shutter, assume ~10000 us
+                    exposure_us = 10000
+
+                # rpicam-still subprocess timeout (same formula as RPi)
+                still_s = self._rpicam_still_timeout(exposure_us)
+
+                # Total expected wall-clock time = pause + still + resume
+                total_s = self._PAUSE_OVERHEAD_S + still_s + self._RESUME_OVERHEAD_S
+
+                # HTTP timeout = total + 20 s safety margin
+                http_timeout_s = total_s + 20.0
+
+                logger.info(
+                    f"Capture estimate: exposure={exposure_us}us, "
+                    f"still={still_s:.0f}s, total={total_s:.0f}s, "
+                    f"http_timeout={http_timeout_s:.0f}s"
+                )
+                return int(total_s * 1000), http_timeout_s
+        except Exception as e:
+            logger.warning(f"Could not fetch exposure settings for progress estimate: {e}")
+
+        # Fallback: ~50 s total, 70 s timeout
+        return 50_000, 70.0
+
     def save_current_image(self) -> None:
         """Capture and save a high-quality photo using PhotoResolution settings from API."""
+        if self.photo_thread is not None and self.photo_thread.isRunning():
+            return  # Already capturing
+
+        # Estimate capture duration for progress animation and HTTP timeout
+        self._progress_total_ms, http_timeout_s = self._get_expected_capture_duration_ms()
+        self._progress_elapsed_ms = 0
+
+        # Disable button to prevent repeated captures
+        self.save_image_button.setEnabled(False)
         self.progress_bar.setVisible(True)
         self.progress_bar.setValue(0)
         self.status_label.setText("Capturing high-resolution photo...")
 
+        # Start progress timer (updates every 200 ms)
+        self._progress_timer = QTimer(self)
+        self._progress_timer.setInterval(200)
+        self._progress_timer.timeout.connect(self._advance_progress)
+        self._progress_timer.start()
+
+        self.photo_thread = PhotoCaptureThread(timeout=http_timeout_s)
+        self.photo_thread.finished.connect(self._on_photo_captured)
+        self.photo_thread.failed.connect(self._on_photo_failed)
+        self.photo_thread.start()
+
+    def _advance_progress(self) -> None:
+        """Advance progress bar smoothly up to 95% while capture is in progress."""
+        self._progress_elapsed_ms += 200
+        # Cap at 95 % – the last 5 % is set when the image is actually saved
+        pct = min(95, int(self._progress_elapsed_ms * 95 / self._progress_total_ms))
+        self.progress_bar.setValue(pct)
+
+    def _stop_progress_timer(self) -> None:
+        if self._progress_timer is not None:
+            self._progress_timer.stop()
+            self._progress_timer.deleteLater()
+            self._progress_timer = None
+
+    def _on_photo_captured(self, image: QImage, photo_info: dict) -> None:
+        """Handle successfully captured photo: save it and update UI."""
+        self._stop_progress_timer()
+
+        photo_dir = self.device_settings_widget.file_tab.get_photo_save_directory()
         try:
-            # Call API to capture photo with PhotoResolution settings
-            api_url = f"{API_BASE_URL}/camera/photo"
-            logger.info(f"Sending photo capture request to: {api_url}")
-            response = requests.post(api_url, timeout=310)  # Max 300s exposure + buffer
-            logger.info(f"Photo API response: status={response.status_code}")
-
-            self.progress_bar.setValue(50)
-
-            if response.status_code == 200:
-                data = response.json()
-                if data.get('success') and 'image_base64' in data.get('data', {}):
-                    import base64
-
-                    # Decode base64 image
-                    image_base64 = data['data']['image_base64']
-                    image_bytes = base64.b64decode(image_base64)
-
-                    # Convert to QImage for saving
-                    # JPEG format hint helps Qt correctly decode the image
-                    image = QImage.fromData(image_bytes, "JPEG")
-                    if image.isNull():
-                        # Fallback: try without format hint
-                        image = QImage()
-                        load_success = image.loadFromData(image_bytes)
-                        if not load_success:
-                            logger.error("Failed to load image from decoded bytes")
-                            self.status_label.setText("Error: Failed to decode image data")
-                            return
-
-                    # Get save directory from FileSettingsWidget
-                    photo_dir = self.device_settings_widget.file_tab.get_photo_save_directory()
-                    try:
-                        if photo_dir:
-                            saved_path = save_photo(image, photo_dir)
-                        else:
-                            saved_path = save_photo(image)  # Fallback to default
-                    except (ValueError, RuntimeError) as save_error:
-                        logger.error(f"Failed to save photo: {save_error}")
-                        self.status_label.setText(f"Error saving photo: {save_error}")
-                        return
-
-                    self.progress_bar.setValue(100)
-                    photo_info = data['data']
-                    resolution = photo_info.get('resolution', 'unknown')
-                    exposure = photo_info.get('exposure_time_us', 'unknown')
-                    logger.info(f"Photo captured: {resolution}, exposure={exposure}us, saved to: {saved_path}")
-                    self.status_label.setText(f"Photo saved: {os.path.basename(saved_path)} ({resolution})")
-                else:
-                    error_msg = data.get('message', 'Unknown error')
-                    logger.error(f"API error: {error_msg}")
-                    self.status_label.setText(f"Error: {error_msg}")
+            if photo_dir:
+                saved_path = save_photo(image, photo_dir)
             else:
-                error_msg = f"HTTP {response.status_code}"
-                try:
-                    error_data = response.json()
-                    error_msg = error_data.get('error', error_msg)
-                except:
-                    pass
-                logger.error(f"API request failed: {error_msg}")
-                self.status_label.setText(f"Error capturing photo: {error_msg}")
-
-        except requests.Timeout:
-            logger.error("Photo capture timeout")
-            self.status_label.setText("Error: Photo capture timeout (exposure too long?)")
-        except Exception as e:
-            logger.error(f"Error saving image: {e}")
-            self.status_label.setText(CameraTabStrings.ERROR_SAVING_IMAGE.format(str(e)))
-        finally:
+                saved_path = save_photo(image)
+        except (ValueError, RuntimeError) as save_error:
+            logger.error(f"Failed to save photo: {save_error}")
+            self.status_label.setText(f"Error saving photo: {save_error}")
             self.progress_bar.setVisible(False)
+            self.save_image_button.setEnabled(True)
+            return
+
+        self.progress_bar.setValue(100)
+        resolution = photo_info.get("resolution", "unknown")
+        exposure = photo_info.get("exposure_time_us", "unknown")
+        logger.info(f"Photo captured: {resolution}, exposure={exposure}us, saved to: {saved_path}")
+        self.status_label.setText(f"Photo saved: {os.path.basename(saved_path)} ({resolution})")
+        self.progress_bar.setVisible(False)
+        self.save_image_button.setEnabled(True)
+        self.photo_thread = None
+
+    def _on_photo_failed(self, error_message: str) -> None:
+        """Handle photo capture failure."""
+        self._stop_progress_timer()
+        logger.error(f"Photo capture failed: {error_message}")
+        self.status_label.setText(f"Error: {error_message}")
+        self.progress_bar.setVisible(False)
+        self.save_image_button.setEnabled(True)
+        self.photo_thread = None
 
     def on_settings_updated(self) -> None:
         """Handle settings updated event - restart camera with new settings from API."""
