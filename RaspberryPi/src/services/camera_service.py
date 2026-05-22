@@ -540,22 +540,9 @@ class CameraService:
                 time.sleep(check_interval)
                 continue
             
-            # Final check: rpicam-still can actually access camera
-            try:
-                result = subprocess.run(
-                    ['rpicam-still', '--list-cameras'],
-                    capture_output=True,
-                    timeout=2
-                )
-                if result.returncode == 0 and b'Available cameras' in result.stdout:
-                    print(f"Camera ready after {elapsed:.2f}s")
-                    return True
-            except subprocess.TimeoutExpired:
-                pass  # Still initializing, continue polling
-            except Exception:
-                pass  # Ignore errors, continue polling
-            
-            time.sleep(check_interval)
+            # Camera processes are gone and media devices are free — that's enough
+            print(f"Camera ready after {elapsed:.2f}s")
+            return True
         
         elapsed = time.time() - start_time
         print(f"Warning: Camera wait timeout after {elapsed:.1f}s")
@@ -589,31 +576,19 @@ class CameraService:
         """Check if /dev/media* devices are held by any process."""
         import subprocess
         import glob
-        
+
         busy_devices = []
         media_devices = glob.glob('/dev/media*')
-        
+
         for device in media_devices:
             try:
-                # Use lsof to check if device is open
-                result = subprocess.run(['lsof', device], 
-                                      capture_output=True, text=True, timeout=2)
+                result = subprocess.run(['fuser', device],
+                                       capture_output=True, text=True, timeout=2)
                 if result.returncode == 0 and result.stdout.strip():
-                    # Parse output to get process names
-                    lines = result.stdout.strip().split('\n')[1:]  # Skip header
-                    processes = set(line.split()[0] for line in lines if line.strip())
-                    if processes:
-                        busy_devices.append(f"{device}({','.join(processes)})")
-            except (subprocess.TimeoutExpired, FileNotFoundError):
-                # lsof not available or timeout, try alternative
-                try:
-                    result = subprocess.run(['fuser', device], 
-                                          capture_output=True, text=True, timeout=2)
-                    if result.returncode == 0 and result.stdout.strip():
-                        busy_devices.append(f"{device}(PID:{result.stdout.strip()})")
-                except:
-                    pass
-        
+                    busy_devices.append(f"{device}(PID:{result.stdout.strip()})")
+            except Exception:
+                pass
+
         return busy_devices
 
     def _resume_video_stream(self):
@@ -685,12 +660,13 @@ class CameraService:
                     if exposure_sec < 1.0:
                         cmd.append('--zsl')  # Zero Shutter Lag for fast capture
 
-                    # Add exposure settings
-                    if self.exposure_time is not None and self.exposure_time > 0:
-                        cmd.extend(['--shutter', str(int(self.exposure_time))])
+                    # Add exposure settings (only when AE is disabled)
+                    if not self.ae_enable:
+                        if self.exposure_time is not None and self.exposure_time > 0:
+                            cmd.extend(['--shutter', str(int(self.exposure_time))])
 
-                    if self.analogue_gain is not None and self.analogue_gain >= 0:
-                        cmd.extend(['--gain', str(float(self.analogue_gain))])
+                        if self.analogue_gain is not None and self.analogue_gain >= 0:
+                            cmd.extend(['--gain', str(float(self.analogue_gain))])
 
                     if self.exposure_value is not None:
                         cmd.extend(['--ev', str(float(self.exposure_value))])
