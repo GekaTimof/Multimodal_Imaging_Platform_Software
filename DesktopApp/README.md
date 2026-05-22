@@ -1,77 +1,285 @@
-# DesktopApp
+# DesktopApp / Десктопное Приложение
 
-Десктопное приложение для управления научными приборами через графический интерфейс.
+**[English](#english) | [Русский](#русский)**
 
-## Обзор
+---
 
-PyQt5 приложение с трёхтабличным интерфейсом для управления спектрометром, камерой и анализом лунок. Поддерживает многоязычный интерфейс и настраиваемые параметры устройств.
+<a name="english"></a>
+## English
 
-## Структура приложения
+Desktop GUI application for controlling scientific instruments (spectrometer, camera, wells analysis) connected to Raspberry Pi hardware.
 
-### Основные файлы
-- `main.py` — точка входа, запускает главное окно
-- `threads/main_window_thread.py` — главное окно с управлением вкладками
+### Overview
 
-### Вкладки (tabs/)
-- `camera_tab.py` — управление IP-камерой, видеопоток, сохранение изображений
-- `spectrometer_tab.py` — работа со спектрометром, сбор спектральных данных
-- `wells_tab.py` — анализ данных лунок
+PyQt5 application with a three-tab interface for managing scientific instruments. Supports multilingual interface (English/Russian) and configurable device parameters with slot-based settings storage.
 
-### Основные классы (objects/)
-- `Interface_text.py` — менеджер многоязычного интерфейса
-- `errors.py` — пользовательские исключения
+### Architecture
 
-### Служебные модули (services/)
-- `raspberry_mode.py` — управление режимами работы Raspberry Pi
-- `directory_control.py` — контроль директорий сохранения
-- `save_photo.py` — сохранение изображений
+- **Pattern**: MVVM (Model-View-ViewModel) with clear separation of concerns
+- **Communication**: REST API client for Raspberry Pi communication
+- **Internationalization**: JSON-based translation system
+- **Settings**: Slot-based storage (10 slots per device type)
 
-### Настройки (widgets/)
-- `device_settings_widget/` — виджеты настроек параметров устройств
+### Project Structure
 
-### Языковые файлы (language_variations/)
-- `text_variations/` — JSON файлы с переводами (Русский/English)
-- `language_link.py` — сопоставление языков с файлами
-
-## Функциональность
-
-### Камера
-- Отображение видеопотока с IP-камеры
-- Кнопки старт/стоп записи
-- Выбор директории сохранения
-- Сохранение текущего кадра
-- Настройка параметров камеры
-
-### Спектрометр
-- Сбор спектральных данных
-- Настройка времени интеграции
-- Установка и очистка темнового спектра
-- Сохранение спектров в файлы
-
-### Интерфейс
-- Переключение между тремя режимами работы
-- Автоматическое переключение режимов Raspberry Pi
-- Многоязычная поддержка (Русский/English)
-- Интуитивное управление параметрами
-
-## Запуск
-
-1. Установка зависимостей:
-
-```bash
-pip install PyQt5
+```
+DesktopApp/
+├── main.py                     # Application entry point
+├── requirements.txt            # Python dependencies
+├── README.md                   # This documentation (EN/RU)
+│
+├── src/
+│   ├── config/                # Configuration modules
+│   │   └── constants/         # Application constants
+│   │       └── spectrometer_constants.py
+│   │
+│   ├── core/                  # Core application logic
+│   │   ├── device_registry.py # Device registration and management
+│   │   ├── mode_controller.py # Raspberry Pi mode switching
+│   │   └── settings_controller.py # Settings management
+│   │
+│   ├── models/                # Data models
+│   │   ├── base_device_model.py
+│   │   ├── camera_model.py
+│   │   ├── spectrometer_model.py
+│   │   └── wells_model.py
+│   │
+│   └── ui/                    # User interface
+│       ├── threads/           # Background threads
+│       │   ├── camera_thread.py      # Camera streaming thread
+│       │   └── main_window_thread.py # Main window controller
+│       │
+│       ├── tabs/              # Main interface tabs
+│       │   ├── camera_tab.py         # Camera control tab
+│       │   ├── spectrometer_tab.py   # Spectrometer tab
+│       │   └── wells_tab.py          # Wells analysis tab
+│       │
+│       ├── widgets/           # Reusable UI components
+│       │   ├── device_settings_widget/  # Settings widgets
+│       │   ├── spectrometer_widget.py     # Spectrometer display
+│       │   └── video_widget.py            # Video display
+│       │
+│       └── windows/           # Dialog windows
+│           └── device_settings_window.py  # Settings dialog
+│
+├── resources/                 # Application resources
+│   ├── language_variations/   # Translation files
+│   │   ├── language_link.py   # Language mapping
+│   │   └── text_variations/   # JSON translations (EN/RU)
+│   └── settings.json          # Application settings
+│
+└── tests/                     # Unit and integration tests
+    ├── unit/
+    └── integration/
 ```
 
-2. Запуск приложения:
+### Features
+
+#### Camera Tab
+- Real-time IP camera video streaming from Raspberry Pi
+- Start/stop recording controls
+- Save directory selection
+- Single frame capture
+- Camera parameter configuration (slots 0-9)
+
+#### Spectrometer Tab
+- Real-time spectral data acquisition
+- Integration time adjustment
+- Dark spectrum calibration (set/clear)
+- Spectrum data export to files
+- Spectral visualization with matplotlib
+
+#### Wells Tab
+- Wells data visualization
+- Analysis parameter settings
+- Data export functionality
+
+#### Settings Management
+- 10 configurable slots per device type
+- Validation rules enforcement
+- Save/load settings to/from Raspberry Pi
+- Automatic mode switching on Raspberry Pi
+
+### Prerequisites
+
+- Python 3.8+
+- PyQt5
+- matplotlib
+- requests
+
+### Installation
 
 ```bash
 cd DesktopApp
+pip install -r requirements.txt
+```
+
+### Running the Application
+
+```bash
 python main.py
 ```
 
-## Архитектура
+### Configuration
 
-- **MVVM паттерн**: разделение логики и представления
-- **Модульность**: каждый компонент в отдельном файле
-- **Многоязычность**: JSON файлы переводов
-- **Сетевое взаимодействие**: обмен данными с Raspberry Pi
+Edit `resources/settings.json` to configure:
+- Raspberry Pi IP address (default: `10.43.70.189`)
+- Default save directories
+- Language preference
+- Stream URLs
+
+### API Communication
+
+The application communicates with Raspberry Pi via REST API:
+
+```
+Base URL: http://<raspberry-pi-ip>:8000/api
+```
+
+Key endpoints:
+- `GET /api/health` — Server health check
+- `GET /api/settings/{table}` — Get device settings
+- `POST /api/settings/update` — Update parameter
+- `GET /api/settings/camera/slot/{slot_id}` — Get camera slot settings
+- `POST /api/settings/camera/save-slot/{slot_id}` — Save to slot
+
+---
+
+<a name="русский"></a>
+## Русский
+
+Десктопное GUI приложение для управления научными приборами (спектрометр, камера, анализ лунок), подключенными к оборудованию Raspberry Pi.
+
+### Обзор
+
+Приложение на PyQt5 с трёхтабличным интерфейсом для управления научными приборами. Поддерживает многоязычный интерфейс (Английский/Русский) и настраиваемые параметры устройств с хранением настроек в слотах.
+
+### Архитектура
+
+- **Паттерн**: MVVM (Model-View-ViewModel) с чётким разделением ответственности
+- **Коммуникация**: REST API клиент для связи с Raspberry Pi
+- **Интернационализация**: Система переводов на основе JSON
+- **Настройки**: Хранение в слотах (10 слотов на тип устройства)
+
+### Структура проекта
+
+```
+DesktopApp/
+├── main.py                     # Точка входа приложения
+├── requirements.txt            # Зависимости Python
+├── README.md                   # Эта документация (EN/RU)
+│
+├── src/
+│   ├── config/                # Модули конфигурации
+│   │   └── constants/         # Константы приложения
+│   │       └── spectrometer_constants.py
+│   │
+│   ├── core/                  # Основная логика приложения
+│   │   ├── device_registry.py # Регистрация и управление устройствами
+│   │   ├── mode_controller.py # Переключение режимов Raspberry Pi
+│   │   └── settings_controller.py # Управление настройками
+│   │
+│   ├── models/                # Модели данных
+│   │   ├── base_device_model.py
+│   │   ├── camera_model.py
+│   │   ├── spectrometer_model.py
+│   │   └── wells_model.py
+│   │
+│   └── ui/                    # Пользовательский интерфейс
+│       ├── threads/           # Фоновые потоки
+│       │   ├── camera_thread.py      # Поток видеостриминга
+│       │   └── main_window_thread.py # Контроллер главного окна
+│       │
+│       ├── tabs/              # Основные вкладки интерфейса
+│       │   ├── camera_tab.py         # Вкладка управления камерой
+│       │   ├── spectrometer_tab.py   # Вкладка спектрометра
+│       │   └── wells_tab.py          # Вкладка анализа лунок
+│       │
+│       ├── widgets/           # Переиспользуемые UI компоненты
+│       │   ├── device_settings_widget/  # Виджеты настроек
+│       │   ├── spectrometer_widget.py     # Отображение спектрометра
+│       │   └── video_widget.py            # Отображение видео
+│       │
+│       └── windows/           # Диалоговые окна
+│           └── device_settings_window.py  # Диалог настроек
+│
+├── resources/                 # Ресурсы приложения
+│   ├── language_variations/   # Файлы переводов
+│   │   ├── language_link.py   # Сопоставление языков
+│   │   └── text_variations/   # JSON переводы (EN/RU)
+│   └── settings.json          # Настройки приложения
+│
+└── tests/                     # Модульные и интеграционные тесты
+    ├── unit/
+    └── integration/
+```
+
+### Функциональность
+
+#### Вкладка Камеры
+- Потоковое видео с IP-камеры Raspberry Pi в реальном времени
+- Кнопки управления записью (старт/стоп)
+- Выбор директории сохранения
+- Захват отдельного кадра
+- Настройка параметров камеры (слоты 0-9)
+
+#### Вкладка Спектрометра
+- Сбор спектральных данных в реальном времени
+- Регулировка времени интеграции
+- Калибровка темнового спектра (установка/очистка)
+- Экспорт данных спектра в файлы
+- Визуализация спектра с matplotlib
+
+#### Вкладка Лунок
+- Визуализация данных лунок
+- Настройка параметров анализа
+- Экспорт данных
+
+#### Управление Настройками
+- 10 настраиваемых слотов на тип устройства
+- Применение правил валидации
+- Сохранение/загрузка настроек на Raspberry Pi
+- Автоматическое переключение режимов на Raspberry Pi
+
+### Требования
+
+- Python 3.8+
+- PyQt5
+- matplotlib
+- requests
+
+### Установка
+
+```bash
+cd DesktopApp
+pip install -r requirements.txt
+```
+
+### Запуск Приложения
+
+```bash
+python main.py
+```
+
+### Конфигурация
+
+Отредактируйте `resources/settings.json` для настройки:
+- IP-адрес Raspberry Pi (по умолчанию: `10.43.70.189`)
+- Директории сохранения по умолчанию
+- Предпочитаемый язык
+- URL потоков
+
+### API Коммуникация
+
+Приложение взаимодействует с Raspberry Pi через REST API:
+
+```
+Базовый URL: http://<ip-raspberry-pi>:8000/api
+```
+
+Основные endpoints:
+- `GET /api/health` — Проверка работоспособности сервера
+- `GET /api/settings/{table}` — Получить настройки устройства
+- `POST /api/settings/update` — Обновить параметр
+- `GET /api/settings/camera/slot/{slot_id}` — Получить настройки слота камеры
+- `POST /api/settings/camera/save-slot/{slot_id}` — Сохранить в слот
