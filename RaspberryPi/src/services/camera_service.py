@@ -23,7 +23,6 @@ _pause_for_photo_global = threading.Event()
 
 # Camera backend options
 OPENCV_AVAILABLE = True
-PICAMERA2_AVAILABLE = False  # Disabled due to libcamera issues
 RPICAM_AVAILABLE = True  # Use rpicam-apps as subprocess
 
 
@@ -69,17 +68,6 @@ class CameraService:
                 return
             except Exception as e:
                 print(f"OpenCV camera failed: {e}")
-        
-        # Try picamera2 as fallback
-        if PICAMERA2_AVAILABLE:
-            try:
-                self._init_picamera2()
-                self.use_real_camera = True
-                self.camera_backend = "picamera2"
-                print("Picamera2 camera initialized successfully")
-                return
-            except Exception as e:
-                print(f"Picamera2 camera failed: {e}")
         
         # If all fail, use test pattern
         print("All camera backends failed, using test pattern")
@@ -172,10 +160,9 @@ class CameraService:
                 width = int(width_str)
                 height = int(height_str)
                 # Accept any resolution from the known config list; fallback for truly unknown ones
-                from src.config.settings import config as _cfg
                 known_resolutions = [
                     (int(r.split('x')[0]), int(r.split('x')[1]))
-                    for r in _cfg.AVAILABLE_RESOLUTIONS
+                    for r in config.AVAILABLE_RESOLUTIONS
                 ]
                 if (width, height) in known_resolutions:
                     self.width, self.height = width, height
@@ -240,9 +227,7 @@ class CameraService:
             self._apply_settings_to_attributes(settings)
 
             # Save to slot 0 (current session) in database
-            from .database_service import DatabaseService
-            db = DatabaseService()
-            success, message = db.save_camera_settings_to_slot(0, settings)
+            success, message = db_service.save_camera_settings_to_slot(0, settings)
             if not success:
                 logger.warning(f"Failed to save session settings to slot 0: {message}")
                 # Continue anyway - camera settings are still applied
@@ -268,6 +253,22 @@ class CameraService:
             logger.error(f"Failed to apply session settings: {e}")
             return False
 
+    def _build_awb_args(self) -> list:
+        """Build rpicam AWB command-line arguments."""
+        if not self.awb_enable and self.red_gain > 0 and self.blue_gain > 0:
+            return ['--awb', 'custom', '--awbgains', f"{self.red_gain:.4f},{self.blue_gain:.4f}"]
+        return ['--awb', 'auto']
+
+    def _build_exposure_args(self) -> list:
+        """Build rpicam manual exposure command-line arguments (empty when AE is on)."""
+        args = []
+        if not self.ae_enable:
+            args.extend(['--shutter', str(int(self.exposure_time))])
+            args.extend(['--gain', str(float(self.analogue_gain))])
+        if self.exposure_value is not None and self.exposure_value != 0.0:
+            args.extend(['--ev', str(float(self.exposure_value))])
+        return args
+
     def _start_rpicam_vid(self):
         """Start rpicam-vid process for continuous MJPEG streaming."""
         # When manual shutter exceeds 1/fps the sensor caps exposure at 1/fps.
@@ -289,22 +290,8 @@ class CameraService:
             '--flush',
             '-o', '-',
         ]
-        # Manual exposure settings (only when AE is disabled)
-        if not self.ae_enable:
-            cmd.extend(['--shutter', str(int(self.exposure_time))])
-            cmd.extend(['--gain', str(float(self.analogue_gain))])
-
-        # Exposure value (EV compensation) - applies in both auto and manual modes
-        if self.exposure_value is not None and self.exposure_value != 0.0:
-            cmd.extend(['--ev', str(float(self.exposure_value))])
-
-        # Auto white balance settings
-        # Valid modes: auto, incandescent, tungsten, fluorescent, indoor, daylight, cloudy, custom
-        if not self.awb_enable and self.red_gain > 0 and self.blue_gain > 0:
-            cmd.extend(['--awb', 'custom'])
-            cmd.extend(['--awbgains', f"{self.red_gain:.4f},{self.blue_gain:.4f}"])
-        else:
-            cmd.extend(['--awb', 'auto'])
+        cmd.extend(self._build_exposure_args())
+        cmd.extend(self._build_awb_args())
 
         self.rpicam_process = subprocess.Popen(
             cmd,
@@ -517,7 +504,7 @@ class CameraService:
                                       capture_output=True, text=True, timeout=2)
                 if result.returncode == 0 and result.stdout.strip():
                     pids.extend(result.stdout.strip().split('\n'))
-            except:
+            except Exception:
                 pass
         return [p for p in pids if p.strip()]
     
@@ -570,24 +557,8 @@ class CameraService:
                     if self.ae_enable and exposure_sec < 1.0:
                         cmd.append('--zsl')
 
-                    # Add exposure settings (only when AE is disabled)
-                    if not self.ae_enable:
-                        if self.exposure_time is not None and self.exposure_time > 0:
-                            cmd.extend(['--shutter', str(int(self.exposure_time))])
-
-                        if self.analogue_gain is not None and self.analogue_gain >= 0:
-                            cmd.extend(['--gain', str(float(self.analogue_gain))])
-
-                    if self.exposure_value is not None and self.exposure_value != 0.0:
-                        cmd.extend(['--ev', str(float(self.exposure_value))])
-
-                    # Auto white balance settings
-                    # Valid modes: auto, incandescent, tungsten, fluorescent, indoor, daylight, cloudy, custom
-                    if not self.awb_enable and self.red_gain > 0 and self.blue_gain > 0:
-                        cmd.extend(['--awb', 'custom'])
-                        cmd.extend(['--awbgains', f"{self.red_gain:.4f},{self.blue_gain:.4f}"])
-                    else:
-                        cmd.extend(['--awb', 'auto'])
+                    cmd.extend(self._build_exposure_args())
+                    cmd.extend(self._build_awb_args())
 
                     # Calculate timeout based on exposure time + buffer
                     # Camera init takes ~3-5s, then actual exposure, then processing

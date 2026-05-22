@@ -73,8 +73,8 @@ def validate_slot_id(slot_id: int) -> Tuple[bool, str]:
     if not isinstance(slot_id, int):
         return False, "Slot ID must be an integer"
     
-    if not 0 <= slot_id <= 9:
-        return False, "Slot ID must be between 0 and 9"
+    if not 0 <= slot_id <= 10:
+        return False, "Slot ID must be between 0 and 10"
     
     return True, ""
 

@@ -1,3 +1,4 @@
+import time
 import cv2
 import requests
 from PyQt5.QtCore import QThread, pyqtSignal
@@ -61,7 +62,6 @@ class CameraThread(QThread):
                         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
                         
                         # Small delay to allow camera to process
-                        import time
                         time.sleep(0.1)
                         
                         # Verify resolution was applied

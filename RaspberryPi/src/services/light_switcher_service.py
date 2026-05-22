@@ -11,6 +11,8 @@ import threading
 from typing import Optional, Tuple
 from enum import Enum
 
+logger = logging.getLogger(__name__)
+
 class SwitchState(Enum):
     """Состояния переключателя"""
     STATE_1 = "state1"  # Левый концевик
@@ -37,10 +39,7 @@ class LightSwitcherService:
         self.is_connected = False
         self.current_state = SwitchState.UNKNOWN
         self._lock = threading.Lock()
-        
-        # Настройка логирования
-        logging.basicConfig(level=logging.INFO)
-        self.logger = logging.getLogger(__name__)
+        self.logger = logger
         
     def connect(self) -> bool:
         """

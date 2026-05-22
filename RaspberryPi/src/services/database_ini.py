@@ -100,7 +100,7 @@ def main():
     if cursor.fetchone()[0] == 0:
         cursor.execute("""
         INSERT INTO CameraSettings (id, SettingsName, PhotoResolution, VideoResolution, AeEnable, AwbEnable, ExposureTime, AnalogueGain, ExposureValue, RedGain, BlueGain)
-        VALUES (0, 'Basic', '3280x2464', '1920x1080', 1, 1, 10000, 1.0, 0.0, 1.0, 1.0)
+        VALUES (0, 'Basic', '3280x2464', '1920x1080', 1, 1, 10000, 1.0, 0.0, 2.0, 2.0)
         """)
     
     # Check if SpectrometerSettings table has the new structure, migrate if needed

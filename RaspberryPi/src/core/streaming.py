@@ -1,12 +1,8 @@
 import time
-from http.server import BaseHTTPRequestHandler, HTTPServer
-from socketserver import ThreadingMixIn
+from http.server import BaseHTTPRequestHandler
 
+from src.core.http_utils import ThreadedHTTPServer
 from src.services.camera_service import CameraService
-
-
-class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
-    daemon_threads = True
 
 
 class MJPEGHandler(BaseHTTPRequestHandler):

@@ -1,4 +1,5 @@
 import os
+import time
 import logging
 from PyQt5.QtGui import QPixmap
 from config import path_manager
@@ -26,7 +27,6 @@ def save_photo(image, custom_directory=None):
     
     if custom_directory:
         # Используем пользовательскую директорию
-        import time
         timestamp = time.strftime("%Y%m%d_%H%M%S")
         filename = f"camera_snapshot_{timestamp}.png"
         full_path = os.path.join(custom_directory, filename)

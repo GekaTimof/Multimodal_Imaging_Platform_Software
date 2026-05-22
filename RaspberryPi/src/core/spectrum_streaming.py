@@ -3,16 +3,12 @@ import json
 import os
 import tempfile
 import numpy as np
-from http.server import BaseHTTPRequestHandler, HTTPServer
-from socketserver import ThreadingMixIn
+from http.server import BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 import threading
 
+from src.core.http_utils import ThreadedHTTPServer
 from src.services.spectrometer_service import SpectrometerService
-
-
-class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
-    daemon_threads = True
 
 
 class SpectrumStreamHandler(BaseHTTPRequestHandler):

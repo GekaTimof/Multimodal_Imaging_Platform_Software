@@ -26,6 +26,35 @@ class DatabaseService:
             import sys
             from . import database_ini
             database_ini.main()
+
+    @staticmethod
+    def _convert_bool_fields(settings: Dict[str, Any]) -> Dict[str, Any]:
+        """Convert AeEnable/AwbEnable to native Python bool (avoids numpy.bool_)."""
+        settings['AeEnable'] = bool(int(settings['AeEnable']))
+        settings['AwbEnable'] = bool(int(settings['AwbEnable']))
+        return settings
+
+    @staticmethod
+    def _insert_default_camera_slot(cursor, slot_id: int, settings: Dict[str, Any]):
+        """INSERT OR IGNORE a camera settings row for slot_id using provided settings dict."""
+        cursor.execute("""
+        INSERT OR IGNORE INTO CameraSettings
+        (id, SettingsName, PhotoResolution, VideoResolution, AeEnable, AwbEnable,
+         ExposureTime, AnalogueGain, ExposureValue, RedGain, BlueGain)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            slot_id,
+            settings.get('SettingsName', f"Slot {slot_id}"),
+            settings.get('PhotoResolution', '3280x2464'),
+            settings.get('VideoResolution', '1920x1080'),
+            int(settings.get('AeEnable', True)),
+            int(settings.get('AwbEnable', True)),
+            settings.get('ExposureTime', 10000),
+            settings.get('AnalogueGain', 1.0),
+            settings.get('ExposureValue', 0.0),
+            settings.get('RedGain', 2.0),
+            settings.get('BlueGain', 2.0),
+        ))
     
     def _validate_parameter(self, table_name: str, parameter: str, value: Any) -> Tuple[bool, str]:
         """Validate parameter value against configuration rules."""
@@ -106,29 +135,13 @@ class DatabaseService:
             if row:
                 columns = [desc[0] for desc in cursor.description]
                 settings = dict(zip(columns, row))
-                # Convert boolean fields to native Python bool (avoid numpy.bool_)
-                settings['AeEnable'] = bool(int(settings['AeEnable']))
-                settings['AwbEnable'] = bool(int(settings['AwbEnable']))
-                return settings
+                return self._convert_bool_fields(settings)
             else:
                 # Create default settings for slot 0 if doesn't exist
                 default_settings = config.DEFAULT_CAMERA_SETTINGS.copy()
                 default_settings['id'] = 0
-                
-                # Insert the default settings into database
-                cursor.execute("""
-                INSERT OR IGNORE INTO CameraSettings 
-                (id, SettingsName, PhotoResolution, VideoResolution, AeEnable, AwbEnable, ExposureTime, AnalogueGain, ExposureValue, RedGain, BlueGain)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    0, default_settings['SettingsName'],
-                    default_settings['PhotoResolution'], default_settings['VideoResolution'],
-                    int(default_settings['AeEnable']), int(default_settings['AwbEnable']),
-                    default_settings['ExposureTime'], default_settings['AnalogueGain'],
-                    default_settings['ExposureValue'], default_settings['RedGain'], default_settings['BlueGain']
-                ))
+                self._insert_default_camera_slot(cursor, 0, default_settings)
                 conn.commit()
-                
                 return default_settings
                 
         except sqlite3.Error as e:
@@ -185,13 +198,7 @@ class DatabaseService:
                 # If no rows exist for CameraSettings slot 0, insert default settings
                 if table_name == 'CameraSettings':
                     # Ensure slot 0 exists with default values
-                    cursor.execute("""
-                    INSERT OR IGNORE INTO CameraSettings 
-                    (id, SettingsName, PhotoResolution, VideoResolution, AeEnable, AwbEnable, ExposureTime, AnalogueGain, ExposureValue, RedGain, BlueGain)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """, (
-                        0, 'Basic', '3280x2464', '1920x1080', 1, 1, 10000, 1.0, 0.0, 1.0, 1.0
-                    ))
+                    self._insert_default_camera_slot(cursor, 0, config.DEFAULT_CAMERA_SETTINGS)
                     
                     # Try updating again
                     cursor.execute(query, (validated_value, target_id))
@@ -231,10 +238,8 @@ class DatabaseService:
             if row:
                 columns = [desc[0] for desc in cursor.description]
                 settings = dict(zip(columns, row))
-                # Convert boolean fields properly for CameraSettings
                 if table_name == 'CameraSettings':
-                    settings['AeEnable'] = bool(int(settings['AeEnable']))
-                    settings['AwbEnable'] = bool(int(settings['AwbEnable']))
+                    self._convert_bool_fields(settings)
                 return settings
             else:
                 return {}
@@ -259,41 +264,15 @@ class DatabaseService:
             if row:
                 columns = [desc[0] for desc in cursor.description]
                 settings = dict(zip(columns, row))
-                # Convert boolean fields to native Python bool (avoid numpy.bool_)
-                settings['AeEnable'] = bool(int(settings['AeEnable']))
-                settings['AwbEnable'] = bool(int(settings['AwbEnable']))
-                return settings
+                return self._convert_bool_fields(settings)
             else:
                 # Create default settings for slot if doesn't exist
                 default_name = "Current Session" if slot_id == 0 else f"Slot {slot_id}"
-                default_settings = {
-                    'id': slot_id,
-                    'SettingsName': default_name,
-                    'PhotoResolution': '3280x2464',
-                    'VideoResolution': '1920x1080',
-                    'AeEnable': True,
-                    'AwbEnable': True,
-                    'ExposureTime': 10000,
-                    'AnalogueGain': 1.0,
-                    'ExposureValue': 0.0,
-                    'RedGain': 1.0,
-                    'BlueGain': 1.0
-                }
-                
-                # Insert the default settings into database
-                cursor.execute("""
-                INSERT OR IGNORE INTO CameraSettings 
-                (id, SettingsName, PhotoResolution, VideoResolution, AeEnable, AwbEnable, ExposureTime, AnalogueGain, ExposureValue, RedGain, BlueGain)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    slot_id, default_name,
-                    default_settings['PhotoResolution'], default_settings['VideoResolution'],
-                    int(default_settings['AeEnable']), int(default_settings['AwbEnable']),
-                    default_settings['ExposureTime'], default_settings['AnalogueGain'],
-                    default_settings['ExposureValue'], default_settings['RedGain'], default_settings['BlueGain']
-                ))
+                default_settings = config.DEFAULT_CAMERA_SETTINGS.copy()
+                default_settings['id'] = slot_id
+                default_settings['SettingsName'] = default_name
+                self._insert_default_camera_slot(cursor, slot_id, default_settings)
                 conn.commit()
-                
                 return default_settings
                 
         except sqlite3.Error as e:
@@ -331,8 +310,8 @@ class DatabaseService:
                     settings.get('ExposureTime', 10000),
                     settings.get('AnalogueGain', 1.0),
                     settings.get('ExposureValue', 0.0),
-                    settings.get('RedGain', 1.0),
-                    settings.get('BlueGain', 1.0),
+                    settings.get('RedGain', 2.0),
+                    settings.get('BlueGain', 2.0),
                     slot_id
                 ))
             else:
@@ -352,8 +331,8 @@ class DatabaseService:
                     settings.get('ExposureTime', 10000),
                     settings.get('AnalogueGain', 1.0),
                     settings.get('ExposureValue', 0.0),
-                    settings.get('RedGain', 1.0),
-                    settings.get('BlueGain', 1.0)
+                    settings.get('RedGain', 2.0),
+                    settings.get('BlueGain', 2.0)
                 ))
             
             conn.commit()

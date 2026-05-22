@@ -13,7 +13,6 @@ Features:
 import json
 import logging
 import os
-import time
 from typing import Optional
 
 import requests
@@ -367,11 +366,8 @@ class CameraTab(QWidget):
         if self.thread is not None and self.thread.isRunning():
             self.stop_camera()
         
-        # Wait a moment for camera to stop
-        time.sleep(0.5)
-        
-        # Restart camera - it will load settings from API automatically
-        self.start_camera()
+        # Restart camera after brief pause to ensure cleanup completes
+        QTimer.singleShot(500, self.start_camera)
     
     def set_current_settings_slot(self, slot_id: int) -> None:
         """Set the current settings slot for next camera start.
