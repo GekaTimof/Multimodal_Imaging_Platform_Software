@@ -140,6 +140,25 @@ class APIResponse(BaseModel):
     message: str
     data: Optional[Dict[str, Any]] = None
 
+    @validator('data', pre=True)
+    def convert_numpy_types(cls, v):
+        """Convert numpy types to standard Python types for JSON serialization."""
+        if v is None:
+            return v
+        
+        def convert_value(val):
+            if hasattr(val, 'item'):  # numpy scalar (bool_, int64, float64, etc.)
+                return val.item()
+            elif isinstance(val, dict):
+                return {k: convert_value(vv) for k, vv in val.items()}
+            elif isinstance(val, list):
+                return [convert_value(item) for item in val]
+            elif isinstance(val, tuple):
+                return tuple(convert_value(item) for item in val)
+            return val
+        
+        return convert_value(v)
+
 
 class ErrorApiResponse(BaseModel):
     success: bool = False

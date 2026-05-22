@@ -16,6 +16,10 @@ from .database_service import db_service
 # Setup logging
 logger = logging.getLogger(__name__)
 
+# Global flag to prevent auto-restart of rpicam-vid during photo capture
+# Must be module-level to be shared across all CameraService instances
+_pause_for_photo_global = threading.Event()
+
 # Camera backend options
 OPENCV_AVAILABLE = True
 PICAMERA2_AVAILABLE = False  # Disabled due to libcamera issues
@@ -32,6 +36,7 @@ class CameraService:
         self.running: bool = False
         self.use_real_camera: bool = False
         self.camera_backend: Optional[str] = None
+        # Note: _pause_for_photo_global is module-level, shared across all instances
         
         # Load settings from database
         self._load_settings()
@@ -314,6 +319,11 @@ class CameraService:
         while self.running:
             try:
                 if self.rpicam_process is None or self.rpicam_process.poll() is not None:
+                    # Don't auto-restart if we're paused for photo capture (global flag)
+                    if _pause_for_photo_global.is_set():
+                        print("rpicam-vid process ended (paused for photo), waiting...")
+                        time.sleep(0.5)
+                        continue
                     print("rpicam-vid process died, restarting...")
                     self._start_rpicam_vid()
                     buf = b''
@@ -408,6 +418,15 @@ class CameraService:
 
     def _pause_video_stream(self):
         """Pause video stream by stopping rpicam-vid process and killing any remaining camera processes."""
+        # Set flag FIRST to prevent auto-restart of rpicam-vid by capture loop
+        # This must happen BEFORE killing the process to avoid race condition
+        _pause_for_photo_global.set()
+        print("DEBUG: Set _pause_for_photo_global (before killing process)")
+        
+        # Small delay to ensure capture loop sees the flag
+        import time
+        time.sleep(0.1)
+        
         # Stop our own process first - use kill immediately for faster release
         if hasattr(self, 'rpicam_process') and self.rpicam_process is not None:
             try:
@@ -431,14 +450,14 @@ class CameraService:
                 print(f"Warning: error stopping video stream: {e}")
             finally:
                 self.rpicam_process = None
-
-        # Kill any other rpicam processes that might be holding the camera
+        
+        # Kill any other rpicam and libcamera processes that might be holding the camera
         try:
             import subprocess
-            # Find and kill any rpicam-vid or rpicam-still processes
-            # Use separate simple patterns instead of regex alternation
+            # Find and kill rpicam-vid, rpicam-still, and libcamera processes
+            # libcamera processes (libcamera-v4l2, libcamera-ipa) hold V4L2 resources
             all_pids = set()
-            for pattern in ['rpicam-vid', 'rpicam-still']:
+            for pattern in ['rpicam-vid', 'rpicam-still', 'libcamera']:
                 result = subprocess.run(['pgrep', '-f', pattern],
                                       capture_output=True, text=True)
                 if result.returncode == 0 and result.stdout.strip():
@@ -447,36 +466,194 @@ class CameraService:
                             all_pids.add(pid.strip())
 
             if all_pids:
-                print(f"Killing remaining rpicam processes: {sorted(all_pids)}")
+                print(f"Killing remaining camera processes: {sorted(all_pids)}")
                 for pid in sorted(all_pids):
                     try:
                         subprocess.run(['kill', '-9', pid], check=False)
                     except Exception:
                         pass
-                # Wait longer for processes to die and camera to be released
+                
+                # Wait for processes to actually die
                 import time
-                time.sleep(1.0)
+                time.sleep(2.0)
+                
+                # Verify processes are gone, if not wait more
+                for _ in range(10):
+                    still_alive = []
+                    for pattern in ['rpicam-vid', 'rpicam-still']:
+                        result = subprocess.run(['pgrep', '-f', pattern], capture_output=True, text=True)
+                        if result.returncode == 0 and result.stdout.strip():
+                            still_alive.extend(result.stdout.strip().split('\n'))
+                    if not still_alive:
+                        break
+                    print(f"Waiting for processes to die: {still_alive}")
+                    time.sleep(0.5)
         except Exception as e:
-            print(f"Warning: could not check for other rpicam processes: {e}")
+            print(f"Warning: could not check for other camera processes: {e}")
 
-        # Additional wait to ensure camera is released
-        import time
-        time.sleep(1)
+        # Adaptive wait with longer initial delay for RPi 5 + IMX477
+        # libcamera on RPi 5 needs more time to release resources
+        self._wait_for_camera_release(max_wait_time=20.0, initial_delay=1.0, max_delay=3.0)
+
         print("Video stream paused, camera should be free")
+
+    def _wait_for_camera_release(self, max_wait_time=15.0, initial_delay=0.5, max_delay=3.0):
+        """
+        Wait for camera to be fully released using adaptive exponential backoff.
+        
+        Checks multiple indicators:
+        1. No libcamera/rpicam processes holding the camera
+        2. /dev/media devices are free
+        3. rpicam-still can list cameras successfully
+        
+        Args:
+            max_wait_time: Maximum total time to wait (seconds)
+            initial_delay: Initial delay between checks (seconds)
+            max_delay: Maximum delay between checks (seconds)
+        """
+        import subprocess
+        import time
+        import glob
+        
+        start_time = time.time()
+        delay = initial_delay
+        attempt = 0
+        
+        print(f"Starting camera release wait (max {max_wait_time}s, initial delay {delay}s)")
+        
+        while time.time() - start_time < max_wait_time:
+            attempt += 1
+            elapsed = time.time() - start_time
+            
+            # Check 1: No camera processes running
+            camera_processes = self._get_camera_processes()
+            if camera_processes:
+                print(f"[Attempt {attempt}, {elapsed:.1f}s] Camera processes still running: {camera_processes}")
+                time.sleep(delay)
+                delay = min(delay * 1.5, max_delay)  # Exponential backoff
+                continue
+            
+            print(f"[Attempt {attempt}, {elapsed:.1f}s] No camera processes running")
+            
+            # Check 2: /dev/media devices not held by any process
+            media_busy = self._check_media_devices_busy()
+            if media_busy:
+                print(f"[Attempt {attempt}, {elapsed:.1f}s] Media devices still busy: {media_busy}")
+                time.sleep(delay)
+                delay = min(delay * 1.5, max_delay)
+                continue
+            
+            print(f"[Attempt {attempt}, {elapsed:.1f}s] Media devices free")
+            
+            # Check 3: rpicam-still can access camera
+            try:
+                print(f"[Attempt {attempt}, {elapsed:.1f}s] Testing rpicam-still --list-cameras...")
+                result = subprocess.run(
+                    ['rpicam-still', '--list-cameras'],
+                    capture_output=True,
+                    timeout=5
+                )
+                if result.returncode == 0 and b'Available cameras' in result.stdout:
+                    print(f"Camera released successfully after {elapsed:.1f}s ({attempt} attempts)")
+                    return True
+                else:
+                    # Camera might be initializing, check stderr
+                    stderr = result.stderr.decode('utf-8', errors='ignore') if result.stderr else ""
+                    stdout = result.stdout.decode('utf-8', errors='ignore') if result.stdout else ""
+                    print(f"[Attempt {attempt}, {elapsed:.1f}s] rpicam-still output: stdout={stdout[:100]}, stderr={stderr[:100]}")
+                    if 'in use by another process' in stderr or 'failed to acquire' in stderr:
+                        print(f"[Attempt {attempt}, {elapsed:.1f}s] Camera still in use (libcamera)")
+                    else:
+                        print(f"[Attempt {attempt}, {elapsed:.1f}s] rpicam-still check failed: {stderr[:100]}")
+            except subprocess.TimeoutExpired:
+                print(f"[Attempt {attempt}, {elapsed:.1f}s] rpicam-still --list-cameras timeout")
+            except Exception as e:
+                print(f"[Attempt {attempt}, {elapsed:.1f}s] Camera check error: {e}")
+            
+            time.sleep(delay)
+            delay = min(delay * 1.5, max_delay)  # Exponential backoff
+        
+        elapsed = time.time() - start_time
+        print(f"Warning: Camera may still be busy after {elapsed:.1f}s ({attempt} attempts)")
+        return False
+    
+    def _is_rpicam_vid_running(self):
+        """Check if rpicam-vid process is actually running (may be started by streaming server)."""
+        import subprocess
+        try:
+            result = subprocess.run(['pgrep', '-f', 'rpicam-vid'], 
+                                  capture_output=True, text=True, timeout=2)
+            return result.returncode == 0 and bool(result.stdout.strip())
+        except:
+            return False
+
+    def _get_camera_processes(self):
+        """Get list of PIDs of processes that might be holding the camera."""
+        import subprocess
+        pids = []
+        for pattern in ['rpicam-vid', 'rpicam-still', 'libcamera-vid', 'libcamera-still']:
+            try:
+                result = subprocess.run(['pgrep', '-f', pattern], 
+                                      capture_output=True, text=True, timeout=2)
+                if result.returncode == 0 and result.stdout.strip():
+                    pids.extend(result.stdout.strip().split('\n'))
+            except:
+                pass
+        return [p for p in pids if p.strip()]
+    
+    def _check_media_devices_busy(self):
+        """Check if /dev/media* devices are held by any process."""
+        import subprocess
+        import glob
+        
+        busy_devices = []
+        media_devices = glob.glob('/dev/media*')
+        
+        for device in media_devices:
+            try:
+                # Use lsof to check if device is open
+                result = subprocess.run(['lsof', device], 
+                                      capture_output=True, text=True, timeout=2)
+                if result.returncode == 0 and result.stdout.strip():
+                    # Parse output to get process names
+                    lines = result.stdout.strip().split('\n')[1:]  # Skip header
+                    processes = set(line.split()[0] for line in lines if line.strip())
+                    if processes:
+                        busy_devices.append(f"{device}({','.join(processes)})")
+            except (subprocess.TimeoutExpired, FileNotFoundError):
+                # lsof not available or timeout, try alternative
+                try:
+                    result = subprocess.run(['fuser', device], 
+                                          capture_output=True, text=True, timeout=2)
+                    if result.returncode == 0 and result.stdout.strip():
+                        busy_devices.append(f"{device}(PID:{result.stdout.strip()})")
+                except:
+                    pass
+        
+        return busy_devices
 
     def _resume_video_stream(self):
         """Resume video stream by restarting rpicam-vid process."""
-        if self.running:
-            try:
-                # Wait extra time to ensure camera is fully released by previous process
-                # libcamera needs time to clean up resources
-                import time
-                time.sleep(2)
-                print("Resuming video stream...")
-                self._start_rpicam_vid()
-                print("Video stream resumed")
-            except Exception as e:
-                print(f"Error resuming video stream: {e}")
+        try:
+            # Wait for camera to be released by rpicam-still using adaptive check
+            import time
+            print("Waiting for camera release before resuming video stream...")
+            
+            # Quick initial delay then adaptive wait
+            time.sleep(1.0)
+            if not self._wait_for_camera_release(max_wait_time=10.0, initial_delay=0.5, max_delay=2.0):
+                print("Warning: Camera may not be fully released, attempting to resume anyway...")
+            
+            print("Resuming video stream...")
+            self._start_rpicam_vid()
+            # Clear pause flag only after successful restart
+            _pause_for_photo_global.clear()
+            print("DEBUG: Cleared _pause_for_photo_global")
+            print("Video stream resumed")
+        except Exception as e:
+            print(f"Error resuming video stream: {e}")
+            # Make sure flag is cleared even on error
+            _pause_for_photo_global.clear()
 
     def capture_photo(self, output_path: Optional[str] = None) -> Tuple[bool, Union[np.ndarray, str]]:
         """Capture a high-quality photo using PhotoResolution and all camera settings.
@@ -492,20 +669,28 @@ class CameraService:
         try:
             # Reload settings to get current values
             self._load_settings()
+            
+            # Debug logging
+            print(f"DEBUG capture_photo: use_real_camera={self.use_real_camera}, backend={self.camera_backend}, running={self.running}")
 
             if self.use_real_camera and self.camera_backend == "rpicam":
                 # Pause video stream to free camera for still capture
                 # Camera cannot be used by rpicam-vid and rpicam-still simultaneously
-                video_was_running = self.running
+                # Check both self.running AND actual rpicam-vid process (may be started by streaming server)
+                video_was_running = self.running or self._is_rpicam_vid_running()
+                print(f"DEBUG: video_was_running={video_was_running}, self.running={self.running}, rpicam_vid_process={self._is_rpicam_vid_running()}")
                 if video_was_running:
                     print("Pausing video stream for photo capture...")
                     self._pause_video_stream()
+                else:
+                    print("DEBUG: Video stream not running, skipping pause")
 
                 try:
                     # Build rpicam-still command with photo resolution and full quality
                     cmd = [
                         'rpicam-still',
                         '-n',  # No preview
+                        '--zsl',  # Zero Shutter Lag - faster capture, uses pre-buffered frames
                         '--width', str(self.photo_width),
                         '--height', str(self.photo_height),
                         '--quality', '95',  # High quality for photos
@@ -531,36 +716,73 @@ class CameraService:
                     else:
                         cmd.append('--awb=auto')
 
-                    # Calculate timeout based on exposure time + buffer (min 10s for photos)
-                    timeout_seconds = max(10, (self.exposure_time / 1_000_000) + 3)
+                    # Calculate timeout based on exposure time + buffer
+                    # For long exposures, need more buffer time for camera initialization + exposure
+                    exposure_sec = self.exposure_time / 1_000_000
+                    if exposure_sec > 3:
+                        # Long exposure: exposure time + 10s buffer for init + capture overhead
+                        timeout_seconds = exposure_sec + 10
+                    elif exposure_sec > 1:
+                        # Medium exposure: exposure time + 5s buffer
+                        timeout_seconds = exposure_sec + 5
+                    else:
+                        # Short exposure: minimum 15s for initialization + capture
+                        timeout_seconds = 15
                     print(f"rpicam-still command: {' '.join(cmd)}, timeout={timeout_seconds}s")
 
-                    if output_path:
-                        # Save to file
-                        cmd.extend(['-o', output_path])
-                        result = subprocess.run(cmd, capture_output=True, timeout=timeout_seconds)
-                        if result.returncode == 0:
-                            return True, output_path
-                        else:
-                            error_msg = result.stderr.decode('utf-8', errors='ignore') if result.stderr else "Unknown error"
-                            print(f"rpicam-still failed: {error_msg}")
-                            return False, f"rpicam-still failed: {error_msg}"
-                    else:
-                        # Return as numpy array
-                        cmd.extend(['-o', '-'])
-                        result = subprocess.run(cmd, capture_output=True, timeout=timeout_seconds)
-                        if result.returncode == 0:
-                            frame_array = np.frombuffer(result.stdout, dtype=np.uint8)
-                            frame = cv2.imdecode(frame_array, cv2.IMREAD_COLOR)
-                            if frame is not None:
-                                return True, frame
+                    # Retry logic for camera acquisition race condition
+                    max_retries = 3
+                    retry_delay = 2.0  # seconds between retries
+                    
+                    for attempt in range(max_retries):
+                        if attempt > 0:
+                            print(f"Retry attempt {attempt}/{max_retries} after {retry_delay}s...")
+                            import time
+                            time.sleep(retry_delay)
+                        
+                        if output_path:
+                            # Save to file
+                            cmd_with_output = cmd + ['-o', output_path]
+                            result = subprocess.run(cmd_with_output, capture_output=True, timeout=timeout_seconds)
+                            if result.returncode == 0:
+                                print(f"Photo captured successfully on attempt {attempt + 1}")
+                                return True, output_path
                             else:
-                                print("Failed to decode captured image from rpicam-still output")
-                                return False, "Failed to decode captured image"
+                                error_msg = result.stderr.decode('utf-8', errors='ignore') if result.stderr else "Unknown error"
+                                print(f"rpicam-still attempt {attempt + 1} failed: {error_msg[:200]}")
+                                # Check if it's a camera busy error - retry if so
+                                if 'in use by another process' in error_msg or 'failed to acquire' in error_msg:
+                                    if attempt < max_retries - 1:
+                                        continue
+                                # Other error - don't retry
+                                return False, f"rpicam-still failed: {error_msg}"
                         else:
-                            error_msg = result.stderr.decode('utf-8', errors='ignore') if result.stderr else "Unknown error"
-                            print(f"rpicam-still failed (stdout mode): {error_msg}")
-                            return False, f"rpicam-still failed: {error_msg}"
+                            # Return as numpy array
+                            cmd_with_output = cmd + ['-o', '-']
+                            result = subprocess.run(cmd_with_output, capture_output=True, timeout=timeout_seconds)
+                            if result.returncode == 0:
+                                frame_array = np.frombuffer(result.stdout, dtype=np.uint8)
+                                frame = cv2.imdecode(frame_array, cv2.IMREAD_COLOR)
+                                if frame is not None:
+                                    print(f"Photo captured successfully on attempt {attempt + 1}")
+                                    return True, frame
+                                else:
+                                    print("Failed to decode captured image from rpicam-still output")
+                                    if attempt < max_retries - 1:
+                                        continue
+                                    return False, "Failed to decode captured image"
+                            else:
+                                error_msg = result.stderr.decode('utf-8', errors='ignore') if result.stderr else "Unknown error"
+                                print(f"rpicam-still attempt {attempt + 1} failed: {error_msg[:200]}")
+                                # Check if it's a camera busy error - retry if so
+                                if 'in use by another process' in error_msg or 'failed to acquire' in error_msg:
+                                    if attempt < max_retries - 1:
+                                        continue
+                                # Other error - don't retry
+                                return False, f"rpicam-still failed: {error_msg}"
+                    
+                    # All retries exhausted
+                    return False, f"rpicam-still failed after {max_retries} attempts - camera may be busy"
 
                 finally:
                     # Always resume video stream if it was running
