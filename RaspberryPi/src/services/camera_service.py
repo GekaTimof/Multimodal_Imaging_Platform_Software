@@ -153,11 +153,6 @@ class CameraService:
 
         print("rpicam-apps backend selected")
         
-    def _init_picamera2(self):
-        """Initialize camera using picamera2."""
-        self.picam2 = Picamera2()
-        self._configure_camera()
-
     def _load_settings(self):
         """Load camera settings from database."""
         try:
@@ -169,9 +164,13 @@ class CameraService:
                     width_str, height_str = video_resolution.split('x')
                     width = int(width_str)
                     height = int(height_str)
-                    # Use safe resolutions for IMX477
-                    safe_resolutions = [(640, 480), (1280, 720), (1920, 1080)]
-                    if (width, height) in safe_resolutions:
+                    # Accept any resolution from the known config list; fallback for truly unknown ones
+                    from src.config.settings import config as _cfg
+                    known_resolutions = [
+                        (int(r.split('x')[0]), int(r.split('x')[1]))
+                        for r in _cfg.AVAILABLE_RESOLUTIONS
+                    ]
+                    if (width, height) in known_resolutions:
                         self.width, self.height = width, height
                     else:
                         self.width, self.height = 1280, 720  # Safe fallback
@@ -220,41 +219,6 @@ class CameraService:
             self.red_gain = 1.0
             self.blue_gain = 1.0
 
-    def _configure_camera(self):
-        """Configure camera with current settings."""
-        try:
-            # Try the most basic approach - don't specify format initially
-            print("Attempting basic camera configuration...")
-            
-            # Try default configuration first
-            config = self.picam2.create_preview_configuration()
-            self.picam2.configure(config)
-            self.picam2.start()
-            
-            # Get the actual resolution from the configuration
-            if hasattr(config, 'main') and hasattr(config.main, 'size'):
-                self.width, self.height = config.main.size
-            else:
-                self.width, self.height = 1280, 720  # Default fallback
-                
-            print(f"Camera configured with default settings: {self.width}x{self.height}")
-            
-        except Exception as e:
-            print(f"Basic configuration failed: {e}")
-            # Try minimal configuration
-            try:
-                print("Trying minimal configuration...")
-                config = self.picam2.create_preview_configuration(
-                    main={"size": (640, 480)}
-                )
-                self.picam2.configure(config)
-                self.picam2.start()
-                self.width, self.height = 640, 480
-                print(f"Camera configured with minimal settings: 640x480")
-            except Exception as e2:
-                print(f"Minimal configuration also failed: {e2}")
-                raise e2
-
     def _start_rpicam_vid(self):
         """Start rpicam-vid process for continuous MJPEG streaming."""
         cmd = [
@@ -268,14 +232,18 @@ class CameraService:
             '--flush',
             '-o', '-',
         ]
-        # Auto exposure settings
-        # rpicam-apps uses --shutter presence to control manual/auto exposure
+        # Manual exposure settings (only when AE is disabled)
         if not self.ae_enable:
             max_shutter_us = int(1_000_000 / self.fps)
             if self.exposure_time <= max_shutter_us:
                 cmd.extend(['--shutter', str(int(self.exposure_time))])
-                cmd.extend(['--gain', str(float(self.analogue_gain))])
-            # else: exposure too long for video fps → let camera handle it
+            else:
+                print(f"Warning: manual exposure {self.exposure_time}us > max for {self.fps}fps ({max_shutter_us}us) - shutter not applied to video")
+            cmd.extend(['--gain', str(float(self.analogue_gain))])
+
+        # Exposure value (EV compensation) - applies in both auto and manual modes
+        if self.exposure_value is not None and self.exposure_value != 0.0:
+            cmd.extend(['--ev', str(float(self.exposure_value))])
 
         # Auto white balance settings
         # Valid modes: auto, incandescent, tungsten, fluorescent, indoor, daylight, cloudy, custom
@@ -362,22 +330,18 @@ class CameraService:
                 time.sleep(0.1)
 
     def _capture_loop_generic(self):
-        """Capture loop for OpenCV/picamera2/test backends."""
+        """Capture loop for OpenCV/test backends."""
         while self.running:
-            if self.use_real_camera:
+            if self.use_real_camera and self.camera_backend == "opencv":
                 try:
-                    if self.camera_backend == "opencv":
-                        ret, frame = self.cap.read()
-                        if not ret or frame is None:
-                            raise Exception("Failed to read frame from OpenCV camera")
-                    elif self.camera_backend == "picamera2":
-                        frame = self.picam2.capture_array()
-                    else:
-                        raise Exception("Unknown camera backend")
+                    ret, frame = self.cap.read()
+                    if not ret or frame is None:
+                        raise Exception("Failed to read frame from OpenCV camera")
                 except Exception as e:
                     print(f"Camera capture error: {e}")
                     self.use_real_camera = False
                     self.camera_backend = "test"
+                    frame = self._generate_test_pattern()
             else:
                 frame = self._generate_test_pattern()
 
@@ -386,11 +350,7 @@ class CameraService:
                 with self.frame_lock:
                     self.current_frame = jpeg.tobytes()
             time.sleep(1 / self.fps)
-    
-    def _capture_rpicam_frame(self):
-        """Legacy method - not used when rpicam-vid is running."""
-        return self._generate_test_pattern()
-    
+
     def _generate_test_pattern(self):
         """Generate a test pattern with the configured resolution."""
         # Create a colorful test pattern
@@ -417,140 +377,78 @@ class CameraService:
         return frame
 
     def _pause_video_stream(self):
-        """Pause video stream by stopping rpicam-vid process and killing any remaining camera processes."""
-        # Set flag FIRST to prevent auto-restart of rpicam-vid by capture loop
-        # This must happen BEFORE killing the process to avoid race condition
+        """Pause video stream by stopping rpicam-vid process."""
+        # Set flag FIRST to prevent auto-restart by capture loop (race condition guard)
         _pause_for_photo_global.set()
-        print("DEBUG: Set _pause_for_photo_global (before killing process)")
-        
-        # Minimal wait for capture loop to see the flag (it checks every 10-500ms)
-        # Flag is atomic, but capture loop needs one iteration to notice
-        import time
-        time.sleep(0.02)  # 20ms - one iteration of capture loop is ~10ms min
-        
-        # Stop our own process first - use kill immediately for faster release
+        print("Pausing video stream for photo capture")
+
+        # Give capture loop one iteration to notice the flag (~10ms)
+        time.sleep(0.02)
+
+        # Stop our own rpicam-vid process
         if hasattr(self, 'rpicam_process') and self.rpicam_process is not None:
             try:
-                # Try graceful termination first, but quickly move to kill
                 self.rpicam_process.terminate()
                 try:
-                    self.rpicam_process.wait(timeout=0.5)
+                    self.rpicam_process.wait(timeout=1.0)
                 except subprocess.TimeoutExpired:
-                    print("Process didn't terminate gracefully, killing...")
                     self.rpicam_process.kill()
-                    try:
-                        self.rpicam_process.wait(timeout=1)
-                    except subprocess.TimeoutExpired:
-                        # Force kill with SIGKILL if still running
-                        import signal
-                        try:
-                            os.kill(self.rpicam_process.pid, signal.SIGKILL)
-                        except ProcessLookupError:
-                            pass  # Process already dead
+                    self.rpicam_process.wait(timeout=1.0)
             except Exception as e:
                 print(f"Warning: error stopping video stream: {e}")
             finally:
                 self.rpicam_process = None
-        
-        # Kill any other rpicam and libcamera processes that might be holding the camera
+
+        # Kill any stray rpicam-vid / rpicam-still processes (NOT libcamera-ipa — it's a system daemon)
         try:
-            import subprocess
-            # Find and kill rpicam-vid, rpicam-still, and libcamera processes
-            # libcamera processes (libcamera-v4l2, libcamera-ipa) hold V4L2 resources
-            all_pids = set()
-            for pattern in ['rpicam-vid', 'rpicam-still', 'libcamera']:
+            stray_pids = set()
+            for pattern in ['rpicam-vid', 'rpicam-still']:
                 result = subprocess.run(['pgrep', '-f', pattern],
-                                      capture_output=True, text=True)
+                                        capture_output=True, text=True, timeout=2)
                 if result.returncode == 0 and result.stdout.strip():
                     for pid in result.stdout.strip().split('\n'):
                         if pid.strip():
-                            all_pids.add(pid.strip())
-
-            if all_pids:
-                print(f"Killing remaining camera processes: {sorted(all_pids)}")
-                for pid in sorted(all_pids):
+                            stray_pids.add(pid.strip())
+            if stray_pids:
+                print(f"Killing stray camera processes: {sorted(stray_pids)}")
+                for pid in sorted(stray_pids):
                     try:
-                        subprocess.run(['kill', '-9', pid], check=False)
+                        subprocess.run(['kill', '-9', pid], check=False, timeout=2)
                     except Exception:
                         pass
-                
-                # Fast poll for processes to die (max 3 seconds)
-                import time
-                start_kill_wait = time.time()
-                while time.time() - start_kill_wait < 3.0:
-                    still_alive = []
-                    for pattern in ['rpicam-vid', 'rpicam-still']:
-                        result = subprocess.run(['pgrep', '-f', pattern], capture_output=True, text=True)
-                        if result.returncode == 0 and result.stdout.strip():
-                            still_alive.extend(result.stdout.strip().split('\n'))
-                    if not still_alive:
-                        print(f"Processes died after {time.time() - start_kill_wait:.2f}s")
-                        break
-                    time.sleep(0.05)  # Fast poll 50ms
-                else:
-                    print(f"Warning: Some processes may still be alive after 3s")
         except Exception as e:
-            print(f"Warning: could not check for other camera processes: {e}")
+            print(f"Warning: could not check for stray camera processes: {e}")
 
-        # Fast poll wait for camera release
-        self._wait_for_camera_release(max_wait_time=20.0, check_interval=0.05)
+        # Wait until no rpicam processes are running (camera device will then be free)
+        self._wait_for_camera_release(max_wait_time=10.0, check_interval=0.05)
+        print("Video stream paused, camera is free")
 
-        print("Video stream paused, camera should be free")
+    def _wait_for_camera_release(self, max_wait_time=10.0, check_interval=0.05):
+        """Poll until no rpicam-vid / rpicam-still processes are running.
 
-    def _wait_for_camera_release(self, max_wait_time=30.0, check_interval=0.05):
+        libcamera-ipa is intentionally excluded — it is a persistent system
+        daemon that always holds /dev/media0 and does NOT block rpicam-still.
         """
-        Fast polling wait for camera release. Returns immediately when camera is free.
-        
-        Uses busy-wait with minimal sleep for maximum responsiveness.
-        Timeout is only a safety net for error conditions.
-        
-        Args:
-            max_wait_time: Maximum total time to wait (seconds) - safety timeout only
-            check_interval: Seconds between polls (default 50ms for fast response)
-        """
-        import subprocess
-        import time
-        
         start_time = time.time()
-        attempt = 0
-        last_log_time = 0
-        
-        print(f"Fast polling for camera release (max {max_wait_time}s, interval {check_interval}s)")
-        
+        last_log_time = 0.0
+
         while time.time() - start_time < max_wait_time:
-            attempt += 1
             elapsed = time.time() - start_time
-            
-            # Quick check: No camera processes running
             camera_processes = self._get_camera_processes()
-            if camera_processes:
-                # Log only every second to avoid spam
-                if elapsed - last_log_time >= 1.0:
-                    print(f"[{elapsed:.1f}s] Waiting for processes: {camera_processes}")
-                    last_log_time = elapsed
-                time.sleep(check_interval)
-                continue
-            
-            # Media devices check (lightweight)
-            media_busy = self._check_media_devices_busy()
-            if media_busy:
-                if elapsed - last_log_time >= 1.0:
-                    print(f"[{elapsed:.1f}s] Media busy: {media_busy}")
-                    last_log_time = elapsed
-                time.sleep(check_interval)
-                continue
-            
-            # Camera processes are gone and media devices are free — that's enough
-            print(f"Camera ready after {elapsed:.2f}s")
-            return True
-        
+            if not camera_processes:
+                print(f"Camera ready after {elapsed:.2f}s")
+                return True
+            if elapsed - last_log_time >= 1.0:
+                print(f"[{elapsed:.1f}s] Waiting for camera processes: {camera_processes}")
+                last_log_time = elapsed
+            time.sleep(check_interval)
+
         elapsed = time.time() - start_time
-        print(f"Warning: Camera wait timeout after {elapsed:.1f}s")
+        print(f"Warning: Camera wait timeout after {elapsed:.1f}s — proceeding anyway")
         return False
     
     def _is_rpicam_vid_running(self):
         """Check if rpicam-vid process is actually running (may be started by streaming server)."""
-        import subprocess
         try:
             result = subprocess.run(['pgrep', '-f', 'rpicam-vid'], 
                                   capture_output=True, text=True, timeout=2)
@@ -560,7 +458,6 @@ class CameraService:
 
     def _get_camera_processes(self):
         """Get list of PIDs of processes that might be holding the camera."""
-        import subprocess
         pids = []
         for pattern in ['rpicam-vid', 'rpicam-still', 'libcamera-vid', 'libcamera-still']:
             try:
@@ -572,47 +469,15 @@ class CameraService:
                 pass
         return [p for p in pids if p.strip()]
     
-    def _check_media_devices_busy(self):
-        """Check if /dev/media* devices are held by any process."""
-        import subprocess
-        import glob
-
-        busy_devices = []
-        media_devices = glob.glob('/dev/media*')
-
-        for device in media_devices:
-            try:
-                result = subprocess.run(['fuser', device],
-                                       capture_output=True, text=True, timeout=2)
-                if result.returncode == 0 and result.stdout.strip():
-                    busy_devices.append(f"{device}(PID:{result.stdout.strip()})")
-            except Exception:
-                pass
-
-        return busy_devices
-
     def _resume_video_stream(self):
-        """Resume video stream by restarting rpicam-vid process."""
-        try:
-            # Wait for camera to be released by rpicam-still using adaptive check
-            import time
-            print("Waiting for camera release before resuming video stream...")
-            
-            # Minimal initial delay before fast polling for camera release
-            time.sleep(0.02)  # 20ms - let rpicam-still start cleanup
-            if not self._wait_for_camera_release(max_wait_time=10.0, check_interval=0.05):
-                print("Warning: Camera may not be fully released, attempting to resume anyway...")
-            
-            print("Resuming video stream...")
-            self._start_rpicam_vid()
-            # Clear pause flag only after successful restart
-            _pause_for_photo_global.clear()
-            print("DEBUG: Cleared _pause_for_photo_global")
-            print("Video stream resumed")
-        except Exception as e:
-            print(f"Error resuming video stream: {e}")
-            # Make sure flag is cleared even on error
-            _pause_for_photo_global.clear()
+        """Resume video stream by clearing the pause flag.
+
+        The capture loop will restart rpicam-vid automatically once the flag is
+        cleared. We must NOT call _start_rpicam_vid() here — doing so would race
+        with the capture loop and produce two conflicting rpicam-vid processes.
+        """
+        _pause_for_photo_global.clear()
+        print("Video stream resume flag cleared — capture loop will restart rpicam-vid")
 
     def capture_photo(self, output_path: Optional[str] = None) -> Tuple[bool, Union[np.ndarray, str]]:
         """Capture a high-quality photo using PhotoResolution and all camera settings.
@@ -629,20 +494,12 @@ class CameraService:
             # Reload settings to get current values
             self._load_settings()
             
-            # Debug logging
-            print(f"DEBUG capture_photo: use_real_camera={self.use_real_camera}, backend={self.camera_backend}, running={self.running}")
-
             if self.use_real_camera and self.camera_backend == "rpicam":
                 # Pause video stream to free camera for still capture
                 # Camera cannot be used by rpicam-vid and rpicam-still simultaneously
-                # Check both self.running AND actual rpicam-vid process (may be started by streaming server)
                 video_was_running = self.running or self._is_rpicam_vid_running()
-                print(f"DEBUG: video_was_running={video_was_running}, self.running={self.running}, rpicam_vid_process={self._is_rpicam_vid_running()}")
                 if video_was_running:
-                    print("Pausing video stream for photo capture...")
                     self._pause_video_stream()
-                else:
-                    print("DEBUG: Video stream not running, skipping pause")
 
                 try:
                     exposure_sec = self.exposure_time / 1_000_000
@@ -668,7 +525,7 @@ class CameraService:
                         if self.analogue_gain is not None and self.analogue_gain >= 0:
                             cmd.extend(['--gain', str(float(self.analogue_gain))])
 
-                    if self.exposure_value is not None:
+                    if self.exposure_value is not None and self.exposure_value != 0.0:
                         cmd.extend(['--ev', str(float(self.exposure_value))])
 
                     # Auto white balance settings
@@ -710,7 +567,6 @@ class CameraService:
                     for attempt in range(max_retries):
                         if attempt > 0:
                             print(f"Retry attempt {attempt}/{max_retries} after {retry_delay}s...")
-                            import time
                             time.sleep(retry_delay)
                         
                         if output_path:
@@ -758,9 +614,7 @@ class CameraService:
                     return False, f"rpicam-still failed after {max_retries} attempts - camera may be busy"
 
                 finally:
-                    # Always resume video stream if it was running
                     if video_was_running:
-                        print("Resuming video stream...")
                         self._resume_video_stream()
 
             elif self.use_real_camera and self.camera_backend == "opencv":
@@ -846,12 +700,6 @@ class CameraService:
                 self.cap.release()
             except Exception:
                 pass
-        elif self.camera_backend == "picamera2" and hasattr(self, 'picam2'):
-            try:
-                self.picam2.stop()
-            except Exception:
-                pass
-
         # Reinitialize with new settings
         self._initialize_camera()
 
@@ -872,10 +720,5 @@ class CameraService:
             if self.camera_backend == "opencv" and hasattr(self, 'cap'):
                 try:
                     self.cap.release()
-                except Exception:
-                    pass
-            elif self.camera_backend == "picamera2" and hasattr(self, 'picam2'):
-                try:
-                    self.picam2.stop()
                 except Exception:
                     pass
