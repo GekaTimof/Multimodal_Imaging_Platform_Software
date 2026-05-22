@@ -36,6 +36,7 @@ ENDPOINTS = {
     "update_parameter": f"{API_BASE_URL}/settings/update",
     "camera_validation": f"{API_BASE_URL}/settings/camera/validation-rules",
     "save_camera_slot": f"{API_BASE_URL}/settings/camera/save-slot/{{slot_id}}",
+    "load_camera_slot": f"{API_BASE_URL}/settings/camera/load-slot/{{slot_id}}",
     "apply_camera": f"{API_BASE_URL}/settings/camera/apply",
     "reload_camera": f"{API_BASE_URL}/settings/camera/reload",
     "video_stream": CAMERA_STREAM_URL,

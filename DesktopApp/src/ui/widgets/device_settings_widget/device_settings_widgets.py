@@ -34,7 +34,11 @@ logger = logging.getLogger(__name__)
 
 
 class SettingsSlotDialog(QDialog):
-    """Dialog for selecting and managing camera settings slots (0-9)."""
+    """Dialog for selecting and managing camera settings slots (0-10).
+
+    Slot 0: Current Session (runtime settings applied to camera)
+    Slots 1-10: Saved presets (persistent storage)
+    """
     
     slot_selected = pyqtSignal(int)
     
@@ -108,8 +112,8 @@ class SettingsSlotDialog(QDialog):
     
     def _load_individual_slot_details(self, slot_id):
         """Load details for a specific slot via API."""
-        if slot_id > 9:
-            # All slots loaded
+        if slot_id >= MAX_CAMERA_SLOTS:
+            # All slots loaded (0-10)
             return
         
         try:
@@ -136,10 +140,10 @@ class SettingsSlotDialog(QDialog):
                 video_resolution = settings.get('VideoResolution', '1920x1080')
                 exposure_time = settings.get('ExposureTime', 10000)
                 ae_enable = settings.get('AeEnable', True)
-                
+
                 # Create display text with real parameters
                 if slot_id == 0:
-                    display_text = f"Slot {slot_id} - {name} (Basic)\n  Photo: {photo_resolution} | Video: {video_resolution}\n  Exposure: {exposure_time}μs | Auto-Exp: {'On' if ae_enable else 'Off'}"
+                    display_text = f"[CURRENT SESSION] {name}\n  Photo: {photo_resolution} | Video: {video_resolution}\n  Exposure: {exposure_time}μs | Auto-Exp: {'On' if ae_enable else 'Off'}"
                 else:
                     display_text = f"Slot {slot_id} - {name}\n  Photo: {photo_resolution} | Video: {video_resolution}\n  Exposure: {exposure_time}μs | Auto-Exp: {'On' if ae_enable else 'Off'}"
                 
@@ -148,10 +152,11 @@ class SettingsSlotDialog(QDialog):
                 self.slots_list.addItem(item)
             else:
                 # Slot doesn't exist or API error, use defaults
-                name = "Basic" if slot_id == 0 else f"Custom {slot_id}"
                 if slot_id == 0:
-                    display_text = f"Slot {slot_id} - {name} (Basic)\n  Photo: 3280x2464 | Video: 1920x1080\n  Default settings"
+                    name = "Current Session"
+                    display_text = f"[CURRENT SESSION] {name}\n  Photo: 3280x2464 | Video: 1920x1080\n  Active camera settings"
                 else:
+                    name = f"Slot {slot_id}"
                     display_text = f"Slot {slot_id} - {name}\n  Photo: 3280x2464 | Video: 1920x1080\n  Empty slot"
                 
                 item = QListWidgetItem(display_text)
@@ -185,8 +190,12 @@ class SettingsSlotDialog(QDialog):
         """Create fallback slots when API fails."""
         self.slots_list.clear()
         for slot_id in range(MAX_CAMERA_SLOTS):
-            name = "Basic" if slot_id == 0 else f"Custom {slot_id}"
-            display_text = f"Slot {slot_id} - {name}\n  Photo: {DEFAULT_RESOLUTION_PHOTO} | Video: {DEFAULT_RESOLUTION_VIDEO}"
+            if slot_id == 0:
+                name = "Current Session"
+                display_text = f"[CURRENT SESSION] {name}\n  Photo: {DEFAULT_RESOLUTION_PHOTO} | Video: {DEFAULT_RESOLUTION_VIDEO}\n  Active camera settings"
+            else:
+                name = f"Slot {slot_id}"
+                display_text = f"Slot {slot_id} - {name}\n  Photo: {DEFAULT_RESOLUTION_PHOTO} | Video: {DEFAULT_RESOLUTION_VIDEO}"
             item = QListWidgetItem(display_text)
             item.setData(Qt.UserRole, slot_id)
             self.slots_list.addItem(item)
@@ -833,58 +842,106 @@ class CameraSettingsWidget(QWidget):
             self.status_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
     
     def load_settings_from_slot(self, slot_id):
-        """Load settings from a specific slot via API."""
+        """Load settings from a specific slot via API.
+
+        Slot 0: Just reads current session settings from slot 0.
+        Slots 1-10: Copies settings from the slot to current session (slot 0)
+                   and restarts the camera to apply settings.
+        """
         try:
-            # Load settings from API for specific slot
-            api_url = ENDPOINTS["camera_settings_slot"].format(slot_id=slot_id)
-            thread = APIClientThread('GET', api_url)
-            thread.response_received.connect(lambda success, message, data: 
-                self._on_slot_settings_loaded(success, message, data, slot_id))
-            thread.finished.connect(lambda: self._cleanup_thread(thread))
-            self.active_threads.append(thread)
-            thread.start()
-            
+            if slot_id == 0:
+                # For slot 0, just read current session settings
+                api_url = ENDPOINTS["camera_settings_slot"].format(slot_id=slot_id)
+                thread = APIClientThread('GET', api_url)
+                thread.response_received.connect(lambda success, message, data:
+                    self._on_slot_settings_loaded(success, message, data, slot_id))
+                thread.finished.connect(lambda: self._cleanup_thread(thread))
+                self.active_threads.append(thread)
+                thread.start()
+            else:
+                # For slots 1-10, use load-slot endpoint which:
+                # 1. Copies settings from slot N to slot 0 (session)
+                # 2. Restarts camera with new settings
+                self.status_label.setText(f"Loading slot {slot_id} to current session...")
+                self.status_label.setStyleSheet("QLabel { color: blue; font-weight: bold; }")
+
+                api_url = ENDPOINTS["load_camera_slot"].format(slot_id=slot_id)
+                thread = APIClientThread('POST', api_url, {})
+                thread.response_received.connect(lambda success, message, data:
+                    self._on_slot_loaded_to_session(success, message, data, slot_id))
+                thread.finished.connect(lambda: self._cleanup_thread(thread))
+                self.active_threads.append(thread)
+                thread.start()
+
         except Exception as e:
             self.status_label.setText(f"Error loading slot {slot_id}: {str(e)}")
             self.status_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
     
     def _on_slot_settings_loaded(self, success, message, data, slot_id):
-        """Handle slot settings loaded from API."""
+        """Handle slot 0 settings loaded from API (current session)."""
         try:
             if success and 'id' in data:
                 # FastAPI direct response for slot settings
                 settings = data
-                
+
                 self.current_slot_id = slot_id
                 self.current_settings = settings
                 self._update_ui_from_settings(settings)
-                
-                slot_name = settings.get('SettingsName', f"Slot {slot_id}")
-                self.status_label.setText(f"Loaded settings from slot {slot_id}: {slot_name}")
+
+                slot_name = settings.get('SettingsName', 'Current Session')
+                self.status_label.setText(f"Loaded current session: {slot_name}")
                 self.status_label.setStyleSheet("QLabel { color: green; font-weight: bold; }")
-                
+
                 # Emit signal that slot has changed
                 self.slot_changed.emit(slot_id)
             elif success and data.get('success') and 'data' in data:
                 # Wrapped response format (fallback)
                 settings = data.get('data', {})
-                
+
                 self.current_slot_id = slot_id
                 self.current_settings = settings
                 self._update_ui_from_settings(settings)
-                
-                slot_name = settings.get('SettingsName', f"Slot {slot_id}")
-                self.status_label.setText(f"Loaded settings from slot {slot_id}: {slot_name}")
+
+                slot_name = settings.get('SettingsName', 'Current Session')
+                self.status_label.setText(f"Loaded current session: {slot_name}")
                 self.status_label.setStyleSheet("QLabel { color: green; font-weight: bold; }")
-                
+
                 # Emit signal that slot has changed
                 self.slot_changed.emit(slot_id)
             else:
-                self.status_label.setText(f"API error loading slot {slot_id}: {message}")
+                self.status_label.setText(f"API error loading session: {message}")
                 self.status_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
-                
+
         except Exception as e:
-            self.status_label.setText(f"Error processing slot {slot_id}: {str(e)}")
+            self.status_label.setText(f"Error processing session: {str(e)}")
+            self.status_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
+
+    def _on_slot_loaded_to_session(self, success, message, data, source_slot_id):
+        """Handle slot loaded to current session and applied to camera."""
+        try:
+            if success and data.get('success'):
+                # Settings copied from slot N to slot 0 and camera restarted
+                settings = data.get('data', {}).get('settings', {})
+
+                self.current_slot_id = 0  # Now we're using session (slot 0)
+                self.current_settings = settings
+                self._update_ui_from_settings(settings)
+
+                slot_name = settings.get('SettingsName', f"Slot {source_slot_id}")
+                self.status_label.setText(
+                    f"Loaded slot {source_slot_id} to current session, camera restarted"
+                )
+                self.status_label.setStyleSheet("QLabel { color: green; font-weight: bold; }")
+
+                # Emit signal that settings were updated (camera restarted)
+                self.settings_updated.emit()
+                self.slot_changed.emit(0)
+            else:
+                self.status_label.setText(f"Failed to load slot {source_slot_id}: {message}")
+                self.status_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
+
+        except Exception as e:
+            self.status_label.setText(f"Error loading slot {source_slot_id}: {str(e)}")
             self.status_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
     
     def save_to_slot_dialog(self):
@@ -899,15 +956,26 @@ class CameraSettingsWidget(QWidget):
             self.status_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
     
     def save_current_settings_to_slot(self, slot_id):
-        """Save current settings to a specific slot via API."""
+        """Save current settings to a specific slot via API.
+
+        Note: Slot 0 is the current session. Saving to slot 0 will apply
+        settings to the camera (same as Apply button). Use slots 1-10
+        for persistent storage.
+        """
         try:
+            # If slot 0 selected, treat as apply operation
+            if slot_id == 0:
+                self.status_label.setText("Slot 0 is current session - using Apply instead")
+                self.apply_settings()
+                return
+
             # Extract resolution from display text (remove aspect ratio)
             photo_resolution_text = self.photo_resolution_combo.currentText()
             photo_resolution = photo_resolution_text.split(' ')[0] if ' ' in photo_resolution_text else photo_resolution_text
-            
+
             video_resolution_text = self.video_resolution_combo.currentText()
             video_resolution = video_resolution_text.split(' ')[0] if ' ' in video_resolution_text else video_resolution_text
-            
+
             # Collect current settings
             settings = {
                 'SettingsName': str(self.settings_name.text() or f"Slot {slot_id}"),
@@ -921,10 +989,10 @@ class CameraSettingsWidget(QWidget):
                 'RedGain': float(self.red_gain.value()),
                 'BlueGain': float(self.blue_gain.value())
             }
-            
+
             # Save all settings at once via new API endpoint
             self._save_slot_settings_via_api(settings, slot_id)
-                
+
         except Exception as e:
             self.status_label.setText(f"Error saving to slot {slot_id}: {str(e)}")
             self.status_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")

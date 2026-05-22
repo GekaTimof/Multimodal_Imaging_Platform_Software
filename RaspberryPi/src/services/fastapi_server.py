@@ -281,11 +281,15 @@ async def get_camera_settings():
 
 @app.get("/api/settings/camera/slot/{slot_id}", response_model=CameraSettingsResponse)
 async def get_camera_settings_by_slot(slot_id: int):
-    """Get camera settings for a specific slot (0-9)."""
+    """Get camera settings for a specific slot (0-10).
+
+    Slot 0: Current session (applied to camera, volatile)
+    Slots 1-10: Saved presets (persistent)
+    """
     try:
-        if not 0 <= slot_id <= 9:
-            raise HTTPException(status_code=400, detail="Slot ID must be between 0 and 9")
-        
+        if not 0 <= slot_id <= 10:
+            raise HTTPException(status_code=400, detail="Slot ID must be between 0 and 10")
+
         settings = db_service.get_camera_settings_by_slot(slot_id)
         if not settings:
             raise HTTPException(status_code=404, detail=f"No camera settings found for slot {slot_id}")
@@ -441,13 +445,17 @@ async def get_camera_validation_rules():
 
 @app.post("/api/settings/camera/save-slot/{slot_id}", response_model=APIResponse)
 async def save_camera_settings_to_slot(slot_id: int, settings: CameraSettingsResponse):
-    """Save camera settings to a specific slot (0-9)."""
+    """Save camera settings to a specific slot (0-10).
+
+    Slot 0 is the current session (volatile, applied immediately to camera).
+    Slots 1-10 are persistent saved presets.
+    """
     try:
-        if not 0 <= slot_id <= 9:
-            raise HTTPException(status_code=400, detail="Slot ID must be between 0 and 9")
-        
+        if not 0 <= slot_id <= 10:
+            raise HTTPException(status_code=400, detail="Slot ID must be between 0 and 10")
+
         success, message = db_service.save_camera_settings_to_slot(slot_id, settings.dict())
-        
+
         if success:
             return APIResponse(
                 success=True,
@@ -456,23 +464,57 @@ async def save_camera_settings_to_slot(slot_id: int, settings: CameraSettingsRes
             )
         else:
             raise HTTPException(status_code=400, detail=message)
-            
+
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
 
 
-@app.post("/api/settings/camera/reload", response_model=APIResponse)
-async def reload_camera_settings():
-    """Reload camera settings and reinitialize camera if resolution changed."""
+@app.post("/api/settings/camera/load-slot/{slot_id}", response_model=APIResponse)
+async def load_camera_settings_from_slot(slot_id: int):
+    """Load camera settings from a slot (1-10) into the current session (slot 0).
+
+    This copies settings from the specified slot to slot 0 (current session)
+    and restarts the camera to apply the settings immediately.
+
+    Use this to load a saved preset and apply it to the camera.
+    """
     try:
-        # Reload settings from database and reinitialize camera if needed
+        if not 1 <= slot_id <= 10:
+            raise HTTPException(status_code=400, detail="Slot ID must be between 1 and 10 (0 is current session)")
+
+        # Copy settings from slot to session (slot 0)
+        success, message, settings = db_service.copy_slot_to_session(slot_id)
+
+        if not success:
+            raise HTTPException(status_code=400, detail=message)
+
+        # Restart camera with new session settings
         camera_service.reload_settings()
 
         return APIResponse(
             success=True,
-            message="Camera settings reloaded successfully. Camera reinitialized if resolution changed.",
+            message=f"Settings loaded from slot {slot_id} to current session and applied to camera",
+            data={"source_slot": slot_id, "settings": settings}
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error loading slot to session: {str(e)}")
+
+
+@app.post("/api/settings/camera/reload", response_model=APIResponse)
+async def reload_camera_settings():
+    """Reload camera settings from slot 0 (current session) and reinitialize camera."""
+    try:
+        # Reload settings from database (slot 0) and reinitialize camera if needed
+        camera_service.reload_settings()
+
+        return APIResponse(
+            success=True,
+            message="Camera settings reloaded from current session. Camera reinitialized if resolution changed.",
             data={"action": "reloaded"}
         )
 

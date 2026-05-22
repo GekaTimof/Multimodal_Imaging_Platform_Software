@@ -237,9 +237,9 @@ class DatabaseService:
             conn.close()
     
     def get_camera_settings_by_slot(self, slot_id: int) -> Dict[str, Any]:
-        """Get camera settings for a specific slot (0-9)."""
-        if not 0 <= slot_id <= 9:
-            raise ValueError("Slot ID must be between 0 and 9")
+        """Get camera settings for a specific slot (0-10). Slot 0 is current session, 1-10 are saved presets."""
+        if not 0 <= slot_id <= 10:
+            raise ValueError("Slot ID must be between 0 and 10")
         
         try:
             conn = sqlite3.connect(db_path)
@@ -257,7 +257,7 @@ class DatabaseService:
                 return settings
             else:
                 # Create default settings for slot if doesn't exist
-                default_name = "Basic" if slot_id == 0 else f"Slot {slot_id}"
+                default_name = "Current Session" if slot_id == 0 else f"Slot {slot_id}"
                 default_settings = {
                     'id': slot_id,
                     'SettingsName': default_name,
@@ -294,9 +294,9 @@ class DatabaseService:
             conn.close()
     
     def save_camera_settings_to_slot(self, slot_id: int, settings: Dict[str, Any]) -> Tuple[bool, str]:
-        """Save camera settings to a specific slot (0-9)."""
-        if not 0 <= slot_id <= 9:
-            return False, "Slot ID must be between 0 and 9"
+        """Save camera settings to a specific slot (0-10). Slot 0 is current session, 1-10 are saved presets."""
+        if not 0 <= slot_id <= 10:
+            return False, "Slot ID must be between 0 and 10"
         
         try:
             conn = sqlite3.connect(db_path)
@@ -357,11 +357,43 @@ class DatabaseService:
             conn.close()
     
     def get_all_camera_settings_slots(self) -> Dict[int, Dict[str, Any]]:
-        """Get all camera settings slots (0-9)."""
+        """Get all camera settings slots (0-10). Slot 0 is current session, 1-10 are saved presets."""
         slots = {}
-        for slot_id in range(10):
+        for slot_id in range(11):  # 0-10 inclusive
             slots[slot_id] = self.get_camera_settings_by_slot(slot_id)
         return slots
+
+    def copy_slot_to_session(self, source_slot_id: int) -> Tuple[bool, str, Dict[str, Any]]:
+        """Copy settings from a slot (1-10) to the current session (slot 0).
+
+        Args:
+            source_slot_id: Slot ID to copy from (1-10)
+
+        Returns:
+            Tuple of (success: bool, message: str, settings: dict)
+        """
+        if not 1 <= source_slot_id <= 10:
+            return False, "Source slot must be between 1 and 10", {}
+
+        try:
+            # Get settings from source slot
+            source_settings = self.get_camera_settings_by_slot(source_slot_id)
+
+            if not source_settings:
+                return False, f"Slot {source_slot_id} not found or empty", {}
+
+            # Copy to slot 0 (session), preserving the SettingsName from source
+            success, message = self.save_camera_settings_to_slot(0, source_settings)
+
+            if success:
+                # Return the settings that were copied (with slot 0 as target)
+                session_settings = self.get_camera_settings_by_slot(0)
+                return True, f"Settings from slot {source_slot_id} loaded to session", session_settings
+            else:
+                return False, f"Failed to copy to session: {message}", {}
+
+        except Exception as e:
+            return False, f"Error copying slot to session: {e}", {}
     
     @log_execution_time
     @database_error_handler

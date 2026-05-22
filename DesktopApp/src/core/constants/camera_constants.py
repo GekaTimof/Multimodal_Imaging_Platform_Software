@@ -13,8 +13,8 @@ DEFAULT_EXPOSURE_VALUE = 0.0
 DEFAULT_RED_GAIN = 1.0
 DEFAULT_BLUE_GAIN = 1.0
 
-# Camera slots
-MAX_CAMERA_SLOTS = 10
+# Camera slots (0 = current session, 1-10 = saved presets)
+MAX_CAMERA_SLOTS = 11
 DEFAULT_CAMERA_SLOT = 0
 
 # Thread settings

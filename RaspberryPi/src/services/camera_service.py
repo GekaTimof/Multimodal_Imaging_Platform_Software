@@ -219,10 +219,11 @@ class CameraService:
         self.blue_gain = 2.0
 
     def apply_session_settings(self, settings: Dict[str, Any]) -> bool:
-        """Apply session settings to camera without saving to database.
+        """Apply session settings to camera and save to slot 0 (current session).
 
-        This updates the camera's current operational parameters and restarts
-        the camera stream to apply the new settings immediately.
+        This updates the camera's current operational parameters, saves them to
+        slot 0 (current session) in the database, and restarts the camera stream
+        to apply the new settings immediately.
 
         Args:
             settings: Dictionary containing camera settings to apply
@@ -238,6 +239,14 @@ class CameraService:
 
             # Apply settings to instance attributes
             self._apply_settings_to_attributes(settings)
+
+            # Save to slot 0 (current session) in database
+            from .database_service import DatabaseService
+            db = DatabaseService()
+            success, message = db.save_camera_settings_to_slot(0, settings)
+            if not success:
+                logger.warning(f"Failed to save session settings to slot 0: {message}")
+                # Continue anyway - camera settings are still applied
 
             # Check if resolution changed
             new_resolution = (self.width, self.height)
