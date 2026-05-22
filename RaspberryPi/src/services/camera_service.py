@@ -192,8 +192,8 @@ class CameraService:
                 self.exposure_time = settings.get('ExposureTime', 10000)
                 self.analogue_gain = settings.get('AnalogueGain', 1.0)
                 self.exposure_value = settings.get('ExposureValue', 0.0)
-                self.red_gain = settings.get('RedGain', 1.0)
-                self.blue_gain = settings.get('BlueGain', 1.0)
+                self.red_gain = settings.get('RedGain', 2.0)
+                self.blue_gain = settings.get('BlueGain', 2.0)
             else:
                 # Default settings if database is empty - use safe defaults
                 self.width, self.height = 1280, 720
@@ -203,8 +203,8 @@ class CameraService:
                 self.exposure_time = 10000
                 self.analogue_gain = 1.0
                 self.exposure_value = 0.0
-                self.red_gain = 1.0
-                self.blue_gain = 1.0
+                self.red_gain = 2.0
+                self.blue_gain = 2.0
 
         except Exception as e:
             print(f"Error loading camera settings: {e}")
@@ -216,8 +216,8 @@ class CameraService:
             self.exposure_time = 10000
             self.analogue_gain = 1.0
             self.exposure_value = 0.0
-            self.red_gain = 1.0
-            self.blue_gain = 1.0
+            self.red_gain = 2.0
+            self.blue_gain = 2.0
 
     def _start_rpicam_vid(self):
         """Start rpicam-vid process for continuous MJPEG streaming."""
@@ -251,12 +251,11 @@ class CameraService:
 
         # Auto white balance settings
         # Valid modes: auto, incandescent, tungsten, fluorescent, indoor, daylight, cloudy, custom
-        if not self.awb_enable:
-            cmd.append('--awb=custom')  # Use custom AWB mode with manual gains
-            if self.red_gain is not None and self.blue_gain is not None:
-                cmd.extend(['--awbgains', f"{float(self.red_gain)},{float(self.blue_gain)}"])
+        if not self.awb_enable and self.red_gain and self.blue_gain and self.red_gain > 0 and self.blue_gain > 0:
+            cmd.append('--awb=custom')
+            cmd.extend(['--awbgains', f"{float(self.red_gain)},{float(self.blue_gain)}"])
         else:
-            cmd.append('--awb=auto')  # Enable auto white balance
+            cmd.append('--awb=auto')
 
         self.rpicam_process = subprocess.Popen(
             cmd,
@@ -535,11 +534,9 @@ class CameraService:
 
                     # Auto white balance settings
                     # Valid modes: auto, incandescent, tungsten, fluorescent, indoor, daylight, cloudy, custom
-                    if not self.awb_enable:
-                        # Use custom mode with manual gains
+                    if not self.awb_enable and self.red_gain and self.blue_gain and self.red_gain > 0 and self.blue_gain > 0:
                         cmd.append('--awb=custom')
-                        if self.red_gain is not None and self.blue_gain is not None:
-                            cmd.extend(['--awbgains', f"{float(self.red_gain)},{float(self.blue_gain)}"])
+                        cmd.extend(['--awbgains', f"{float(self.red_gain)},{float(self.blue_gain)}"])
                     else:
                         cmd.append('--awb=auto')
 

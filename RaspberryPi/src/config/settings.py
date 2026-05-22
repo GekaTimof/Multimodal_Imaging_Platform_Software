@@ -43,8 +43,8 @@ class Config:
     MAX_ANALOG_GAIN = 32.0
     MIN_EXPOSURE_VALUE = -10.0
     MAX_EXPOSURE_VALUE = 10.0
-    MIN_COLOR_GAIN = 0.0
-    MAX_COLOR_GAIN = 8.0
+    MIN_COLOR_GAIN = 0.1
+    MAX_COLOR_GAIN = 32.0
     
     # Available camera resolutions
     AVAILABLE_RESOLUTIONS = [
@@ -71,8 +71,8 @@ class Config:
         'ExposureTime': 10000,
         'AnalogueGain': 1.0,
         'ExposureValue': 0.0,
-        'RedGain': 1.0,
-        'BlueGain': 1.0
+        'RedGain': 2.0,
+        'BlueGain': 2.0
     }
     
     @classmethod

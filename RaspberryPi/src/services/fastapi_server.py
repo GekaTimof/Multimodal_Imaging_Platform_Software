@@ -480,6 +480,52 @@ async def reload_camera_settings():
         raise HTTPException(status_code=500, detail=f"Error reloading camera settings: {str(e)}")
 
 
+@app.get("/api/camera/awb-gains")
+async def get_current_awb_gains():
+    """Read current ColourGains from camera using auto-AWB metadata.
+
+    Useful for implementing a 'lock AWB' workflow: call this while AwbEnable=true
+    to get the gains the camera chose, then store them as RedGain/BlueGain and
+    switch to AwbEnable=false.
+    """
+    try:
+        import subprocess as _sp, json as _json, tempfile, os as _os
+        from .camera_service import _pause_for_photo_global
+
+        video_was_running = camera_service.running or camera_service._is_rpicam_vid_running()
+        if video_was_running:
+            camera_service._pause_video_stream()
+
+        with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as f:
+            tmp = f.name
+        try:
+            result = _sp.run(
+                ['rpicam-still', '-n', '--width', '320', '--height', '240',
+                 '--awb', 'auto', '--metadata', '-', '-o', tmp],
+                capture_output=True, text=True, timeout=15
+            )
+            if result.returncode != 0:
+                raise HTTPException(status_code=500, detail="Failed to capture AWB frame")
+            meta = _json.loads(result.stdout)
+            gains = meta.get('ColourGains')
+            if not gains or len(gains) < 2:
+                raise HTTPException(status_code=500, detail="ColourGains not found in metadata")
+            red_gain = round(float(gains[0]), 3)
+            blue_gain = round(float(gains[1]), 3)
+            return {"success": True, "data": {"red_gain": red_gain, "blue_gain": blue_gain}}
+        finally:
+            try:
+                _os.unlink(tmp)
+            except Exception:
+                pass
+            if video_was_running:
+                camera_service._resume_video_stream()
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"AWB gains error: {str(e)}")
+
+
 @app.post("/api/camera/photo")
 async def capture_photo(output_path: Optional[str] = None):
     """Capture a high-quality photo with all camera settings (PhotoResolution, ExposureTime, etc.).
