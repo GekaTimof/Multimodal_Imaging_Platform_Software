@@ -1,5 +1,7 @@
 import time
 import json
+import os
+import tempfile
 import numpy as np
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from socketserver import ThreadingMixIn
@@ -201,10 +203,6 @@ class SpectrumStreamHandler(BaseHTTPRequestHandler):
             # Read the uploaded data
             file_data = self.rfile.read(content_length)
             
-            # For simplicity, save to a temporary file and load it
-            import tempfile
-            import os
-            
             with tempfile.NamedTemporaryFile(delete=False, suffix='.npy') as temp_file:
                 temp_file.write(file_data)
                 temp_file_path = temp_file.name
@@ -234,13 +232,15 @@ class SpectrumStreamHandler(BaseHTTPRequestHandler):
 
 
 class SpectrumStreamServer:
-    def __init__(self, host='0.0.0.0', port=8081, fps=10):
+    def __init__(self, host='0.0.0.0', port=8081, fps=10, spectrometer_service: SpectrometerService = None):
         self.host = host
         self.port = port
-        self.spectrometer_service = SpectrometerService(fps=fps)
+        self._owns_spectrometer_service = spectrometer_service is None
+        self.spectrometer_service = spectrometer_service if spectrometer_service is not None else SpectrometerService(fps=fps)
 
     def run(self):
-        self.spectrometer_service.start()
+        if self._owns_spectrometer_service:
+            self.spectrometer_service.start()
         server = ThreadedHTTPServer((self.host, self.port), SpectrumStreamHandler)
         server.spectrometer_service = self.spectrometer_service
 
@@ -258,5 +258,6 @@ class SpectrumStreamServer:
         except KeyboardInterrupt:
             pass
         finally:
-            self.spectrometer_service.stop()
+            if self._owns_spectrometer_service:
+                self.spectrometer_service.stop()
             server.server_close()

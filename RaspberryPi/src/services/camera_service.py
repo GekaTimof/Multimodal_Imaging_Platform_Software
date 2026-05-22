@@ -1,5 +1,6 @@
 import time
 import threading
+import glob
 import numpy as np
 import cv2
 import sys
@@ -87,8 +88,6 @@ class CameraService:
     
     def _init_opencv_camera(self):
         """Initialize camera using OpenCV + V4L2."""
-        # Try all available video devices
-        import glob
         video_devices = glob.glob('/dev/video*')
         
         print(f"Trying video devices: {video_devices}")
@@ -195,13 +194,13 @@ class CameraService:
                 self.photo_width, self.photo_height = 3280, 2464
 
             # Load other camera settings
-            self.ae_enable = settings.get('AeEnable', True)
-            self.awb_enable = settings.get('AwbEnable', True)
+            self.ae_enable = bool(settings.get('AeEnable', True))
+            self.awb_enable = bool(settings.get('AwbEnable', True))
             self.exposure_time = settings.get('ExposureTime', 10000)
             self.analogue_gain = settings.get('AnalogueGain', 1.0)
             self.exposure_value = settings.get('ExposureValue', 0.0)
-            self.red_gain = settings.get('RedGain', 2.0)
-            self.blue_gain = settings.get('BlueGain', 2.0)
+            self.red_gain = float(settings.get('RedGain', 2.0))
+            self.blue_gain = float(settings.get('BlueGain', 2.0))
         else:
             # Default settings if database is empty - use safe defaults
             self._set_default_settings()
@@ -301,11 +300,11 @@ class CameraService:
 
         # Auto white balance settings
         # Valid modes: auto, incandescent, tungsten, fluorescent, indoor, daylight, cloudy, custom
-        if not self.awb_enable and self.red_gain and self.blue_gain and self.red_gain > 0 and self.blue_gain > 0:
-            cmd.append('--awb=custom')
-            cmd.extend(['--awbgains', f"{float(self.red_gain)},{float(self.blue_gain)}"])
+        if not self.awb_enable and self.red_gain > 0 and self.blue_gain > 0:
+            cmd.extend(['--awb', 'custom'])
+            cmd.extend(['--awbgains', f"{self.red_gain:.4f},{self.blue_gain:.4f}"])
         else:
-            cmd.append('--awb=auto')
+            cmd.extend(['--awb', 'auto'])
 
         self.rpicam_process = subprocess.Popen(
             cmd,
@@ -506,7 +505,7 @@ class CameraService:
             result = subprocess.run(['pgrep', '-f', 'rpicam-vid'], 
                                   capture_output=True, text=True, timeout=2)
             return result.returncode == 0 and bool(result.stdout.strip())
-        except:
+        except Exception:
             return False
 
     def _get_camera_processes(self):
@@ -584,11 +583,11 @@ class CameraService:
 
                     # Auto white balance settings
                     # Valid modes: auto, incandescent, tungsten, fluorescent, indoor, daylight, cloudy, custom
-                    if not self.awb_enable and self.red_gain and self.blue_gain and self.red_gain > 0 and self.blue_gain > 0:
-                        cmd.append('--awb=custom')
-                        cmd.extend(['--awbgains', f"{float(self.red_gain)},{float(self.blue_gain)}"])
+                    if not self.awb_enable and self.red_gain > 0 and self.blue_gain > 0:
+                        cmd.extend(['--awb', 'custom'])
+                        cmd.extend(['--awbgains', f"{self.red_gain:.4f},{self.blue_gain:.4f}"])
                     else:
-                        cmd.append('--awb=auto')
+                        cmd.extend(['--awb', 'auto'])
 
                     # Calculate timeout based on exposure time + buffer
                     # Camera init takes ~3-5s, then actual exposure, then processing

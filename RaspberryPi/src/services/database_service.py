@@ -146,21 +146,29 @@ class DatabaseService:
         if not is_valid:
             return False, validated_value
         
+        # table_name and parameter are validated by _validate_parameter / Pydantic before reaching here.
+        # SQLite does not support ? placeholders for identifiers (table/column names),
+        # so we use the already-whitelisted values directly in the query string.
+        ALLOWED_TABLES = {'CameraSettings', 'SpectrometerSettings', 'PositionerSettings'}
+        if table_name not in ALLOWED_TABLES:
+            return False, f"Table {table_name} is not allowed"
+
         try:
             conn = sqlite3.connect(db_path)
             cursor = conn.cursor()
-            
-            # Check if table exists
-            cursor.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table_name}'")
+
+            # Check if table exists (parameterized — sqlite_master lookup)
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table_name,))
             if not cursor.fetchone():
                 return False, f"Table {table_name} does not exist"
-            
-            # Check if parameter exists in table
+
+            # Check if parameter (column) exists — PRAGMA doesn't support ? for table names,
+            # but table_name is whitelisted above so f-string is safe here.
             cursor.execute(f"PRAGMA table_info({table_name})")
             columns = [row[1] for row in cursor.fetchall()]
             if parameter not in columns:
                 return False, f"Parameter {parameter} does not exist in table {table_name}"
-            
+
             # For CameraSettings, always update slot 0 (main settings)
             if table_name == 'CameraSettings':
                 target_id = 0
@@ -168,8 +176,8 @@ class DatabaseService:
                 cursor.execute(f"SELECT MAX(id) FROM {table_name}")
                 row = cursor.fetchone()
                 target_id = row[0] if row and row[0] is not None else 0
-            
-            # Update the parameter
+
+            # Update the parameter — identifiers whitelisted above
             query = f"UPDATE {table_name} SET {parameter} = ? WHERE id = ?"
             cursor.execute(query, (validated_value, target_id))
             

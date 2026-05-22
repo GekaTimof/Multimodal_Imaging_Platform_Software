@@ -43,8 +43,8 @@ class Config:
     MAX_ANALOG_GAIN = 32.0
     MIN_EXPOSURE_VALUE = -10.0
     MAX_EXPOSURE_VALUE = 10.0
-    MIN_COLOR_GAIN = 0.1
-    MAX_COLOR_GAIN = 32.0
+    MIN_COLOR_GAIN = 0.0
+    MAX_COLOR_GAIN = 8.0
     
     # Available camera resolutions
     AVAILABLE_RESOLUTIONS = [
@@ -94,79 +94,73 @@ class Config:
     def validate_camera_parameter(cls, parameter: str, value: Any) -> tuple[bool, str]:
         """Validate camera parameter against configuration rules."""
         if parameter == 'ExposureTime':
-            if not isinstance(value, int):
-                try:
-                    value = int(value)
-                except (ValueError, TypeError):
-                    return False, f"ExposureTime must be integer, got {type(value).__name__}"
+            try:
+                value = int(value)
+            except (ValueError, TypeError):
+                return False, f"ExposureTime must be integer, got {type(value).__name__}"
             if not cls.MIN_EXPOSURE_TIME_US <= value <= cls.MAX_EXPOSURE_TIME_US:
                 return False, f"ExposureTime {value} out of range [{cls.MIN_EXPOSURE_TIME_US}, {cls.MAX_EXPOSURE_TIME_US}]"
-            return True, str(value)
+            return True, value
         
         elif parameter == 'AnalogueGain':
-            if not isinstance(value, (int, float)):
-                try:
-                    value = float(value)
-                except (ValueError, TypeError):
-                    return False, f"AnalogueGain must be number, got {type(value).__name__}"
+            try:
+                value = float(value)
+            except (ValueError, TypeError):
+                return False, f"AnalogueGain must be number, got {type(value).__name__}"
             if not cls.MIN_ANALOG_GAIN <= value <= cls.MAX_ANALOG_GAIN:
                 return False, f"AnalogueGain {value} out of range [{cls.MIN_ANALOG_GAIN}, {cls.MAX_ANALOG_GAIN}]"
-            return True, str(value)
+            return True, value
         
         elif parameter in ['RedGain', 'BlueGain']:
-            if not isinstance(value, (int, float)):
-                try:
-                    value = float(value)
-                except (ValueError, TypeError):
-                    return False, f"{parameter} must be number, got {type(value).__name__}"
+            try:
+                value = float(value)
+            except (ValueError, TypeError):
+                return False, f"{parameter} must be number, got {type(value).__name__}"
             if not cls.MIN_COLOR_GAIN <= value <= cls.MAX_COLOR_GAIN:
                 return False, f"{parameter} {value} out of range [{cls.MIN_COLOR_GAIN}, {cls.MAX_COLOR_GAIN}]"
-            return True, str(value)
+            return True, value
         
         elif parameter == 'ExposureValue':
-            if not isinstance(value, (int, float)):
-                try:
-                    value = float(value)
-                except (ValueError, TypeError):
-                    return False, f"ExposureValue must be number, got {type(value).__name__}"
+            try:
+                value = float(value)
+            except (ValueError, TypeError):
+                return False, f"ExposureValue must be number, got {type(value).__name__}"
             if not cls.MIN_EXPOSURE_VALUE <= value <= cls.MAX_EXPOSURE_VALUE:
                 return False, f"ExposureValue {value} out of range [{cls.MIN_EXPOSURE_VALUE}, {cls.MAX_EXPOSURE_VALUE}]"
-            return True, str(value)
+            return True, value
         
         elif parameter in ['PhotoResolution', 'VideoResolution']:
             if not isinstance(value, str):
                 return False, f"{parameter} must be string, got {type(value).__name__}"
             if value not in cls.AVAILABLE_RESOLUTIONS:
                 return False, f"Invalid {parameter}: {value}. Available: {', '.join(cls.AVAILABLE_RESOLUTIONS)}"
-            return True, str(value)
+            return True, value
         
         elif parameter in ['AeEnable', 'AwbEnable']:
             if isinstance(value, str):
                 if value.lower() in ('true', '1', 'on'):
-                    return True, '1'
+                    return True, 1
                 elif value.lower() in ('false', '0', 'off'):
-                    return True, '0'
+                    return True, 0
                 else:
                     return False, f"Invalid boolean value for {parameter}: {value}"
             elif isinstance(value, bool):
-                return True, '1' if value else '0'
+                return True, int(value)
             elif isinstance(value, int):
-                return True, '1' if value else '0'
+                return True, int(bool(value))
             else:
                 return False, f"{parameter} must be boolean, got {type(value).__name__}"
         
         elif parameter == 'SettingsName':
-            # Convert numeric values to string
             if isinstance(value, (int, float)):
                 value = str(value)
             elif not isinstance(value, str):
                 return False, f"SettingsName must be string or number, got {type(value).__name__}"
-            
             if not str(value).strip():
                 return False, "Settings name cannot be empty"
             if len(str(value)) > 50:
                 return False, "Settings name too long (max 50 characters)"
-            return True, str(value)
+            return True, value
         
         else:
             return False, f"Unknown parameter: {parameter}"

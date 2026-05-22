@@ -1,8 +1,12 @@
+import base64
+import subprocess as _sp
+import json as _json
+import tempfile
+import uvicorn
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 from typing import Optional, Dict, Any, Union
-import sys
 import os
 import logging
 import numpy as np
@@ -14,6 +18,12 @@ from .database_service import db_service
 from .camera_service import CameraService
 from .light_switcher_service import light_switcher_service, SwitchState
 from .spectrometer_service import SpectrometerService
+
+# Camera parameters that require a camera stream restart when changed
+CAMERA_STREAM_PARAMS = frozenset({
+    "AeEnable", "AwbEnable", "ExposureTime", "AnalogueGain",
+    "ExposureValue", "RedGain", "BlueGain", "VideoResolution", "PhotoResolution"
+})
 
 # Setup logging
 logging.basicConfig(level=config.LOG_LEVEL, format=config.LOG_FORMAT)
@@ -44,61 +54,64 @@ class CameraSettingsResponse(BaseModel):
     RedGain: Union[float, str, int] = Field(default=1.0, description="Red channel gain")
     BlueGain: Union[float, str, int] = Field(default=1.0, description="Blue channel gain")
 
-    @validator('SettingsName', pre=True)
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "SettingsName": "Basic",
+            "PhotoResolution": "3280x2464",
+            "VideoResolution": "1920x1080",
+            "AeEnable": True,
+            "AwbEnable": True,
+            "ExposureTime": 10000,
+            "AnalogueGain": 1.0,
+            "ExposureValue": 0.0,
+            "RedGain": 1.0,
+            "BlueGain": 1.0
+        }
+    })
+
+    @field_validator('SettingsName', mode='before')
+    @classmethod
     def convert_settings_name(cls, v):
         if isinstance(v, bool):
             return str(v).lower()
         return str(v) if v is not None else "Basic"
 
-    @validator('PhotoResolution', 'VideoResolution', pre=True)
+    @field_validator('PhotoResolution', 'VideoResolution', mode='before')
+    @classmethod
     def convert_resolution(cls, v):
         if isinstance(v, bool):
             return str(v).lower()
         return str(v) if v is not None else "1920x1080"
 
-    @validator('AeEnable', 'AwbEnable', pre=True)
+    @field_validator('AeEnable', 'AwbEnable', mode='before')
+    @classmethod
     def convert_boolean_input(cls, v):
         # Handle numpy.bool_ and other types on input
         if hasattr(v, 'item'):  # numpy scalar
             return bool(v.item())
         if isinstance(v, str):
             return v.lower() in ('true', '1', 'on')
-        elif isinstance(v, (int, float)):
-            return bool(v)
         return bool(v)
 
-    @validator('AeEnable', 'AwbEnable')
+    @field_validator('AeEnable', 'AwbEnable')
+    @classmethod
     def ensure_python_bool(cls, v):
         # Ensure output is always a Python bool, not numpy.bool_
         return bool(v)
 
-    @validator('ExposureTime', pre=True)
+    @field_validator('ExposureTime', mode='before')
+    @classmethod
     def convert_exposure_time(cls, v):
         if isinstance(v, (str, bool)):
-            return int(v) if v != False else 0
+            return int(v) if v is not False else 0
         return int(v)
 
-    @validator('AnalogueGain', 'ExposureValue', 'RedGain', 'BlueGain', pre=True)
+    @field_validator('AnalogueGain', 'ExposureValue', 'RedGain', 'BlueGain', mode='before')
+    @classmethod
     def convert_float(cls, v):
         if isinstance(v, (str, bool)):
-            return float(v) if v != False else 0.0
+            return float(v) if v is not False else 0.0
         return float(v)
-
-    class Config:
-        schema_extra = {
-            "example": {
-                "SettingsName": "Basic",
-                "PhotoResolution": "3280x2464",
-                "VideoResolution": "1920x1080",
-                "AeEnable": True,
-                "AwbEnable": True,
-                "ExposureTime": 10000,
-                "AnalogueGain": 1.0,
-                "ExposureValue": 0.0,
-                "RedGain": 1.0,
-                "BlueGain": 1.0
-            }
-        }
 
 
 class ParameterUpdateRequest(BaseModel):
@@ -106,14 +119,16 @@ class ParameterUpdateRequest(BaseModel):
     parameter: str = Field(..., description="Parameter name to update")
     value: Union[str, int, float, bool] = Field(..., description="New value for the parameter")
 
-    @validator('table_name')
+    @field_validator('table_name')
+    @classmethod
     def validate_table_name(cls, v):
         allowed_tables = ['CameraSettings', 'SpectrometerSettings', 'PositionerSettings']
         if v not in allowed_tables:
             raise ValueError(f"Table name must be one of: {allowed_tables}")
         return v
 
-    @validator('value', pre=True)
+    @field_validator('value', mode='before')
+    @classmethod
     def convert_value(cls, v):
         """Convert string values to appropriate types"""
         if isinstance(v, str):
@@ -140,7 +155,8 @@ class APIResponse(BaseModel):
     message: str
     data: Optional[Dict[str, Any]] = None
 
-    @validator('data', pre=True)
+    @field_validator('data', mode='before')
+    @classmethod
     def convert_numpy_types(cls, v):
         """Convert numpy types to standard Python types for JSON serialization."""
         if v is None:
@@ -177,7 +193,8 @@ class LightSwitcherStatusResponse(BaseModel):
 class LightSwitcherSwitchRequest(BaseModel):
     state: str = Field(..., description="Target state: 'state1' or 'state2'")
 
-    @validator('state')
+    @field_validator('state')
+    @classmethod
     def validate_state(cls, v):
         allowed_states = ['state1', 'state2']
         if v not in allowed_states:
@@ -337,10 +354,6 @@ async def update_parameter(request: ParameterUpdateRequest):
         
         if success:
             # Reload camera when any camera parameter changes
-            CAMERA_STREAM_PARAMS = {
-                "AeEnable", "AwbEnable", "ExposureTime", "AnalogueGain",
-                "ExposureValue", "RedGain", "BlueGain", "VideoResolution", "PhotoResolution"
-            }
             if request.table_name == "CameraSettings" and request.parameter in CAMERA_STREAM_PARAMS:
                 try:
                     camera_service.reload_settings()
@@ -382,16 +395,11 @@ async def update_camera_settings(settings: CameraSettingsResponse):
         
         failed_updates = []
         camera_params_changed = False
-        camera_stream_params = {
-            "PhotoResolution", "VideoResolution", "AeEnable", "AwbEnable",
-            "ExposureTime", "AnalogueGain", "ExposureValue", "RedGain", "BlueGain"
-        }
-
         for table_name, parameter, value in updates:
             success, message = db_service.update_parameter(table_name, parameter, value)
             if not success:
                 failed_updates.append(f"{parameter}: {message}")
-            elif parameter in camera_stream_params:
+            elif parameter in CAMERA_STREAM_PARAMS:
                 camera_params_changed = True
 
         if failed_updates:
@@ -407,19 +415,19 @@ async def update_camera_settings(settings: CameraSettingsResponse):
                 return APIResponse(
                     success=True,
                     message="All camera settings updated and applied to camera.",
-                    data=settings.dict()
+                    data=settings.model_dump()
                 )
             except Exception as reload_error:
                 return APIResponse(
                     success=True,
                     message=f"All camera settings updated but camera reload failed: {reload_error}",
-                    data=settings.dict()
+                    data=settings.model_dump()
                 )
         else:
             return APIResponse(
                 success=True,
                 message="All camera settings updated successfully",
-                data=settings.dict()
+                data=settings.model_dump()
             )
         
     except HTTPException:
@@ -454,13 +462,13 @@ async def save_camera_settings_to_slot(slot_id: int, settings: CameraSettingsRes
         if not 0 <= slot_id <= 10:
             raise HTTPException(status_code=400, detail="Slot ID must be between 0 and 10")
 
-        success, message = db_service.save_camera_settings_to_slot(slot_id, settings.dict())
+        success, message = db_service.save_camera_settings_to_slot(slot_id, settings.model_dump())
 
         if success:
             return APIResponse(
                 success=True,
                 message=f"Settings saved to slot {slot_id}",
-                data={"slot_id": slot_id, "settings": settings.dict()}
+                data={"slot_id": slot_id, "settings": settings.model_dump()}
             )
         else:
             raise HTTPException(status_code=400, detail=message)
@@ -533,7 +541,7 @@ async def apply_camera_session_settings(settings: CameraSettingsResponse):
     """
     try:
         # Convert settings to dictionary
-        settings_dict = settings.dict()
+        settings_dict = settings.model_dump()
 
         # Apply settings to camera without saving to database
         success = camera_service.apply_session_settings(settings_dict)
@@ -562,9 +570,6 @@ async def get_current_awb_gains():
     switch to AwbEnable=false.
     """
     try:
-        import subprocess as _sp, json as _json, tempfile, os as _os
-        from .camera_service import _pause_for_photo_global
-
         video_was_running = camera_service.running or camera_service._is_rpicam_vid_running()
         if video_was_running:
             camera_service._pause_video_stream()
@@ -588,7 +593,7 @@ async def get_current_awb_gains():
             return {"success": True, "data": {"red_gain": red_gain, "blue_gain": blue_gain}}
         finally:
             try:
-                _os.unlink(tmp)
+                os.unlink(tmp)
             except Exception:
                 pass
             if video_was_running:
@@ -610,9 +615,6 @@ async def capture_photo(output_path: Optional[str] = None):
         JSON response with success status, image data (base64) or file path, and metadata.
     """
     try:
-        import base64
-        import io
-
         logger.info(f"Photo capture requested. output_path={output_path}, backend={camera_service.camera_backend}, use_real_camera={camera_service.use_real_camera}")
         logger.info(f"Current camera settings: photo_res={camera_service.photo_width}x{camera_service.photo_height}, "
                    f"exposure={camera_service.exposure_time}us, gain={camera_service.analogue_gain}, "
@@ -857,7 +859,7 @@ async def http_exception_handler(request, exc):
             success=False,
             error=exc.detail,
             details={"status_code": exc.status_code}
-        ).dict()
+        ).model_dump()
     )
 
 
@@ -869,13 +871,11 @@ async def general_exception_handler(request, exc):
             success=False,
             error="Internal server error",
             details={"exception": str(exc)}
-        ).dict()
+        ).model_dump()
     )
 
 
 if __name__ == "__main__":
-    import uvicorn
-    
     logger.info(f"Starting Device Settings FastAPI Server on {config.API_HOST}:{config.API_PORT}...")
     logger.info(f"Database path: {config.get_database_path()}")
     logger.info("Available endpoints:")

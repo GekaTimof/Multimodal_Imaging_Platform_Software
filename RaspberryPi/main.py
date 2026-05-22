@@ -3,7 +3,7 @@ import time
 import uvicorn
 from src.core.streaming import CameraStreamServer
 from src.core.spectrum_streaming import SpectrumStreamServer
-from src.services.fastapi_server import app, camera_service
+from src.services.fastapi_server import app, camera_service, spectrometer_service
 from src.config.settings import config
 
 
@@ -15,7 +15,7 @@ def run_camera_server():
 
 def run_spectrum_server():
     """Run spectrum streaming server in a separate thread"""
-    server = SpectrumStreamServer(host='0.0.0.0', port=8081)
+    server = SpectrumStreamServer(host='0.0.0.0', port=8081, spectrometer_service=spectrometer_service)
     server.run()
 
 
@@ -37,8 +37,9 @@ if __name__ == '__main__':
     print("Spectrum stream will be available at http://0.0.0.0:8081/spectrum")
     print("Press Ctrl+C to stop all servers")
 
-    # Start the shared camera service once (streaming server will reuse it)
+    # Start shared services once — both streaming server and FastAPI reuse them
     camera_service.start()
+    spectrometer_service.start()
 
     # Create threads for all servers
     api_thread = threading.Thread(target=run_api_server, daemon=True)
@@ -56,4 +57,6 @@ if __name__ == '__main__':
             time.sleep(1)
     except KeyboardInterrupt:
         print("\nShutting down servers...")
-        # Threads will automatically clean up when daemon threads are interrupted
+        camera_service.stop()
+        spectrometer_service.stop()
+        print("Services stopped.")

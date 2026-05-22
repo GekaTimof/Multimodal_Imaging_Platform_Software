@@ -21,7 +21,9 @@ class LightSwitcherDaemon:
         
     def _setup_logging(self):
         """Настройка логирования"""
-        log_dir = "/home/minilumi/Multimodal_Imaging_Platform_Software/RaspberryPi/logs"
+        # Derive log directory relative to this file's location (…/RaspberryPi/logs)
+        base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+        log_dir = os.path.join(base_dir, 'logs')
         os.makedirs(log_dir, exist_ok=True)
         
         logging.basicConfig(
