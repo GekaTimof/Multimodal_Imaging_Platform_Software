@@ -234,11 +234,7 @@ class CameraService:
         ]
         # Manual exposure settings (only when AE is disabled)
         if not self.ae_enable:
-            max_shutter_us = int(1_000_000 / self.fps)
-            if self.exposure_time <= max_shutter_us:
-                cmd.extend(['--shutter', str(int(self.exposure_time))])
-            else:
-                print(f"Warning: manual exposure {self.exposure_time}us > max for {self.fps}fps ({max_shutter_us}us) - shutter not applied to video")
+            cmd.extend(['--shutter', str(int(self.exposure_time))])
             cmd.extend(['--gain', str(float(self.analogue_gain))])
 
         # Exposure value (EV compensation) - applies in both auto and manual modes
@@ -249,7 +245,7 @@ class CameraService:
         # Valid modes: auto, incandescent, tungsten, fluorescent, indoor, daylight, cloudy, custom
         if not self.awb_enable:
             cmd.append('--awb=custom')  # Use custom AWB mode with manual gains
-            if self.red_gain and self.blue_gain:
+            if self.red_gain is not None and self.blue_gain is not None:
                 cmd.extend(['--awbgains', f"{float(self.red_gain)},{float(self.blue_gain)}"])
         else:
             cmd.append('--awb=auto')  # Enable auto white balance
@@ -513,9 +509,10 @@ class CameraService:
                         '--quality', '95',  # High quality for photos
                     ]
                     
-                    # ZSL only for short exposures (<1s) - it conflicts with long exposures
-                    if exposure_sec < 1.0:
-                        cmd.append('--zsl')  # Zero Shutter Lag for fast capture
+                    # ZSL only in auto-AE mode for short exposures — in manual mode ZSL
+                    # captures from the preview buffer (which used AE settings) and ignores --shutter
+                    if self.ae_enable and exposure_sec < 1.0:
+                        cmd.append('--zsl')
 
                     # Add exposure settings (only when AE is disabled)
                     if not self.ae_enable:
@@ -680,14 +677,46 @@ class CameraService:
 
     def _restart_rpicam_vid(self):
         """Terminate current rpicam-vid and start a new one with updated settings."""
-        if hasattr(self, 'rpicam_process') and self.rpicam_process is not None:
+        # Set pause flag so capture loop doesn't race-restart the process
+        _pause_for_photo_global.set()
+        time.sleep(0.05)  # Let capture loop notice the flag
+        try:
+            if hasattr(self, 'rpicam_process') and self.rpicam_process is not None:
+                saved_pid = self.rpicam_process.pid
+                try:
+                    self.rpicam_process.terminate()
+                    # Close stdout so the capture loop's blocking read() returns immediately
+                    try:
+                        self.rpicam_process.stdout.close()
+                    except Exception:
+                        pass
+                    self.rpicam_process.wait(timeout=3)
+                except subprocess.TimeoutExpired:
+                    self.rpicam_process.kill()
+                    self.rpicam_process.wait(timeout=1)
+                except Exception:
+                    pass
+                self.rpicam_process = None
+                # Force kill by PID in case process is still alive
+                try:
+                    subprocess.run(['kill', '-9', str(saved_pid)], check=False, timeout=2)
+                except Exception:
+                    pass
+            # Kill any other stray rpicam-vid processes (NOT libcamera-ipa)
             try:
-                self.rpicam_process.terminate()
-                self.rpicam_process.wait(timeout=3)
+                result = subprocess.run(['pgrep', '-f', 'rpicam-vid'],
+                                        capture_output=True, text=True, timeout=2)
+                if result.returncode == 0 and result.stdout.strip():
+                    for pid in result.stdout.strip().split('\n'):
+                        if pid.strip():
+                            subprocess.run(['kill', '-9', pid.strip()], check=False, timeout=2)
             except Exception:
                 pass
-            self.rpicam_process = None
-        self._start_rpicam_vid()
+            # Wait for camera to be released before starting new process
+            self._wait_for_camera_release(max_wait_time=5.0, check_interval=0.05)
+            self._start_rpicam_vid()
+        finally:
+            _pause_for_photo_global.clear()
 
     def _reinitialize_camera(self):
         """Reinitialize camera with new settings."""

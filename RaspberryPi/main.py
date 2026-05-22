@@ -3,13 +3,13 @@ import time
 import uvicorn
 from src.core.streaming import CameraStreamServer
 from src.core.spectrum_streaming import SpectrumStreamServer
-from src.services.fastapi_server import app
+from src.services.fastapi_server import app, camera_service
 from src.config.settings import config
 
 
 def run_camera_server():
     """Run camera streaming server in a separate thread"""
-    server = CameraStreamServer(host='0.0.0.0', port=8080)
+    server = CameraStreamServer(host='0.0.0.0', port=8080, camera_service=camera_service)
     server.run()
 
 
@@ -36,6 +36,9 @@ if __name__ == '__main__':
     print("Camera stream will be available at http://0.0.0.0:8080/video")
     print("Spectrum stream will be available at http://0.0.0.0:8081/spectrum")
     print("Press Ctrl+C to stop all servers")
+
+    # Start the shared camera service once (streaming server will reuse it)
+    camera_service.start()
 
     # Create threads for all servers
     api_thread = threading.Thread(target=run_api_server, daemon=True)

@@ -51,13 +51,15 @@ class MJPEGHandler(BaseHTTPRequestHandler):
 
 
 class CameraStreamServer:
-    def __init__(self, host='0.0.0.0', port=8080, fps=20):
+    def __init__(self, host='0.0.0.0', port=8080, camera_service: CameraService = None, fps=20):
         self.host = host
         self.port = port
-        self.camera_service = CameraService(fps=fps)
+        self.camera_service = camera_service if camera_service is not None else CameraService(fps=fps)
+        self._owns_camera_service = camera_service is None
 
     def run(self):
-        self.camera_service.start()
+        if self._owns_camera_service:
+            self.camera_service.start()
         server = ThreadedHTTPServer((self.host, self.port), MJPEGHandler)
         server.camera_service = self.camera_service
 
@@ -67,5 +69,6 @@ class CameraStreamServer:
         except KeyboardInterrupt:
             pass
         finally:
-            self.camera_service.stop()
+            if self._owns_camera_service:
+                self.camera_service.stop()
             server.server_close()
