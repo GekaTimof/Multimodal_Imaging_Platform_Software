@@ -80,6 +80,9 @@ class MainWindow(QMainWindow):
         self.camera_tab = CameraTab(self.interface_text)
         self.wells_tab = WellsTab(self.interface_text)
 
+        # Track previous tab index for cleanup when leaving camera tab
+        self._previous_tab_index = 0
+        
         # Connect tab change handler
         self.tabs.currentChanged.connect(self.handle_tab_change)
 
@@ -162,6 +165,10 @@ class MainWindow(QMainWindow):
             index (int): Index of selected tab (0=Spectrometer, 1=Camera, 2=Wells)
         """
         try:
+            # Stop camera when leaving camera tab (index 1)
+            if self._previous_tab_index == 1 and index != 1:
+                self.camera_tab.stop_camera()
+            
             if index == 0:
                 # Switch to spectrometer mode
                 success, message = switch_to_spectrometer_mode()
@@ -191,10 +198,15 @@ class MainWindow(QMainWindow):
                 
                 # Switch device settings to Positioner for wells
                 self.wells_tab.device_settings_widget.switch_to_settings(self.interface_text.positioner())
-                
+            
+            # Update previous tab index for next change
+            self._previous_tab_index = index
+            
         except Exception as e:
             print(f"Error handling tab change: {e}")
             self.light_switcher_status.show_error(f"Ошибка при смене вкладки: {str(e)}")
+            # Still update the index even on error
+            self._previous_tab_index = index
     
     def switch_to_initial_mode(self):
         """Переключиться в режим соответствующий начальной вкладке"""
