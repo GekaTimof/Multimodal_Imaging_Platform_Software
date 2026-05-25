@@ -9,7 +9,7 @@ import json
 import logging
 from typing import Optional, Tuple, Dict, Any
 from enum import Enum
-from PyQt5.QtCore import QObject, pyqtSignal, QTimer
+from PyQt5.QtCore import QObject, pyqtSignal, QThread
 import threading
 
 logger = logging.getLogger(__name__)
@@ -20,6 +20,55 @@ class SwitchState(Enum):
     STATE_2 = "state2"  # Правый концевик - спектрометр
     UNKNOWN = "unknown"
     ERROR = "error"
+
+class _SwitchWorker(QThread):
+    """Фоновый поток для выполнения HTTP-запроса переключения, не блокирует GUI"""
+
+    def __init__(self, service: 'LightSwitcherService', state: str):
+        super().__init__()
+        self._service = service
+        self._state = state
+
+    def run(self):
+        state = self._state
+        service = self._service
+        print(f"DEBUG: Executing switch to {state} in background thread")
+
+        data = {"state": state}
+        success, result = service._make_request(
+            "/light-switcher/switch", method="POST", data=data, timeout=service.switch_timeout
+        )
+        print(f"DEBUG: API request completed. Success: {success}")
+
+        if success:
+            message = result.get('message', 'Переключение успешно')
+            data_result = result.get('data', {})
+            current_state = data_result.get('current_state', 'unknown')
+
+            with service._lock:
+                try:
+                    service.current_state = SwitchState(current_state)
+                except ValueError:
+                    service.current_state = SwitchState.ERROR
+
+            if current_state == "state1":
+                mode_text = "камера"
+            elif current_state == "state2":
+                mode_text = "спектрометр"
+            else:
+                mode_text = current_state
+
+            user_message = f"Режим {mode_text}: {message}"
+            print(f"DEBUG: Emitting switch_status_changed signal: {current_state}, {user_message}")
+            service.switch_status_changed.emit(current_state, user_message)
+        else:
+            message = f"Ошибка переключения в {state}: {result}"
+            with service._lock:
+                service.current_state = SwitchState.ERROR
+
+            print(f"DEBUG: Emitting error_occurred signal: {message}")
+            service.error_occurred.emit(message)
+
 
 class LightSwitcherService(QObject):
     """Сервис для управления переключателем света через API"""
@@ -203,64 +252,11 @@ class LightSwitcherService(QObject):
         print(f"DEBUG: Emitting switch_started signal for state: {state}")
         self.switch_started.emit(state)
         
-        # Используем QTimer для отложенного выполнения запроса
-        # чтобы дать время UI обновиться
-        self._delayed_switch_data = {"state": state}
-        QTimer.singleShot(100, self._execute_delayed_switch)
+        # Запускаем HTTP-запрос в фоновом потоке, чтобы не блокировать GUI
+        self._switch_worker = _SwitchWorker(self, state)
+        self._switch_worker.start()
         
-        # Возвращаем результат будет обработан в _execute_delayed_switch
-        # Пока вернем временный результат
         return True, "Switching in progress..."
-    
-    def _execute_delayed_switch(self):
-        """Выполнить отложенное переключение после обновления UI"""
-        if not hasattr(self, '_delayed_switch_data'):
-            return
-            
-        state = self._delayed_switch_data["state"]
-        print(f"DEBUG: Executing delayed switch to {state}")
-        
-        data = {"state": state}
-        print(f"DEBUG: Making API request to switch to {state}")
-        success, result = self._make_request("/light-switcher/switch", method="POST", data=data, timeout=self.switch_timeout)
-        print(f"DEBUG: API request completed. Success: {success}")
-        
-        if success:
-            message = result.get('message', 'Переключение успешно')
-            data_result = result.get('data', {})
-            current_state = data_result.get('current_state', 'unknown')
-            target_state = data_result.get('target_state', state)
-            
-            with self._lock:
-                try:
-                    self.current_state = SwitchState(current_state)
-                except ValueError:
-                    self.current_state = SwitchState.ERROR
-            
-            # Добавляем информацию о режиме в сообщение
-            if current_state == "state1":
-                mode_text = "камера"
-                mode_key = "camera"
-            elif current_state == "state2":
-                mode_text = "спектрометр"
-                mode_key = "spectrometer"
-            else:
-                mode_text = current_state
-                mode_key = current_state
-            
-            user_message = f"Режим {mode_text}: {message}"
-            print(f"DEBUG: Emitting switch_status_changed signal: {current_state}, {user_message}")
-            self.switch_status_changed.emit(current_state, user_message)
-        else:
-            message = f"Ошибка переключения в {state}: {result}"
-            with self._lock:
-                self.current_state = SwitchState.ERROR
-            
-            print(f"DEBUG: Emitting error_occurred signal: {message}")
-            self.error_occurred.emit(message)
-        
-        # Очищаем временные данные
-        delattr(self, '_delayed_switch_data')
     
     def switch_to_camera_mode(self) -> Tuple[bool, str]:
         """Переключиться в режим камеры (state1)"""

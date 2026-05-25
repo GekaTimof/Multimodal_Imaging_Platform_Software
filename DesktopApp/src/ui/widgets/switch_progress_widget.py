@@ -105,6 +105,9 @@ class SwitchProgressWidget(QWidget):
         # Изначально скрываем виджет
         self.setVisible(False)
         
+        # Оверлей не перехватывает клики мыши — кнопки за ним остаются кликабельны
+        self.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+        
         # Устанавливаем полупрозрачный фон для всего виджета
         self.setStyleSheet("""
             SwitchProgressWidget {
