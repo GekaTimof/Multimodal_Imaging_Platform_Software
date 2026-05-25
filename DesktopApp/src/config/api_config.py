@@ -35,6 +35,8 @@ THREAD_TIMEOUT_MS = 3000
 PROGRESS_UPDATE_INTERVAL_MS = 200
 SPECTRUM_THREAD_SLEEP_MS = 100
 API_THREAD_WAIT_TIMEOUT = 1000
+LIGHT_SWITCHER_CONNECTION_TIMEOUT = 10.0
+LIGHT_SWITCHER_SWITCH_TIMEOUT = 25.0
 
 # API endpoints
 ENDPOINTS = {
@@ -49,7 +51,12 @@ ENDPOINTS = {
     "apply_camera": f"{API_BASE_URL}/settings/camera/apply",
     "reload_camera": f"{API_BASE_URL}/settings/camera/reload",
     "video_stream": CAMERA_STREAM_URL,
-    "stream_status": f"{CAMERA_STREAM_URL}/status"
+    "stream_status": f"{CAMERA_STREAM_URL}/status",
+    # Light switcher endpoints
+    "light_switcher_status": f"{API_BASE_URL}/light-switcher/status",
+    "light_switcher_connect": f"{API_BASE_URL}/light-switcher/connect",
+    "light_switcher_switch": f"{API_BASE_URL}/light-switcher/switch",
+    "light_switcher_disconnect": f"{API_BASE_URL}/light-switcher/disconnect"
 }
 
 # Headers for API requests
