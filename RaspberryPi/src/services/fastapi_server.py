@@ -19,11 +19,6 @@ from .camera_service import CameraService
 from .light_switcher_service import light_switcher_service, SwitchState
 from .spectrometer_service import SpectrometerService
 
-# Camera parameters that require a camera stream restart when changed
-CAMERA_STREAM_PARAMS = frozenset({
-    "AeEnable", "AwbEnable", "ExposureTime", "AnalogueGain",
-    "ExposureValue", "RedGain", "BlueGain", "VideoResolution", "PhotoResolution"
-})
 
 # Setup logging
 logging.basicConfig(level=config.LOG_LEVEL, format=config.LOG_FORMAT)
@@ -356,14 +351,6 @@ async def update_parameter(request: ParameterUpdateRequest):
         )
         
         if success:
-            # Reload camera when any camera parameter changes
-            if request.table_name == "CameraSettings" and request.parameter in CAMERA_STREAM_PARAMS:
-                try:
-                    camera_service.reload_settings()
-                    message += " Camera settings applied."
-                except Exception as reload_error:
-                    message += f" Warning: Camera reload failed: {reload_error}"
-            
             return APIResponse(
                 success=True, 
                 message=message,
@@ -397,13 +384,10 @@ async def update_camera_settings(settings: CameraSettingsResponse):
         ]
         
         failed_updates = []
-        camera_params_changed = False
         for table_name, parameter, value in updates:
             success, message = db_service.update_parameter(table_name, parameter, value)
             if not success:
                 failed_updates.append(f"{parameter}: {message}")
-            elif parameter in CAMERA_STREAM_PARAMS:
-                camera_params_changed = True
 
         if failed_updates:
             raise HTTPException(
@@ -411,27 +395,11 @@ async def update_camera_settings(settings: CameraSettingsResponse):
                 detail=f"Failed to update some parameters: {'; '.join(failed_updates)}"
             )
 
-        # Reload camera if any streaming parameters changed
-        if camera_params_changed:
-            try:
-                camera_service.reload_settings()
-                return APIResponse(
-                    success=True,
-                    message="All camera settings updated and applied to camera.",
-                    data=settings.model_dump()
-                )
-            except Exception as reload_error:
-                return APIResponse(
-                    success=True,
-                    message=f"All camera settings updated but camera reload failed: {reload_error}",
-                    data=settings.model_dump()
-                )
-        else:
-            return APIResponse(
-                success=True,
-                message="All camera settings updated successfully",
-                data=settings.model_dump()
-            )
+        return APIResponse(
+            success=True,
+            message="All camera settings updated successfully",
+            data=settings.model_dump()
+        )
         
     except HTTPException:
         raise
@@ -501,9 +469,6 @@ async def load_camera_settings_from_slot(slot_id: int):
         if not success:
             raise HTTPException(status_code=400, detail=message)
 
-        # Restart camera with new session settings
-        camera_service.reload_settings()
-
         return APIResponse(
             success=True,
             message=f"Settings loaded from slot {slot_id} to current session and applied to camera",
@@ -515,22 +480,6 @@ async def load_camera_settings_from_slot(slot_id: int):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error loading slot to session: {str(e)}")
 
-
-@app.post("/api/settings/camera/reload", response_model=APIResponse)
-async def reload_camera_settings():
-    """Reload camera settings from slot 0 (current session) and reinitialize camera."""
-    try:
-        # Reload settings from database (slot 0) and reinitialize camera if needed
-        camera_service.reload_settings()
-
-        return APIResponse(
-            success=True,
-            message="Camera settings reloaded from current session. Camera reinitialized if resolution changed.",
-            data={"action": "reloaded"}
-        )
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error reloading camera settings: {str(e)}")
 
 
 @app.post("/api/settings/camera/apply", response_model=APIResponse)

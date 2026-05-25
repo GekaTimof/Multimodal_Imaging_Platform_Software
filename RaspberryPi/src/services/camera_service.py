@@ -683,23 +683,6 @@ class CameraService:
         with self.frame_lock:
             return self.current_frame
 
-    def reload_settings(self):
-        """Reload camera settings from database and reinitialize if needed."""
-        old_resolution = (self.width, self.height)
-
-        # Reload settings from database
-        self._load_settings()
-
-        # Check if resolution changed
-        new_resolution = (self.width, self.height)
-        if old_resolution != new_resolution and self.use_real_camera:
-            print(f"Resolution changed from {old_resolution} to {new_resolution}, reinitializing camera...")
-            self._reinitialize_camera()
-        elif self.camera_backend == "rpicam" and self.use_real_camera:
-            # Restart rpicam-vid to apply new settings (exposure, AWB, etc.)
-            print("Restarting rpicam-vid with updated settings...")
-            self._restart_rpicam_vid()
-
     def _restart_rpicam_vid(self):
         """Terminate current rpicam-vid and start a new one with updated settings."""
         # Set pause flag so capture loop doesn't race-restart the process
