@@ -35,6 +35,7 @@ from core.constants.camera_constants import (
     PHOTO_EXPECTED_ADDITIONS,
 )
 from core.constants.ui_strings import CameraTabStrings
+from config.theme_manager import ThemeManager
 from models.interface_text import Interface_text
 from services.save_photo import save_photo
 from core.threads.camera_thread import CameraThread
@@ -55,12 +56,13 @@ class CameraTab(QWidget):
     - Camera parameter settings
     """
 
-    def __init__(self, interface_text: Interface_text):
+    def __init__(self, interface_text: Interface_text, theme_manager: ThemeManager = None):
         """
         Initialize camera tab with interface text.
         
         Args:
             interface_text (Interface_text): Text manager for UI labels
+            theme_manager (ThemeManager): Application-wide theme manager
         """
         super().__init__()
 
@@ -114,7 +116,7 @@ class CameraTab(QWidget):
         upper_scroll_area.setWidget(upper_widget)
 
         # Lower panel with device settings (tabbed interface) with scroll
-        self.device_settings_widget = DeviceSettingsWidget(self.interface_text)
+        self.device_settings_widget = DeviceSettingsWidget(self.interface_text, theme_manager)
         
         # Create scroll area for device settings
         lower_scroll_area = QScrollArea()

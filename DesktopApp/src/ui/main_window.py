@@ -19,6 +19,7 @@ from ui.widgets.light_switcher_status_widget import LightSwitcherStatusWidget
 from ui.widgets.switch_progress_widget import SwitchProgressWidget
 from models.interface_text import Interface_text
 from config import interface_config
+from config.theme_manager import ThemeManager
 from services.raspberry_mode import (
     switch_to_camera_mode,
     switch_to_spectrometer_mode,
@@ -44,6 +45,10 @@ class MainWindow(QMainWindow):
         # Load language from config
         default_language = interface_config.get('language.default', 'English')
         self.interface_text = Interface_text(default_language)
+
+        # Theme manager — single source of truth for dark/light theme
+        self.theme_manager = ThemeManager(interface_config)
+        self.theme_manager.apply_current_theme()
         
         # Configure window from config
         window_config = interface_config.get_window_config()
@@ -80,9 +85,9 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(main_widget)
 
         # Initialize device tabs
-        self.spectrometer_tab = SpectrometerTab(self.interface_text)
-        self.camera_tab = CameraTab(self.interface_text)
-        self.Acquisition_tab = AcquisitionTab(self.interface_text)
+        self.spectrometer_tab = SpectrometerTab(self.interface_text, self.theme_manager)
+        self.camera_tab = CameraTab(self.interface_text, self.theme_manager)
+        self.Acquisition_tab = AcquisitionTab(self.interface_text, self.theme_manager)
 
         # Track previous tab index for cleanup when leaving camera tab
         self._previous_tab_index = 0

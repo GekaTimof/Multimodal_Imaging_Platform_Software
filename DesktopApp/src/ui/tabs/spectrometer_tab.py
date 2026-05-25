@@ -17,6 +17,7 @@ from PyQt5.QtWidgets import (
 )
 import pyqtgraph as pg
 
+from config.theme_manager import ThemeManager
 from models.interface_text import Interface_text
 from ui.widgets.device_settings_widget import DeviceSettingsWidget
 from ui.widgets.spectrometer_widget import SpectrometerWidget
@@ -27,9 +28,10 @@ class SpectrometerTab(QWidget):
     Spectrometer tab with the same column structure as CameraTab.
     """
 
-    def __init__(self, interface_text: Interface_text):
+    def __init__(self, interface_text: Interface_text, theme_manager: ThemeManager = None):
         super().__init__()
         self.interface_text = interface_text
+        self._theme_manager = theme_manager
 
         # ---- Left: graph widget ----
         self.spectrometer_widget = SpectrometerWidget(interface_text)
@@ -64,11 +66,6 @@ class SpectrometerTab(QWidget):
         self.reset_zoom_button.clicked.connect(self.spectrometer_widget.reset_graph_view)
         upper_tools_layout.addWidget(self.reset_zoom_button)
 
-        self.theme_button = QPushButton(interface_text.switch_to_dark_theme())
-        self.theme_button.setCheckable(True)
-        self.theme_button.toggled.connect(self._toggle_theme)
-        upper_tools_layout.addWidget(self.theme_button)
-
         # Progress bar (hidden by default)
         self.progress_bar = QProgressBar()
         self.progress_bar.setVisible(False)
@@ -85,7 +82,7 @@ class SpectrometerTab(QWidget):
         upper_scroll.setWidget(upper_tools_widget)
 
         # ---- Right lower: device settings ----
-        self.device_settings_widget = DeviceSettingsWidget(interface_text)
+        self.device_settings_widget = DeviceSettingsWidget(interface_text, theme_manager)
 
         # Switch dropdown to Spectrometer by default
         if hasattr(interface_text, 'spectrometer'):
@@ -130,6 +127,13 @@ class SpectrometerTab(QWidget):
         )
         # Forward errors
         self.spectrometer_widget.data_thread.error_occurred.connect(self._on_error)
+
+        # Theme: connect ThemeManager (global) or fallback to local signal
+        if theme_manager is not None:
+            theme_manager.theme_changed.connect(self._toggle_theme)
+            self._toggle_theme(theme_manager.is_dark)
+        else:
+            self.device_settings_widget.theme_toggle_requested.connect(self._toggle_theme)
 
     # ------------------------------------------------------------------
     # File operations
@@ -205,13 +209,11 @@ class SpectrometerTab(QWidget):
     # Theme
     # ------------------------------------------------------------------
 
-    def _toggle_theme(self, checked):
-        if checked:
+    def _toggle_theme(self, dark: bool):
+        if dark:
             self.spectrometer_widget.set_dark_theme()
-            self.theme_button.setText(self.interface_text.switch_to_light_theme())
         else:
             self.spectrometer_widget.set_light_theme()
-            self.theme_button.setText(self.interface_text.switch_to_dark_theme())
 
     # ------------------------------------------------------------------
     # Error handling
