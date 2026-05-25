@@ -23,7 +23,7 @@ class SwitchState(Enum):
 class LightSwitcherService:
     """Сервис для управления Arduino переключателем"""
     
-    def __init__(self, port: str = "/dev/ttyUSB0", baudrate: int = 9600, timeout: float = 2.0):
+    def __init__(self, port: str = "/dev/ttyUSB0", baudrate: int = 9600, timeout: float = 2.0, movement_timeout: float = 20.0):
         """
         Инициализация сервиса
         
@@ -35,6 +35,7 @@ class LightSwitcherService:
         self.port = port
         self.baudrate = baudrate
         self.timeout = timeout
+        self.movement_timeout = movement_timeout  # Timeout for motor movement commands
         self.serial_connection: Optional[serial.Serial] = None
         self.is_connected = False
         self.current_state = SwitchState.UNKNOWN
@@ -60,11 +61,11 @@ class LightSwitcherService:
                     write_timeout=self.timeout
                 )
                 
-                # Ожидание инициализации Arduino
-                time.sleep(2)
+                # Ожидание инициализации Arduino (reset after open)
+                time.sleep(2.5)
                 
-                # Проверка связи
-                if self._test_connection():
+                # Проверка что порт открыт
+                if self.serial_connection.is_open:
                     self.is_connected = True
                     self.logger.info(f"Connected to Arduino on {self.port}")
                     return True
@@ -100,11 +101,11 @@ class LightSwitcherService:
         Returns:
             bool: True если связь установлена
         """
+        if not self.is_connected or not self.serial_connection:
+            return False
         try:
-            # Отправка тестовой команды для проверки
-            response = self._send_command("test", expect_response=False)
-            # Если нет исключений, соединение работает
-            return True
+            # Простая проверка - порт открыт
+            return self.serial_connection.is_open
         except Exception:
             return False
     
@@ -161,7 +162,11 @@ class LightSwitcherService:
             Tuple[bool, str]: (успех, сообщение)
         """
         try:
+            # Temporarily increase timeout for movement command (up to 15s + buffer)
+            old_timeout = self.serial_connection.timeout
+            self.serial_connection.timeout = self.movement_timeout
             response = self._send_command("set1")
+            self.serial_connection.timeout = old_timeout
             
             if response == "done":
                 self.current_state = SwitchState.STATE_1
@@ -190,7 +195,11 @@ class LightSwitcherService:
             Tuple[bool, str]: (успех, сообщение)
         """
         try:
+            # Temporarily increase timeout for movement command
+            old_timeout = self.serial_connection.timeout
+            self.serial_connection.timeout = self.movement_timeout
             response = self._send_command("set2")
+            self.serial_connection.timeout = old_timeout
             
             if response == "done":
                 self.current_state = SwitchState.STATE_2
