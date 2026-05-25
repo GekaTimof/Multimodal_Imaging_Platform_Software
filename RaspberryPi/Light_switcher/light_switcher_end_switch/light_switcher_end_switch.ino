@@ -99,9 +99,9 @@ void processCommand(String s) {
   s.toLowerCase();
 
   if (s == "set1") {
-    Serial.println(moveToLeft());
-  } else if (s == "set2") {
     Serial.println(moveToRight());
+  } else if (s == "set2") {
+    Serial.println(moveToLeft());
   } else if (s.length() > 0) {
     Serial.println("unknown");
   }
