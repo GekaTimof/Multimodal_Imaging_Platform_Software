@@ -69,8 +69,8 @@ class Interface_text():
     def language(self):
         return self.text_json["Language"]
     
-    def wells(self):
-        return self.text_json["Wells"]
+    def Acquisition(self):
+        return self.text_json["Acquisition"]
     
     def camera(self):   
         """Return camera-related text."""

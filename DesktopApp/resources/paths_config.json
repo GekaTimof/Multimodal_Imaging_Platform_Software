@@ -33,9 +33,9 @@
             "create_subdirs": false,
             "subdir_format": "{date}"
         },
-        "wells": {
+        "Acquisition": {
             "default_save_dir": "",
-            "filename_template": "wells_analysis_{timestamp}.csv",
+            "filename_template": "Acquisition_analysis_{timestamp}.csv",
             "format": "CSV",
             "allowed_formats": [
                 "CSV",

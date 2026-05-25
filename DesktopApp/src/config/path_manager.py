@@ -36,9 +36,9 @@ class PathManager:
                 "create_subdirs": False,
                 "subdir_format": "{date}"
             },
-            "wells": {
+            "Acquisition": {
                 "default_save_dir": "",
-                "filename_template": "wells_analysis_{timestamp}.csv",
+                "filename_template": "Acquisition_analysis_{timestamp}.csv",
                 "format": "CSV",
                 "allowed_formats": ["CSV", "XLSX", "JSON"],
                 "create_subdirs": False,
@@ -117,7 +117,7 @@ class PathManager:
         Get configured save directory for specific operation.
 
         Args:
-            operation: Operation type ('photo', 'spectrometer', 'wells')
+            operation: Operation type ('photo', 'spectrometer', 'Acquisition')
 
         Returns:
             Save directory path
@@ -144,7 +144,7 @@ class PathManager:
         Set save directory for specific operation.
         
         Args:
-            operation: Operation type ('photo', 'spectrometer', 'wells')
+            operation: Operation type ('photo', 'spectrometer', 'Acquisition')
             directory: Directory path
         """
         is_valid, reason = self.validate_directory(directory)

@@ -7,7 +7,7 @@
 <a name="english"></a>
 ## English
 
-A comprehensive platform for controlling scientific instruments (spectrometer, camera, wells analysis) through a desktop application connected to Raspberry Pi hardware.
+A comprehensive platform for controlling scientific instruments (spectrometer, camera, acquisition analysis) through a desktop application connected to Raspberry Pi hardware.
 
 ### Overview
 
@@ -102,7 +102,7 @@ python main.py
 |---------|-------------|
 | **Camera Control** | IP camera video streaming, image capture, parameter configuration |
 | **Spectrometer** | Spectral data acquisition, integration time control, dark spectrum calibration |
-| **Wells Analysis** | Wells data visualization and analysis |
+| **Acquisition Analysis** | Acquisition data visualization and analysis |
 | **Multilingual UI** | English and Russian interface support |
 | **Settings Management** | Slot-based settings storage (10 slots per device) |
 | **Real-time Streaming** | MJPEG video and spectrum data streaming |
@@ -238,7 +238,7 @@ python main.py
 |-------------|----------|
 | **Управление камерой** | Потоковое видео с IP-камеры, захват изображений, настройка параметров |
 | **Спектрометр** | Сбор спектральных данных, управление временем интеграции, калибровка темнового спектра |
-| **Анализ лунок** | Визуализация и анализ данных лунок |
+| **Анализ приобретения** | Визуализация и анализ данных приобретения |
 | **Мультиязычный UI** | Поддержка английского и русского интерфейса |
 | **Управление настройками** | Хранение настроек в слотах (10 слотов на устройство) |
 | **Потоковая передача** | MJPEG видео и данные спектрометра в реальном времени |

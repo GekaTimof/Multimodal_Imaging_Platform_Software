@@ -5,7 +5,7 @@ Manages the main application window with tabbed interface for different device m
 The application provides three main tabs:
 - Spectrometer: For spectrometer device control
 - Camera: For camera device control and imaging
-- Wells: For wells analysis functionality
+- Acquisition: For acquisition analysis functionality
 """
 
 import logging
@@ -14,7 +14,7 @@ from PyQt5.QtWidgets import QMainWindow, QTabWidget, QVBoxLayout, QWidget
 from PyQt5.QtCore import QTimer
 from ui.tabs.spectrometer_tab import SpectrometerTab
 from ui.tabs.camera_tab import CameraTab
-from ui.tabs.wells_tab import WellsTab
+from ui.tabs.Acquisition_tab import AcquisitionTab
 from ui.widgets.light_switcher_status_widget import LightSwitcherStatusWidget
 from ui.widgets.switch_progress_widget import SwitchProgressWidget
 from models.interface_text import Interface_text
@@ -22,7 +22,7 @@ from config import interface_config
 from services.raspberry_mode import (
     switch_to_camera_mode,
     switch_to_spectrometer_mode,
-    switch_to_wells_mode,
+    switch_to_Acquisition_mode,
     check_switcher_connection,
     get_light_switcher_service,
 )
@@ -82,7 +82,7 @@ class MainWindow(QMainWindow):
         # Initialize device tabs
         self.spectrometer_tab = SpectrometerTab(self.interface_text)
         self.camera_tab = CameraTab(self.interface_text)
-        self.wells_tab = WellsTab(self.interface_text)
+        self.Acquisition_tab = AcquisitionTab(self.interface_text)
 
         # Track previous tab index for cleanup when leaving camera tab
         self._previous_tab_index = 0
@@ -93,7 +93,7 @@ class MainWindow(QMainWindow):
         # Add tabs to interface
         self.tabs.addTab(self.spectrometer_tab, self.interface_text.spectrometer())
         self.tabs.addTab(self.camera_tab, self.interface_text.camera())
-        self.tabs.addTab(self.wells_tab, self.interface_text.wells())
+        self.tabs.addTab(self.Acquisition_tab, self.interface_text.Acquisition())
         
         # Set default tab from config
         tabs_config = interface_config.get_tabs_config()
@@ -166,7 +166,7 @@ class MainWindow(QMainWindow):
         and switching device settings to the corresponding type.
         
         Args:
-            index (int): Index of selected tab (0=Spectrometer, 1=Camera, 2=Wells)
+            index (int): Index of selected tab (0=Spectrometer, 1=Camera, 2=Acquisition)
         """
         try:
             # Stop camera when leaving camera tab (index 1)
@@ -193,14 +193,14 @@ class MainWindow(QMainWindow):
                 self.camera_tab.device_settings_widget.switch_to_settings(self.interface_text.camera())
                 
             elif index == 2:
-                # Switch to wells mode (uses camera state)
-                success, message = switch_to_wells_mode()
+                # Switch to Acquisition mode (uses camera state)
+                success, message = switch_to_Acquisition_mode()
                 if not success:
                     # Показать ошибку, но продолжить переключение вкладки
                     self.light_switcher_status.show_error(f"Ошибка запуска переключения: {message}")
                 
-                # Switch device settings to Positioner for wells
-                self.wells_tab.device_settings_widget.switch_to_settings(self.interface_text.positioner())
+                # Switch device settings to Positioner for Acquisition
+                self.Acquisition_tab.device_settings_widget.switch_to_settings(self.interface_text.positioner())
             
             # Update previous tab index for next change
             self._previous_tab_index = index
@@ -226,9 +226,9 @@ class MainWindow(QMainWindow):
                 success, message = switch_to_camera_mode()
                 logger.debug(f"Initial camera switch result: {success}, {message}")
             elif current_tab == 2:
-                # Wells mode (uses camera state)
-                success, message = switch_to_wells_mode()
-                logger.debug(f"Initial wells switch result: {success}, {message}")
+                # Acquisition mode (uses camera state)
+                success, message = switch_to_Acquisition_mode()
+                logger.debug(f"Initial Acquisition switch result: {success}, {message}")
                 
         except Exception as e:
             logger.error(f"Error switching to initial mode: {e}")

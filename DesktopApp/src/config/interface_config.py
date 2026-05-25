@@ -37,7 +37,7 @@ class InterfaceConfig:
         "tabs": {
             "default_tab": 0,
             "remember_last_tab": True,
-            "tab_positions": ["spectrometer", "camera", "wells"]
+            "tab_positions": ["spectrometer", "camera", "Acquisition"]
         },
         "ui_behavior": {
             "confirmations": True,

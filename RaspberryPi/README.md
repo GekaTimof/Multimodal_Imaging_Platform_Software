@@ -137,7 +137,7 @@ Base URL: `http://<raspberry-pi-ip>:8000/api`
 
 #### Camera Control
 - `GET /api/camera/stream` — Video stream status
-- `POST /api/camera/mode/{mode}` — Set camera mode (camera/spectrometer/wells)
+- `POST /api/camera/mode/{mode}` — Set camera mode (camera/spectrometer/Acquisition)
 
 #### Spectrometer
 - `GET /api/spectrometer/data` — Get current spectrum data
@@ -336,7 +336,7 @@ sudo journalctl -u raspberrypi-settings.service -f    # Просмотр лог�
 
 #### Управление камерой
 - `GET /api/camera/stream` — Статус видеопотока
-- `POST /api/camera/mode/{mode}` — Установить режим камеры (camera/spectrometer/wells)
+- `POST /api/camera/mode/{mode}` — Установить режим камеры (camera/spectrometer/Acquisition)
 
 #### Спектрометр
 - `GET /api/spectrometer/data` — Получить текущие данные спектра

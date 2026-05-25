@@ -28,7 +28,7 @@
         "tab_positions": [
             "spectrometer",
             "camera",
-            "wells"
+            "Acquisition"
         ]
     },
     "ui_behavior": {

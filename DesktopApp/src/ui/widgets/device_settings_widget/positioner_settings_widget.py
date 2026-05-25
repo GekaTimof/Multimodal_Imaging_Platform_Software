@@ -1,6 +1,6 @@
 """
 Positioner Settings Widget
-Widget for configuring positioner device parameters for wells analysis mode.
+Widget for configuring positioner device parameters for Acquisition analysis mode.
 
 This widget provides controls for:
 - Position coordinates (X, Y, Z)

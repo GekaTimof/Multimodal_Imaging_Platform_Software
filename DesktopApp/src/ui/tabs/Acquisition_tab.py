@@ -2,16 +2,16 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel
 from models.interface_text import Interface_text
 from ui.widgets.device_settings_widget import DeviceSettingsWidget
 
-class WellsTab(QWidget):
+class AcquisitionTab(QWidget):
     def __init__(self, interface_text: Interface_text):
         super().__init__()
         
         # Main layout
         main_layout = QHBoxLayout(self)
         
-        # Left side - Wells content (placeholder for now)
+        # Left side - Acquisition content (placeholder for now)
         left_layout = QVBoxLayout()
-        left_layout.addWidget(QLabel(interface_text.wells()))
+        left_layout.addWidget(QLabel(interface_text.Acquisition()))
         left_layout.addStretch()
         
         # Right side - Device settings

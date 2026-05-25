@@ -65,25 +65,25 @@ def switch_to_camera_mode() -> Tuple[bool, str]:
         return False, error_msg
 
 
-def switch_to_wells_mode() -> Tuple[bool, str]:
+def switch_to_Acquisition_mode() -> Tuple[bool, str]:
     """
-    Переключить Raspberry Pi в режим wells (анализ лунок).
-    Для wells используется тот же режим, что и для камеры (state1).
+    Переключить Raspberry Pi в режим Acquisition (анализ лунок).
+    Для Acquisition используется тот же режим, что и для камеры (state1).
     
     Returns:
         Tuple[bool, str]: (успех, сообщение)
     """
     try:
         service = get_light_switcher_service()
-        success, message = service.switch_to_camera_mode()  # Wells использует camera mode
+        success, message = service.switch_to_camera_mode()  # Acquisition использует camera mode
         
         # При новой логике success всегда True (запущен процесс)
         # Результат придет через сигналы
-        logger.info("Started switching to wells mode (camera state)")
+        logger.info("Started switching to Acquisition mode (camera state)")
         return success, message
             
     except Exception as e:
-        error_msg = f"Error switching to wells mode: {str(e)}"
+        error_msg = f"Error switching to Acquisition mode: {str(e)}"
         logger.error(error_msg)
         return False, error_msg
 

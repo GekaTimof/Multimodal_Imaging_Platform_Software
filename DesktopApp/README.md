@@ -7,7 +7,7 @@
 <a name="english"></a>
 ## English
 
-Desktop GUI application for controlling scientific instruments (spectrometer, camera, wells analysis) connected to Raspberry Pi hardware.
+Desktop GUI application for controlling scientific instruments (spectrometer, camera, acquisition analysis) connected to Raspberry Pi hardware.
 
 ### Overview
 
@@ -42,7 +42,7 @@ DesktopApp/
 │   │   ├── base_device_model.py
 │   │   ├── camera_model.py
 │   │   ├── spectrometer_model.py
-│   │   └── wells_model.py
+│   │   └── Acquisition_model.py
 │   │
 │   └── ui/                    # User interface
 │       ├── threads/           # Background threads
@@ -52,7 +52,7 @@ DesktopApp/
 │       ├── tabs/              # Main interface tabs
 │       │   ├── camera_tab.py         # Camera control tab
 │       │   ├── spectrometer_tab.py   # Spectrometer tab
-│       │   └── wells_tab.py          # Wells analysis tab
+│       │   └── Acquisition_tab.py    # Acquisition analysis tab
 │       │
 │       ├── widgets/           # Reusable UI components
 │       │   ├── device_settings_widget/  # Settings widgets
@@ -89,8 +89,8 @@ DesktopApp/
 - Spectrum data export to files
 - Spectral visualization with matplotlib
 
-#### Wells Tab
-- Wells data visualization
+#### Acquisition Tab
+- Acquisition data visualization
 - Analysis parameter settings
 - Data export functionality
 
@@ -183,7 +183,7 @@ DesktopApp/
 │   │   ├── base_device_model.py
 │   │   ├── camera_model.py
 │   │   ├── spectrometer_model.py
-│   │   └── wells_model.py
+│   │   └── Acquisition_model.py
 │   │
 │   └── ui/                    # Пользовательский интерфейс
 │       ├── threads/           # Фоновые потоки
@@ -193,7 +193,7 @@ DesktopApp/
 │       ├── tabs/              # Основные вкладки интерфейса
 │       │   ├── camera_tab.py         # Вкладка управления камерой
 │       │   ├── spectrometer_tab.py   # Вкладка спектрометра
-│       │   └── wells_tab.py          # Вкладка анализа лунок
+│       │   └── Acquisition_tab.py    # Вкладка анализа приобретения
 │       │
 │       ├── widgets/           # Переиспользуемые UI компоненты
 │       │   ├── device_settings_widget/  # Виджеты настроек
@@ -230,8 +230,8 @@ DesktopApp/
 - Экспорт данных спектра в файлы
 - Визуализация спектра с matplotlib
 
-#### Вкладка Лунок
-- Визуализация данных лунок
+#### Вкладка Приобретения
+- Визуализация данных приобретения
 - Настройка параметров анализа
 - Экспорт данных
 
