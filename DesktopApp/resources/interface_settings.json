@@ -7,7 +7,7 @@
         "resizable": true
     },
     "theme": {
-        "default": "dark",
+        "default": "light",
         "available_themes": [
             "light",
             "dark"

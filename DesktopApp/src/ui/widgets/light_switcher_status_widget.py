@@ -75,8 +75,8 @@ class LightSwitcherStatusWidget(QFrame):
         
         # Растягивающийся spacer
         layout.addStretch()
-        
-        # Изначально скрываем виджет
+
+        # Изначально скрываем виджет (контейнер в main_window сохраняет фиксированный размер)
         self.setVisible(False)
         
     def setup_timer(self):

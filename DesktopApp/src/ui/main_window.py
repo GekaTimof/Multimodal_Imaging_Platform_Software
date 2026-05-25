@@ -10,7 +10,7 @@ The application provides three main tabs:
 
 import logging
 
-from PyQt5.QtWidgets import QMainWindow, QTabWidget, QVBoxLayout, QWidget
+from PyQt5.QtWidgets import QMainWindow, QTabWidget, QVBoxLayout, QWidget, QHBoxLayout
 from PyQt5.QtCore import QTimer
 from ui.tabs.spectrometer_tab import SpectrometerTab
 from ui.tabs.camera_tab import CameraTab
@@ -67,14 +67,23 @@ class MainWindow(QMainWindow):
         main_layout = QVBoxLayout(main_widget)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
-        
-        # Create status widget for light switcher
-        self.light_switcher_status = LightSwitcherStatusWidget(self)
-        main_layout.addWidget(self.light_switcher_status)
-        
+
         # Create tab widget
         self.tabs = QTabWidget()
         main_layout.addWidget(self.tabs)
+
+        # Create status container with fixed height to prevent layout shifts
+        status_container = QWidget()
+        status_container.setMinimumHeight(44)
+        status_container.setMaximumHeight(44)
+        status_layout = QHBoxLayout(status_container)
+        status_layout.setContentsMargins(0, 2, 0, 2)
+        status_layout.setSpacing(0)
+
+        # Create status widget for light switcher
+        self.light_switcher_status = LightSwitcherStatusWidget(self)
+        status_layout.addWidget(self.light_switcher_status)
+        main_layout.addWidget(status_container)
         
         # Create centered switch progress widget (overlay)
         self.switch_progress = SwitchProgressWidget(self)
