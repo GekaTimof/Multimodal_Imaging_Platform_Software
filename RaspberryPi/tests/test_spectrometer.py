@@ -7,8 +7,8 @@ import sys
 import os
 import time
 
-# Add src to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+# Add RaspberryPi root to path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from src.services.spectrometer_service import SpectrometerService
 from src.services.database_service import db_service

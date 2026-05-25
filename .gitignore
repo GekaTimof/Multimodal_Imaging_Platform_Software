@@ -160,6 +160,10 @@ Thumbs.db
 *.swp
 *.temp
 
+# RaspberryPi runtime directories
+logs/
+data/
+
 # IDE specific
 .vscode/settings.json
 .vscode/launch.json

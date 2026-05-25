@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Light Switcher Daemon
-Демон для поддержания постоянной работы Arduino переключателя
+Daemon for maintaining continuous operation of the Arduino switch controller
 """
 
 import time
@@ -13,14 +13,14 @@ from threading import Event
 from src.services.light_switcher_service import light_switcher_service, SwitchState
 
 class LightSwitcherDaemon:
-    """Демон для управления световым переключателем"""
+    """Daemon for managing the light switcher controller"""
     
     def __init__(self):
         self.running = Event()
         self.logger = self._setup_logging()
         
     def _setup_logging(self):
-        """Настройка логирования"""
+        """Set up logging"""
         # Derive log directory relative to this file's location (…/RaspberryPi/logs)
         base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
         log_dir = os.path.join(base_dir, 'logs')
@@ -37,27 +37,27 @@ class LightSwitcherDaemon:
         return logging.getLogger(__name__)
     
     def _signal_handler(self, signum, frame):
-        """Обработчик сигналов для graceful shutdown"""
+        """Signal handler for graceful shutdown"""
         self.logger.info(f"Received signal {signum}, shutting down...")
         self.running.clear()
     
     def _monitor_connection(self):
-        """Мониторинг и восстановление соединения с Arduino"""
+        """Monitor and restore Arduino connection"""
         while self.running.is_set():
             try:
-                # Проверка статуса соединения
+                # Check connection status
                 status = light_switcher_service.get_status()
                 
                 if not status['connected'] or not status['arduino_responsive']:
                     self.logger.warning("Connection lost or Arduino not responsive, attempting to reconnect...")
                     
-                    # Попытка переподключения
+                    # Attempt to reconnect
                     if light_switcher_service.connect():
                         self.logger.info("Successfully reconnected to Arduino")
                     else:
                         self.logger.error("Failed to reconnect to Arduino, will retry in 30 seconds")
                 
-                # Пауза между проверками
+                # Pause between checks
                 self.running.wait(30)
                 
             except Exception as e:
@@ -65,18 +65,18 @@ class LightSwitcherDaemon:
                 self.running.wait(30)
     
     def start(self):
-        """Запуск демона"""
+        """Start the daemon"""
         self.logger.info("Starting Light Switcher Daemon...")
         
-        # Установка обработчиков сигналов
+        # Set up signal handlers
         signal.signal(signal.SIGTERM, self._signal_handler)
         signal.signal(signal.SIGINT, self._signal_handler)
         
-        # Установка флага работы
+        # Set running flag
         self.running.set()
         
         try:
-            # Первичное подключение к Arduino
+            # Initial connection to Arduino
             self.logger.info("Attempting to connect to Arduino...")
             if light_switcher_service.connect():
                 self.logger.info("Successfully connected to Arduino")
@@ -85,7 +85,7 @@ class LightSwitcherDaemon:
             else:
                 self.logger.warning("Failed to connect to Arduino on startup, will retry...")
             
-            # Основной цикл демона
+            # Main daemon loop
             self.logger.info("Daemon started, monitoring connection...")
             self._monitor_connection()
             
@@ -97,11 +97,11 @@ class LightSwitcherDaemon:
             self.stop()
     
     def stop(self):
-        """Остановка демона"""
+        """Stop the daemon"""
         self.logger.info("Stopping Light Switcher Daemon...")
         self.running.clear()
         
-        # Отключение от Arduino
+        # Disconnect from Arduino
         try:
             light_switcher_service.disconnect()
             self.logger.info("Disconnected from Arduino")
@@ -111,7 +111,7 @@ class LightSwitcherDaemon:
         self.logger.info("Daemon stopped")
 
 def main():
-    """Главная функция"""
+    """Entry point"""
     daemon = LightSwitcherDaemon()
     
     try:

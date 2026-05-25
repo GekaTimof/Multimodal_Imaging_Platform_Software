@@ -1,36 +1,37 @@
 #!/usr/bin/env python3
 """
 Light Switcher Service for Arduino End Switch Control
-Сервис для управления Arduino переключателем концевиков
+Service for managing Arduino end switch controller
 """
 
 import serial
 import time
 import logging
 import threading
+import glob
 from typing import Optional, Tuple
 from enum import Enum
 
 logger = logging.getLogger(__name__)
 
 class SwitchState(Enum):
-    """Состояния переключателя"""
-    STATE_1 = "state1"  # Левый концевик
-    STATE_2 = "state2"  # Правый концевик
+    """Switch states"""
+    STATE_1 = "state1"  # Left end switch
+    STATE_2 = "state2"  # Right end switch
     UNKNOWN = "unknown"
     ERROR = "error"
 
 class LightSwitcherService:
-    """Сервис для управления Arduino переключателем"""
+    """Service for managing Arduino switch controller"""
     
-    def __init__(self, port: str = "/dev/ttyUSB0", baudrate: int = 9600, timeout: float = 2.0, movement_timeout: float = 20.0):
+    def __init__(self, port: str = None, baudrate: int = 9600, timeout: float = 2.0, movement_timeout: float = 20.0):
         """
-        Инициализация сервиса
+        Initialize the service.
         
         Args:
-            port: Serial порт для подключения Arduino
-            baudrate: Скорость передачи данных
-            timeout: Таймаут ожидания ответа
+            port: Serial port for Arduino connection (None for auto-detection)
+            baudrate: Communication baud rate
+            timeout: Response timeout
         """
         self.port = port
         self.baudrate = baudrate
@@ -42,18 +43,57 @@ class LightSwitcherService:
         self._lock = threading.Lock()
         self.logger = logger
         
-    def connect(self) -> bool:
+    def _find_arduino_port(self) -> Optional[str]:
         """
-        Подключение к Arduino
+        Auto-detect Arduino port.
+        Checks /dev/ttyUSB* and /dev/ttyACM*.
         
         Returns:
-            bool: True если подключение успешно
+            str: Port path or None if not found
+        """
+        # Ищем USB Serial порты
+        patterns = ['/dev/ttyUSB*', '/dev/ttyACM*']
+        for pattern in patterns:
+            ports = glob.glob(pattern)
+            for port in sorted(ports):
+                try:
+                    # Пробуем открыть порт
+                    ser = serial.Serial(port, self.baudrate, timeout=1)
+                    ser.close()
+                    # Если порт открылся - считаем что это Arduino
+                    self.logger.info(f"Found Arduino on {port}")
+                    return port
+                except (serial.SerialException, OSError):
+                    continue
+                except Exception:
+                    continue
+        
+        return None
+        
+    def connect(self) -> bool:
+        """
+        Connect to Arduino.
+        If no port was specified, automatically searches for Arduino.
+        
+        Returns:
+            bool: True if connection was successful
         """
         try:
             with self._lock:
                 if self.serial_connection and self.serial_connection.is_open:
                     self.serial_connection.close()
-                    
+                
+                # Если порт не указан или не существует - ищем автоматически
+                if self.port is None or not glob.glob(self.port):
+                    found_port = self._find_arduino_port()
+                    if found_port:
+                        self.port = found_port
+                        self.logger.info(f"Auto-detected Arduino on {self.port}")
+                    else:
+                        self.logger.error("Arduino not found on any port")
+                        self.is_connected = False
+                        return False
+                
                 self.serial_connection = serial.Serial(
                     port=self.port,
                     baudrate=self.baudrate,
@@ -84,7 +124,7 @@ class LightSwitcherService:
             return False
     
     def disconnect(self):
-        """Отключение от Arduino"""
+        """Disconnect from Arduino"""
         try:
             with self._lock:
                 if self.serial_connection and self.serial_connection.is_open:
@@ -96,29 +136,69 @@ class LightSwitcherService:
     
     def _test_connection(self) -> bool:
         """
-        Тестирование соединения с Arduino
+        Test connection to Arduino.
+        Sends a real command to verify Arduino is responding.
         
         Returns:
-            bool: True если связь установлена
+            bool: True if connection is established and Arduino is responsive
         """
         if not self.is_connected or not self.serial_connection:
             return False
-        try:
-            # Простая проверка - порт открыт
-            return self.serial_connection.is_open
-        except Exception:
+        if not self.serial_connection.is_open:
+            self.is_connected = False
             return False
+        try:
+            # Реальная проверка - отправляем команду и проверяем ответ
+            # Используем "set1" с очень коротким таймаутом как ping
+            old_timeout = self.serial_connection.timeout
+            self.serial_connection.timeout = 0.5  # Короткий таймаут для проверки
+            
+            # Очистка буферов
+            self.serial_connection.reset_input_buffer()
+            self.serial_connection.reset_output_buffer()
+            
+            # Отправляем команду set1 - если концевик нажат, ответит "alreadyset"
+            self.serial_connection.write(b"set1\n")
+            self.serial_connection.flush()
+            
+            # Ждем ответ (любой - done, alreadyset, timeout)
+            response = self.serial_connection.readline().decode('utf-8').strip()
+            
+            # Восстанавливаем таймаут
+            self.serial_connection.timeout = old_timeout
+            
+            # Если получили любой ответ - Arduino жив
+            if response in ["done", "alreadyset", "timeout"]:
+                return True
+            return False
+            
+        except (serial.SerialException, OSError) as e:
+            # Порт отключен физически или ошибка
+            self.logger.warning(f"Connection test failed - port disconnected: {e}")
+            self.is_connected = False
+            return False
+        except Exception as e:
+            self.logger.warning(f"Connection test failed: {e}")
+            self.is_connected = False
+            return False
+        finally:
+            # Восстанавливаем таймаут в любом случае
+            try:
+                if self.serial_connection:
+                    self.serial_connection.timeout = old_timeout
+            except:
+                pass
     
     def _send_command(self, command: str, expect_response: bool = True) -> Optional[str]:
         """
-        Отправка команды в Arduino
+        Send command to Arduino.
         
         Args:
-            command: Команда для отправки
-            expect_response: Ожидать ли ответ
+            command: Command to send
+            expect_response: Whether to wait for a response
             
         Returns:
-            Optional[str]: Ответ от Arduino или None
+            Optional[str]: Response from Arduino or None
         """
         if not self.is_connected or not self.serial_connection:
             raise ConnectionError("Not connected to Arduino")
@@ -146,7 +226,7 @@ class LightSwitcherService:
         except serial.SerialTimeoutException:
             self.logger.error(f"Timeout sending command: {command}")
             raise
-        except serial.SerialException as e:
+        except (serial.SerialException, OSError) as e:
             self.logger.error(f"Serial error sending command {command}: {e}")
             self.is_connected = False
             raise
@@ -156,10 +236,10 @@ class LightSwitcherService:
     
     def switch_to_state_1(self) -> Tuple[bool, str]:
         """
-        Переключение в состояние 1 (левый концевик)
+        Switch to state 1 (left end switch).
         
         Returns:
-            Tuple[bool, str]: (успех, сообщение)
+            Tuple[bool, str]: (success, message)
         """
         try:
             # Temporarily increase timeout for movement command (up to 15s + buffer)
@@ -189,10 +269,10 @@ class LightSwitcherService:
     
     def switch_to_state_2(self) -> Tuple[bool, str]:
         """
-        Переключение в состояние 2 (правый концевик)
+        Switch to state 2 (right end switch).
         
         Returns:
-            Tuple[bool, str]: (успех, сообщение)
+            Tuple[bool, str]: (success, message)
         """
         try:
             # Temporarily increase timeout for movement command
@@ -222,10 +302,10 @@ class LightSwitcherService:
     
     def get_status(self) -> dict:
         """
-        Получение статуса сервиса
+        Get service status.
         
         Returns:
-            dict: Информация о статусе
+            dict: Status information
         """
         return {
             "connected": self.is_connected,
@@ -244,8 +324,8 @@ class LightSwitcherService:
         """Context manager exit"""
         self.disconnect()
 
-# Глобальный экземпляр сервиса
-light_switcher_service = LightSwitcherService()
+# Global service instance (with auto port detection)
+light_switcher_service = LightSwitcherService(port=None)
 
 if __name__ == "__main__":
     # Тестирование сервиса
