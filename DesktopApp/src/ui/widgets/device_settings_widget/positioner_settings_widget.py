@@ -11,7 +11,8 @@ This widget provides controls for:
 
 import logging
 
-from config.api_config import API_BASE_URL, THREAD_TIMEOUT_MS
+from config.api_config import API_BASE_URL
+from core.constants.camera_constants import THREAD_TIMEOUT_MS
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, 
     QLabel, QSpinBox, QDoubleSpinBox, QPushButton, 

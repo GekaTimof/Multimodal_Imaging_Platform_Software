@@ -13,12 +13,12 @@ from PyQt5.QtWidgets import (
     QSpinBox, QVBoxLayout, QWidget
 )
 
-from config.api_config import API_BASE_URL, ENDPOINTS, THREAD_TIMEOUT_MS
+from config.api_config import API_BASE_URL, ENDPOINTS
 from core.constants.camera_constants import (
     ANALOGUE_GAIN_RANGE, BLUE_GAIN_RANGE, DEFAULT_ANALOGUE_GAIN, DEFAULT_BLUE_GAIN,
     DEFAULT_EXPOSURE_TIME, DEFAULT_EXPOSURE_VALUE, DEFAULT_RED_GAIN,
     DEFAULT_RESOLUTION_PHOTO, DEFAULT_RESOLUTION_VIDEO, EXPOSURE_TIME_RANGE,
-    EXPOSURE_VALUE_RANGE, RED_GAIN_RANGE,
+    EXPOSURE_VALUE_RANGE, RED_GAIN_RANGE, THREAD_TIMEOUT_MS,
 )
 from core.constants.ui_strings import SettingsWidgetStrings
 from .api_client_thread import APIClientThread

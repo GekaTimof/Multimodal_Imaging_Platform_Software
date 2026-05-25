@@ -20,7 +20,20 @@ from PyQt5.QtGui import QPixmap, QImage
 from PyQt5.QtWidgets import QHBoxLayout, QLabel, QMessageBox, QProgressBar, QPushButton, QScrollArea, QSizePolicy, QVBoxLayout, QWidget
 
 from config.api_config import CAMERA_STREAM_URL, API_BASE_URL
-from core.constants.camera_constants import DEFAULT_CAMERA_SLOT
+from core.constants.camera_constants import (
+    DEFAULT_CAMERA_SLOT,
+    PHOTO_CAPTURE_PAUSE_OVERHEAD_S,
+    PHOTO_CAPTURE_RESUME_OVERHEAD_S,
+    PHOTO_CAPTURE_SAFETY_MARGIN_S,
+    PHOTO_CAPTURE_FALLBACK_DURATION_MS,
+    PHOTO_CAPTURE_FALLBACK_TIMEOUT_S,
+    EXPOSURE_THRESHOLD_EXTREME,
+    EXPOSURE_THRESHOLD_VERY_LONG,
+    EXPOSURE_THRESHOLD_LONG,
+    EXPOSURE_THRESHOLD_MEDIUM,
+    PHOTO_TIMEOUT_ADDITIONS,
+    PHOTO_EXPECTED_ADDITIONS,
+)
 from core.constants.ui_strings import CameraTabStrings
 from models.interface_text import Interface_text
 from services.save_photo import save_photo
@@ -201,44 +214,45 @@ class CameraTab(QWidget):
         self.start_button.setEnabled(True)
         self.stop_button.setEnabled(False)
 
-    # Overhead constants matching RaspberryPi camera_service.py behaviour:
+    # Константы накладных расходов, соответствующие поведению RaspberryPi camera_service.py:
     #   _pause_video_stream  → sleep(0.02) + terminate + wait(1s) + _wait_for_camera_release ≈ 2-3s
-    #   _resume_video_stream → only clears flag, capture loop restarts rpicam-vid itself  ≈ 0s
-    _PAUSE_OVERHEAD_S: float = 3.0
-    _RESUME_OVERHEAD_S: float = 0.0
+    #   _resume_video_stream → только сбрасывает флаг, цикл захвата перезапускает rpicam-vid  ≈ 0s
+    _PAUSE_OVERHEAD_S: float = PHOTO_CAPTURE_PAUSE_OVERHEAD_S
+    _RESUME_OVERHEAD_S: float = PHOTO_CAPTURE_RESUME_OVERHEAD_S
 
     @staticmethod
     def _rpicam_still_timeout(exposure_us: int) -> float:
-        """Mirror the timeout formula in RaspberryPi camera_service.py capture_photo()."""
+        """Копирует формулу таймаута из RaspberryPi camera_service.py capture_photo()."""
         exposure_sec = exposure_us / 1_000_000
-        if exposure_sec >= 60:
-            return exposure_sec + 30  # Extreme long exposure (60s+)
-        elif exposure_sec >= 10:
-            return exposure_sec + 15  # Very long exposure (10-60s)
-        elif exposure_sec >= 3:
-            return exposure_sec + 15  # Long exposure (3-10s) - extra buffer for init
-        elif exposure_sec >= 1:
-            return exposure_sec + 8   # Medium exposure (1-3s)
+        if exposure_sec >= EXPOSURE_THRESHOLD_EXTREME:
+            return exposure_sec + PHOTO_TIMEOUT_ADDITIONS['extreme']
+        elif exposure_sec >= EXPOSURE_THRESHOLD_VERY_LONG:
+            return exposure_sec + PHOTO_TIMEOUT_ADDITIONS['very_long']
+        elif exposure_sec >= EXPOSURE_THRESHOLD_LONG:
+            return exposure_sec + PHOTO_TIMEOUT_ADDITIONS['long']
+        elif exposure_sec >= EXPOSURE_THRESHOLD_MEDIUM:
+            return exposure_sec + PHOTO_TIMEOUT_ADDITIONS['medium']
         else:
-            return 10.0  # Short exposure (<1s) - fast with ZSL
+            return PHOTO_TIMEOUT_ADDITIONS['short']
 
     @staticmethod
     def _rpicam_still_expected(exposure_us: int) -> float:
-        """Expected REAL duration of rpicam-still for progress bar estimation.
-        Shorter than the subprocess timeout — reflects typical observed wall-clock time.
-        Camera init (IMX477): ~3-5s; ZSL after video pause is not active so init always runs.
+        """Ожидаемая РЕАЛЬНАЯ длительность rpicam-still для оценки прогресс-бара.
+        Короче чем таймаут subprocess — отражает типичное наблюдаемое время.
+        Инициализация камеры (IMX477): ~3-5с; ZSL после паузы видео не активен, поэтому
+        инициализация всегда выполняется.
         """
         exposure_sec = exposure_us / 1_000_000
-        if exposure_sec >= 60:
-            return exposure_sec + 10
-        elif exposure_sec >= 10:
-            return exposure_sec + 7
-        elif exposure_sec >= 3:
-            return exposure_sec + 6
-        elif exposure_sec >= 1:
-            return exposure_sec + 5
+        if exposure_sec >= EXPOSURE_THRESHOLD_EXTREME:
+            return exposure_sec + PHOTO_EXPECTED_ADDITIONS['extreme']
+        elif exposure_sec >= EXPOSURE_THRESHOLD_VERY_LONG:
+            return exposure_sec + PHOTO_EXPECTED_ADDITIONS['very_long']
+        elif exposure_sec >= EXPOSURE_THRESHOLD_LONG:
+            return exposure_sec + PHOTO_EXPECTED_ADDITIONS['long']
+        elif exposure_sec >= EXPOSURE_THRESHOLD_MEDIUM:
+            return exposure_sec + PHOTO_EXPECTED_ADDITIONS['medium']
         else:
-            return 6.0  # Short exposure (<1s): ~3-5s init + capture + encode
+            return PHOTO_EXPECTED_ADDITIONS['short']
 
     def _get_expected_capture_duration_ms(self) -> tuple:
         """Fetch current exposure settings and compute:
@@ -268,8 +282,11 @@ class CameraTab(QWidget):
                 # Total expected wall-clock time = pause + still + resume
                 total_s = self._PAUSE_OVERHEAD_S + still_expected_s + self._RESUME_OVERHEAD_S
 
-                # HTTP timeout = max subprocess timeout + overheads + 20s safety margin
-                http_timeout_s = self._PAUSE_OVERHEAD_S + still_timeout_s + self._RESUME_OVERHEAD_S + 20.0
+                # HTTP timeout = max subprocess timeout + overheads + safety margin
+                http_timeout_s = (
+                    self._PAUSE_OVERHEAD_S + still_timeout_s + self._RESUME_OVERHEAD_S
+                    + PHOTO_CAPTURE_SAFETY_MARGIN_S
+                )
 
                 logger.info(
                     f"Capture estimate: exposure={exposure_us}us, "
@@ -280,8 +297,8 @@ class CameraTab(QWidget):
         except Exception as e:
             logger.warning(f"Could not fetch exposure settings for progress estimate: {e}")
 
-        # Fallback: ~9s total (pause 3s + still 6s + resume 0s), 33s timeout
-        return 9_000, 33.0
+        # Fallback: используем константы из конфигурации
+        return PHOTO_CAPTURE_FALLBACK_DURATION_MS, PHOTO_CAPTURE_FALLBACK_TIMEOUT_S
 
     def save_current_image(self) -> None:
         """Capture and save a high-quality photo using PhotoResolution settings from API."""

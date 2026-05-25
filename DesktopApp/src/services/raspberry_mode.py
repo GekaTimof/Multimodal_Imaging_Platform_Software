@@ -5,14 +5,14 @@ for different device modes.
 """
 
 import logging
-from typing import Tuple
+from typing import Tuple, Optional
 from .light_switcher_service import LightSwitcherService
 from config import api_config
 
 logger = logging.getLogger(__name__)
 
 # Глобальный экземпляр сервиса переключателя
-_light_switcher_service: LightSwitcherService = None
+_light_switcher_service: Optional[LightSwitcherService] = None
 
 def get_light_switcher_service() -> LightSwitcherService:
     """Получить экземпляр сервиса переключателя (singleton pattern)"""

@@ -71,3 +71,36 @@ CAMERA_BACKENDS = {
     'RPICAM': 'rpicam',
     'TEST': 'test'
 }
+
+# Photo capture timing constants (matching RaspberryPi camera_service.py)
+PHOTO_CAPTURE_PAUSE_OVERHEAD_S = 3.0  # Время на паузу видеопотока
+PHOTO_CAPTURE_RESUME_OVERHEAD_S = 0.0  # Время на возобновление видеопотока
+PHOTO_CAPTURE_SAFETY_MARGIN_S = 20.0  # Запас времени для HTTP таймаута
+
+# Fallback values for capture duration estimation
+PHOTO_CAPTURE_FALLBACK_DURATION_MS = 9_000  # 9 секунд по умолчанию
+PHOTO_CAPTURE_FALLBACK_TIMEOUT_S = 33.0  # 33 секунды таймаут по умолчанию
+
+# Exposure thresholds for timeout calculation (в секундах)
+EXPOSURE_THRESHOLD_EXTREME = 60.0  # Экстремальная экспозиция (60с+)
+EXPOSURE_THRESHOLD_VERY_LONG = 10.0  # Очень длинная экспозиция (10-60с)
+EXPOSURE_THRESHOLD_LONG = 3.0  # Длинная экспозиция (3-10с)
+EXPOSURE_THRESHOLD_MEDIUM = 1.0  # Средняя экспозиция (1-3с)
+
+# Timeout additions for different exposure ranges (extreme, very_long, long, medium, short)
+PHOTO_TIMEOUT_ADDITIONS = {
+    'extreme': 30.0,
+    'very_long': 15.0,
+    'long': 15.0,
+    'medium': 8.0,
+    'short': 10.0
+}
+
+# Expected duration additions for different exposure ranges
+PHOTO_EXPECTED_ADDITIONS = {
+    'extreme': 10.0,
+    'very_long': 7.0,
+    'long': 6.0,
+    'medium': 5.0,
+    'short': 6.0
+}

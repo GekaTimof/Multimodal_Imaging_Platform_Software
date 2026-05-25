@@ -3,11 +3,13 @@ Spectrometer Service
 Handles communication with the spectrometer API on Raspberry Pi.
 """
 
+import time
+import logging
+from typing import Optional, Tuple, Dict, Any
+
 import requests
 import numpy as np
-from typing import Optional, Tuple, Dict, Any
 from PyQt5.QtCore import QObject, pyqtSignal, QTimer
-import logging
 
 from config.api_config import API_BASE_URL, TIMEOUT_SECONDS, RETRY_ATTEMPTS, RETRY_DELAY
 
@@ -72,7 +74,6 @@ class SpectrometerService(QObject):
             except requests.exceptions.RequestException as e:
                 logger.error(f"Request attempt {attempt + 1} failed: {e}")
                 if attempt < RETRY_ATTEMPTS - 1:
-                    import time
                     time.sleep(RETRY_DELAY)
                     
         return None

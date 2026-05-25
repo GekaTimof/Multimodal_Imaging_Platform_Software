@@ -1,5 +1,3 @@
-import base64
-import subprocess as _sp
 import json as _json
 import tempfile
 import uvicorn

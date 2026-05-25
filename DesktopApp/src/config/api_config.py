@@ -1,7 +1,11 @@
 """
 API Configuration
 Centralized configuration for API endpoints and connection settings.
-IP address of Raspberry Pi is configured in resources/settings.json ("api.base_url" and "camera.stream_url").
+
+Приоритет настроек (от высшего к низшему):
+1. Переменные окружения (RASPBERRY_PI_IP, API_PORT, STREAM_PORT)
+2. Файл resources/settings.json
+3. Значения по умолчанию
 """
 
 import json
@@ -10,9 +14,18 @@ import os
 
 logger = logging.getLogger(__name__)
 
-_SETTINGS_FILE = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "resources", "settings.json"))
+# Значения по умолчанию
+_DEFAULT_RASPBERRY_PI_IP = "10.78.112.189"
+_DEFAULT_API_PORT = "8000"
+_DEFAULT_STREAM_PORT = "8080"
+
+_SETTINGS_FILE = os.path.normpath(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "resources", "settings.json")
+)
+
 
 def _load_settings() -> dict:
+    """Загрузить настройки из JSON-файла."""
     try:
         with open(_SETTINGS_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
@@ -20,10 +33,39 @@ def _load_settings() -> dict:
         logger.warning(f"Could not load settings.json: {e}")
         return {}
 
+
+def _get_base_url_from_env() -> str | None:
+    """Получить базовый URL из переменных окружения."""
+    ip = os.getenv("RASPBERRY_PI_IP")
+    port = os.getenv("API_PORT", _DEFAULT_API_PORT)
+    if ip:
+        return f"http://{ip}:{port}/api"
+    return None
+
+
+def _get_stream_url_from_env() -> str | None:
+    """Получить URL видеопотока из переменных окружения."""
+    ip = os.getenv("RASPBERRY_PI_IP")
+    port = os.getenv("STREAM_PORT", _DEFAULT_STREAM_PORT)
+    if ip:
+        return f"http://{ip}:{port}/video"
+    return None
+
+
 _settings = _load_settings()
 
-API_BASE_URL: str = _settings.get("api", {}).get("base_url", "http://10.78.112.189:8000/api")
-CAMERA_STREAM_URL: str = _settings.get("camera", {}).get("stream_url", "http://10.78.112.189:8080/video")
+# Приоритет: переменные окружения > settings.json > значения по умолчанию
+API_BASE_URL: str = (
+    _get_base_url_from_env()
+    or _settings.get("api", {}).get("base_url")
+    or f"http://{_DEFAULT_RASPBERRY_PI_IP}:{_DEFAULT_API_PORT}/api"
+)
+
+CAMERA_STREAM_URL: str = (
+    _get_stream_url_from_env()
+    or _settings.get("camera", {}).get("stream_url")
+    or f"http://{_DEFAULT_RASPBERRY_PI_IP}:{_DEFAULT_STREAM_PORT}/video"
+)
 
 # Connection settings
 TIMEOUT_SECONDS = 5
@@ -33,8 +75,6 @@ RETRY_DELAY = 1.0
 # Timeout constants (centralized)
 CAMERA_STREAM_TIMEOUT = 5
 PHOTO_CAPTURE_TIMEOUT = 350.0
-THREAD_WAIT_TIMEOUT = 1000
-THREAD_TIMEOUT_MS = 3000
 PROGRESS_UPDATE_INTERVAL_MS = 200
 SPECTRUM_THREAD_SLEEP_MS = 100
 API_THREAD_WAIT_TIMEOUT = 1000
