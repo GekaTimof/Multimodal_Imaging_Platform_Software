@@ -32,12 +32,10 @@ def switch_to_spectrometer_mode() -> Tuple[bool, str]:
         service = get_light_switcher_service()
         success, message = service.switch_to_spectrometer_mode()
         
-        if success:
-            logger.info("Successfully switched to spectrometer mode")
-            return True, message
-        else:
-            logger.error(f"Failed to switch to spectrometer mode: {message}")
-            return False, message
+        # При новой логике success всегда True (запущен процесс)
+        # Результат придет через сигналы
+        logger.info("Started switching to spectrometer mode")
+        return success, message
             
     except Exception as e:
         error_msg = f"Error switching to spectrometer mode: {str(e)}"
@@ -56,12 +54,10 @@ def switch_to_camera_mode() -> Tuple[bool, str]:
         service = get_light_switcher_service()
         success, message = service.switch_to_camera_mode()
         
-        if success:
-            logger.info("Successfully switched to camera mode")
-            return True, message
-        else:
-            logger.error(f"Failed to switch to camera mode: {message}")
-            return False, message
+        # При новой логике success всегда True (запущен процесс)
+        # Результат придет через сигналы
+        logger.info("Started switching to camera mode")
+        return success, message
             
     except Exception as e:
         error_msg = f"Error switching to camera mode: {str(e)}"
@@ -81,12 +77,10 @@ def switch_to_wells_mode() -> Tuple[bool, str]:
         service = get_light_switcher_service()
         success, message = service.switch_to_camera_mode()  # Wells использует camera mode
         
-        if success:
-            logger.info("Successfully switched to wells mode (camera state)")
-            return True, message
-        else:
-            logger.error(f"Failed to switch to wells mode: {message}")
-            return False, message
+        # При новой логике success всегда True (запущен процесс)
+        # Результат придет через сигналы
+        logger.info("Started switching to wells mode (camera state)")
+        return success, message
             
     except Exception as e:
         error_msg = f"Error switching to wells mode: {str(e)}"

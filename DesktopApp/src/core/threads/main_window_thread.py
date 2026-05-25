@@ -9,10 +9,12 @@ The application provides three main tabs:
 """
 
 from PyQt5.QtWidgets import QMainWindow, QTabWidget, QVBoxLayout, QWidget
+from PyQt5.QtCore import QTimer
 from ui.tabs.spectrometer_tab import SpectrometerTab
 from ui.tabs.camera_tab import CameraTab
 from ui.tabs.wells_tab import WellsTab
 from ui.widgets.light_switcher_status_widget import LightSwitcherStatusWidget
+from ui.widgets.switch_progress_widget import SwitchProgressWidget
 from models.objects.Interface_text import Interface_text
 from config import interface_config
 from services.raspberry_mode import (
@@ -65,6 +67,11 @@ class MainWindow(QMainWindow):
         self.tabs = QTabWidget()
         main_layout.addWidget(self.tabs)
         
+        # Create centered switch progress widget (overlay)
+        self.switch_progress = SwitchProgressWidget(self)
+        self.switch_progress.setParent(self.tabs)  # Накладываем на вкладки
+        self.switch_progress.raise_()  # Поднимаем на передний план
+        
         # Set main widget as central widget
         self.setCentralWidget(main_widget)
 
@@ -91,6 +98,9 @@ class MainWindow(QMainWindow):
         
         # Check light switcher connection on startup
         self.check_initial_connection()
+        
+        # Switch to mode corresponding to initial tab
+        QTimer.singleShot(1000, self.switch_to_initial_mode)  # Задержка 1 секунда для инициализации
 
     def setup_light_switcher_connections(self):
         """Настроить соединения для сервиса переключателя"""
@@ -109,6 +119,17 @@ class MainWindow(QMainWindow):
             )
             light_switcher_service.error_occurred.connect(
                 self.light_switcher_status.show_error
+            )
+            
+            # Подключаем сигналы к центрированной плашке прогресса
+            light_switcher_service.switch_started.connect(
+                self.switch_progress.show_switch_progress
+            )
+            light_switcher_service.switch_status_changed.connect(
+                self.switch_progress.hide_switch_progress
+            )
+            light_switcher_service.error_occurred.connect(
+                self.switch_progress.hide_switch_progress
             )
             
         except Exception as e:
@@ -146,7 +167,7 @@ class MainWindow(QMainWindow):
                 success, message = switch_to_spectrometer_mode()
                 if not success:
                     # Показать ошибку, но продолжить переключение вкладки
-                    self.light_switcher_status.show_error(f"Ошибка переключения: {message}")
+                    self.light_switcher_status.show_error(f"Ошибка запуска переключения: {message}")
                 
                 # Switch device settings to Spectrometer
                 self.spectrometer_tab.device_settings_widget.switch_to_settings(self.interface_text.spectrometer())
@@ -156,7 +177,7 @@ class MainWindow(QMainWindow):
                 success, message = switch_to_camera_mode()
                 if not success:
                     # Показать ошибку, но продолжить переключение вкладки
-                    self.light_switcher_status.show_error(f"Ошибка переключения: {message}")
+                    self.light_switcher_status.show_error(f"Ошибка запуска переключения: {message}")
                 
                 # Switch device settings to Camera (this will trigger refresh)
                 self.camera_tab.device_settings_widget.switch_to_settings(self.interface_text.camera())
@@ -166,7 +187,7 @@ class MainWindow(QMainWindow):
                 success, message = switch_to_wells_mode()
                 if not success:
                     # Показать ошибку, но продолжить переключение вкладки
-                    self.light_switcher_status.show_error(f"Ошибка переключения: {message}")
+                    self.light_switcher_status.show_error(f"Ошибка запуска переключения: {message}")
                 
                 # Switch device settings to Positioner for wells
                 self.wells_tab.device_settings_widget.switch_to_settings(self.interface_text.positioner())
@@ -174,3 +195,42 @@ class MainWindow(QMainWindow):
         except Exception as e:
             print(f"Error handling tab change: {e}")
             self.light_switcher_status.show_error(f"Ошибка при смене вкладки: {str(e)}")
+    
+    def switch_to_initial_mode(self):
+        """Переключиться в режим соответствующий начальной вкладке"""
+        try:
+            current_tab = self.tabs.currentIndex()
+            print(f"DEBUG: Switching to initial mode for tab {current_tab}")
+            
+            if current_tab == 0:
+                # Spectrometer mode
+                success, message = switch_to_spectrometer_mode()
+                print(f"DEBUG: Initial spectrometer switch result: {success}, {message}")
+            elif current_tab == 1:
+                # Camera mode
+                success, message = switch_to_camera_mode()
+                print(f"DEBUG: Initial camera switch result: {success}, {message}")
+            elif current_tab == 2:
+                # Wells mode (uses camera state)
+                success, message = switch_to_wells_mode()
+                print(f"DEBUG: Initial wells switch result: {success}, {message}")
+                
+        except Exception as e:
+            print(f"Error switching to initial mode: {e}")
+            self.light_switcher_status.show_error(f"Ошибка при начальном переключении: {str(e)}")
+    
+    def resizeEvent(self, event):
+        """Обработка изменения размера окна для обновления позиции центрированной плашки"""
+        super().resizeEvent(event)
+        if hasattr(self, 'switch_progress'):
+            # Обновляем геометрию центрированной плашки
+            self.switch_progress.setGeometry(self.tabs.rect())
+            self.switch_progress.update_geometry()
+    
+    def showEvent(self, event):
+        """Обработка показа главного окна"""
+        super().showEvent(event)
+        if hasattr(self, 'switch_progress'):
+            # Убедимся что плашка правильно позиционирована
+            self.switch_progress.setGeometry(self.tabs.rect())
+            self.switch_progress.raise_()  # Поднимаем на передний план

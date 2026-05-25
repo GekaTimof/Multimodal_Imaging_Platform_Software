@@ -294,6 +294,20 @@ class Interface_text():
     def light_switcher_switching(self):
         return self.text_json["Light_Switcher_Switching"]
     
+    def light_switcher_switching_camera(self):
+        """Текст для переключения в режим камеры"""
+        if self.language == "Russian":
+            return "Пожалуйста, подождите пока переключается камера..."
+        else:
+            return "Please wait while switching camera position..."
+    
+    def light_switcher_switching_spectrometer(self):
+        """Текст для переключения в режим спектрометра"""
+        if self.language == "Russian":
+            return "Пожалуйста, подождите пока переключается спектрометр..."
+        else:
+            return "Please wait while switching spectrometer position..."
+    
     def light_switcher_switch_error(self):
         return self.text_json["Light_Switcher_Switch_Error"]
     

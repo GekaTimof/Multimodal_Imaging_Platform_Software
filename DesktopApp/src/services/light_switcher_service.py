@@ -200,10 +200,30 @@ class LightSwitcherService(QObject):
                 return False, "Switcher not connected"
         
         # Отправляем сигнал о начале переключения
+        print(f"DEBUG: Emitting switch_started signal for state: {state}")
         self.switch_started.emit(state)
         
+        # Используем QTimer для отложенного выполнения запроса
+        # чтобы дать время UI обновиться
+        self._delayed_switch_data = {"state": state}
+        QTimer.singleShot(100, self._execute_delayed_switch)
+        
+        # Возвращаем результат будет обработан в _execute_delayed_switch
+        # Пока вернем временный результат
+        return True, "Switching in progress..."
+    
+    def _execute_delayed_switch(self):
+        """Выполнить отложенное переключение после обновления UI"""
+        if not hasattr(self, '_delayed_switch_data'):
+            return
+            
+        state = self._delayed_switch_data["state"]
+        print(f"DEBUG: Executing delayed switch to {state}")
+        
         data = {"state": state}
+        print(f"DEBUG: Making API request to switch to {state}")
         success, result = self._make_request("/light-switcher/switch", method="POST", data=data, timeout=self.switch_timeout)
+        print(f"DEBUG: API request completed. Success: {success}")
         
         if success:
             message = result.get('message', 'Переключение успешно')
@@ -220,21 +240,27 @@ class LightSwitcherService(QObject):
             # Добавляем информацию о режиме в сообщение
             if current_state == "state1":
                 mode_text = "камера"
+                mode_key = "camera"
             elif current_state == "state2":
                 mode_text = "спектрометр"
+                mode_key = "spectrometer"
             else:
                 mode_text = current_state
+                mode_key = current_state
             
             user_message = f"Режим {mode_text}: {message}"
+            print(f"DEBUG: Emitting switch_status_changed signal: {current_state}, {user_message}")
             self.switch_status_changed.emit(current_state, user_message)
-            return True, user_message
         else:
             message = f"Ошибка переключения в {state}: {result}"
             with self._lock:
                 self.current_state = SwitchState.ERROR
             
+            print(f"DEBUG: Emitting error_occurred signal: {message}")
             self.error_occurred.emit(message)
-            return False, message
+        
+        # Очищаем временные данные
+        delattr(self, '_delayed_switch_data')
     
     def switch_to_camera_mode(self) -> Tuple[bool, str]:
         """Переключиться в режим камеры (state1)"""
