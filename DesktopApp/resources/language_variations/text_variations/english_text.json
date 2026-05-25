@@ -74,5 +74,14 @@
     "Positioner_Moved_Home": "Positioner moved to home (simulated)",
     "Moving_To_Position": "Moving to position...",
     "Moved_To_Position": "Moved to position: X={x:.2f}, Y={y:.2f}, Z={z:.2f} (simulated)",
-    "Position_Saved": "Position saved as preset: {preset_name} (simulated)"
+    "Position_Saved": "Position saved as preset: {preset_name} (simulated)",
+    
+    "Light_Switcher_Connected": "Light switcher connected: {message}",
+    "Light_Switcher_Disconnected": "Light switcher disconnected: {message}",
+    "Light_Switcher_Checking": "Checking connection...",
+    "Light_Switcher_Switching": "Switching to {mode_text} mode...",
+    "Light_Switcher_Switch_Error": "Switch error: {message}",
+    "Light_Switcher_Error": "Error: {error_message}",
+    "Light_Switcher_Reconnect": "Reconnect",
+    "Light_Switcher_Reset": "Reset"
 }

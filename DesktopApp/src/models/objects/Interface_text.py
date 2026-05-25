@@ -282,3 +282,27 @@ class Interface_text():
     def position_saved(self):
         return self.text_json["Position_Saved"]
     
+    def light_switcher_connected(self):
+        return self.text_json["Light_Switcher_Connected"]
+    
+    def light_switcher_disconnected(self):
+        return self.text_json["Light_Switcher_Disconnected"]
+    
+    def light_switcher_checking(self):
+        return self.text_json["Light_Switcher_Checking"]
+    
+    def light_switcher_switching(self):
+        return self.text_json["Light_Switcher_Switching"]
+    
+    def light_switcher_switch_error(self):
+        return self.text_json["Light_Switcher_Switch_Error"]
+    
+    def light_switcher_error(self):
+        return self.text_json["Light_Switcher_Error"]
+    
+    def light_switcher_reconnect(self):
+        return self.text_json["Light_Switcher_Reconnect"]
+    
+    def light_switcher_reset(self):
+        return self.text_json["Light_Switcher_Reset"]
+    

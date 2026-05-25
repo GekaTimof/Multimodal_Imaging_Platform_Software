@@ -74,5 +74,14 @@
     "Positioner_Moved_Home": "Позиционер перемещен в исходную позицию (симуляция)",
     "Moving_To_Position": "Перемещение в позицию...",
     "Moved_To_Position": "Перемещено в позицию: X={x:.2f}, Y={y:.2f}, Z={z:.2f} (симуляция)",
-    "Position_Saved": "Позиция сохранена как пресет: {preset_name} (симуляция)"
+    "Position_Saved": "Позиция сохранена как пресет: {preset_name} (симуляция)",
+    
+    "Light_Switcher_Connected": "Переключатель подключен: {message}",
+    "Light_Switcher_Disconnected": "Переключатель не подключен: {message}",
+    "Light_Switcher_Checking": "Проверка подключения...",
+    "Light_Switcher_Switching": "Переключение в режим {mode_text}...",
+    "Light_Switcher_Switch_Error": "Ошибка переключения: {message}",
+    "Light_Switcher_Error": "Ошибка: {error_message}",
+    "Light_Switcher_Reconnect": "Повторить подключение",
+    "Light_Switcher_Reset": "Сбросить"
 }

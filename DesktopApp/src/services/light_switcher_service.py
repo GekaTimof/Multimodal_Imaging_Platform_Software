@@ -104,6 +104,7 @@ class LightSwitcherService(QObject):
             connected = status_data.get('connected', False)
             arduino_responsive = status_data.get('arduino_responsive', False)
             current_state = status_data.get('current_state', 'unknown')
+            port = status_data.get('port', 'unknown')
             
             with self._lock:
                 self.is_connected = connected and arduino_responsive
@@ -113,11 +114,14 @@ class LightSwitcherService(QObject):
                     self.current_state = SwitchState.UNKNOWN
             
             if self.is_connected:
-                message = f"Switcher connected, current state: {current_state}"
+                message = f"Переключатель подключен ({port}), состояние: {current_state}"
                 self.connection_status_changed.emit(True, message)
                 return True, message
             else:
-                message = "Switcher not connected or Arduino not responsive"
+                if not connected:
+                    message = f"Переключатель не найден (автопоиск портов)"
+                else:
+                    message = f"Переключатель найден ({port}) но Arduino не отвечает"
                 self.connection_status_changed.emit(False, message)
                 return False, message
         else:
@@ -125,7 +129,7 @@ class LightSwitcherService(QObject):
                 self.is_connected = False
                 self.current_state = SwitchState.UNKNOWN
             
-            message = f"Failed to check switcher status: {result}"
+            message = f"Ошибка проверки статуса: {result}"
             self.connection_status_changed.emit(False, message)
             return False, message
     
@@ -139,15 +143,18 @@ class LightSwitcherService(QObject):
         success, result = self._make_request("/light-switcher/connect", method="POST", timeout=self.connection_timeout)
         
         if success:
-            message = result.get('message', 'Connection successful')
-            with self._lock:
-                self.is_connected = True
+            message = result.get('message', 'Подключение успешно')
+            data = result.get('data', {})
+            port = data.get('port', 'unknown')
             
-            # После подключения проверяем статус
-            self.check_connection()
-            return True, message
+            # После подключения проверяем реальный статус
+            check_success, check_message = self.check_connection()
+            if check_success:
+                return True, f"Подключено к {port}: {check_message}"
+            else:
+                return False, f"Подключение установлено но проверка не прошла: {check_message}"
         else:
-            message = f"Failed to connect: {result}"
+            message = f"Ошибка подключения: {result}"
             with self._lock:
                 self.is_connected = False
             
@@ -199,9 +206,10 @@ class LightSwitcherService(QObject):
         success, result = self._make_request("/light-switcher/switch", method="POST", data=data, timeout=self.switch_timeout)
         
         if success:
-            message = result.get('message', 'Switch successful')
+            message = result.get('message', 'Переключение успешно')
             data_result = result.get('data', {})
             current_state = data_result.get('current_state', 'unknown')
+            target_state = data_result.get('target_state', state)
             
             with self._lock:
                 try:
@@ -209,10 +217,19 @@ class LightSwitcherService(QObject):
                 except ValueError:
                     self.current_state = SwitchState.ERROR
             
-            self.switch_status_changed.emit(current_state, message)
-            return True, message
+            # Добавляем информацию о режиме в сообщение
+            if current_state == "state1":
+                mode_text = "камера"
+            elif current_state == "state2":
+                mode_text = "спектрометр"
+            else:
+                mode_text = current_state
+            
+            user_message = f"Режим {mode_text}: {message}"
+            self.switch_status_changed.emit(current_state, user_message)
+            return True, user_message
         else:
-            message = f"Failed to switch to {state}: {result}"
+            message = f"Ошибка переключения в {state}: {result}"
             with self._lock:
                 self.current_state = SwitchState.ERROR
             

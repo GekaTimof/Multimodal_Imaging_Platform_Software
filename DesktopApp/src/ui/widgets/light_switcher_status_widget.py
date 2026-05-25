@@ -9,6 +9,7 @@ from PyQt5.QtWidgets import (QFrame, QHBoxLayout, QLabel, QPushButton,
 from PyQt5.QtCore import Qt, pyqtSlot, QTimer
 from PyQt5.QtGui import QFont, QColor, QPalette
 import logging
+from models.objects.Interface_text import Interface_text
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +19,7 @@ class LightSwitcherStatusWidget(QFrame):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.parent_window = parent
+        self.interface_text = getattr(parent, 'interface_text', Interface_text('English'))
         self.setup_ui()
         self.setup_timer()
         
@@ -55,18 +57,18 @@ class LightSwitcherStatusWidget(QFrame):
         layout.addWidget(self.status_icon)
         
         # Текст статуса
-        self.status_label = QLabel("Проверка подключения...")
+        self.status_label = QLabel(self.interface_text.light_switcher_checking())
         self.status_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         layout.addWidget(self.status_label)
         
         # Кнопка повторного подключения
-        self.retry_button = QPushButton("Повторить")
+        self.retry_button = QPushButton(self.interface_text.light_switcher_reconnect())
         self.retry_button.clicked.connect(self.retry_connection)
         self.retry_button.setVisible(False)
         layout.addWidget(self.retry_button)
         
         # Кнопка сброса ошибки
-        self.reset_button = QPushButton("Сбросить ошибку")
+        self.reset_button = QPushButton(self.interface_text.light_switcher_reset())
         self.reset_button.clicked.connect(self.reset_error)
         self.reset_button.setVisible(False)
         layout.addWidget(self.reset_button)
@@ -97,7 +99,7 @@ class LightSwitcherStatusWidget(QFrame):
         if connected:
             # Успешное подключение
             self.status_icon.setText("🟢")
-            self.status_label.setText(f"Переключатель подключен: {message}")
+            self.status_label.setText(self.interface_text.light_switcher_connected().format(message=message))
             self.retry_button.setVisible(False)
             self.reset_button.setVisible(False)
             
@@ -127,7 +129,7 @@ class LightSwitcherStatusWidget(QFrame):
         else:
             # Ошибка подключения
             self.status_icon.setText("🔴")
-            self.status_label.setText(f"Переключатель не подключен: {message}")
+            self.status_label.setText(self.interface_text.light_switcher_disconnected().format(message=message))
             self.retry_button.setVisible(True)
             self.reset_button.setVisible(False)
             
@@ -170,10 +172,10 @@ class LightSwitcherStatusWidget(QFrame):
         self.setVisible(True)
         
         # Определяем текст режима
-        mode_text = "камера" if target_state == "state1" else "спектрометр"
+        mode_text = self.interface_text.camera() if target_state == "state1" else self.interface_text.spectrometer()
         
         self.status_icon.setText("⏳")
-        self.status_label.setText(f"Переключение в режим {mode_text}...")
+        self.status_label.setText(self.interface_text.light_switcher_switching().format(mode_text=mode_text))
         self.retry_button.setVisible(False)
         self.reset_button.setVisible(False)
         
@@ -214,8 +216,8 @@ class LightSwitcherStatusWidget(QFrame):
         if state in ["state1", "state2"]:
             # Успешное переключение
             self.status_icon.setText("🟢")
-            mode_text = "камера" if state == "state1" else "спектрометр"
-            self.status_label.setText(f"Режим {mode_text}: {message}")
+            # Сообщение уже содержит информацию о режиме, используем его напрямую
+            self.status_label.setText(message)
             self.retry_button.setVisible(False)
             self.reset_button.setVisible(False)
             
@@ -245,7 +247,7 @@ class LightSwitcherStatusWidget(QFrame):
         else:
             # Ошибка переключения
             self.status_icon.setText("🟡")
-            self.status_label.setText(f"Ошибка переключения: {message}")
+            self.status_label.setText(self.interface_text.light_switcher_switch_error().format(message=message))
             self.retry_button.setVisible(False)
             self.reset_button.setVisible(True)
             
@@ -287,7 +289,7 @@ class LightSwitcherStatusWidget(QFrame):
         """
         self.setVisible(True)
         self.status_icon.setText("🔴")
-        self.status_label.setText(f"Ошибка: {error_message}")
+        self.status_label.setText(self.interface_text.light_switcher_error().format(error_message=error_message))
         self.retry_button.setVisible(True)
         self.reset_button.setVisible(False)
         
@@ -330,7 +332,7 @@ class LightSwitcherStatusWidget(QFrame):
                 
         except Exception as e:
             logger.error(f"Error retrying connection: {e}")
-            self.show_error(f"Ошибка при повторном подключении: {str(e)}")
+            self.show_error(self.interface_text.light_switcher_error().format(error_message=f"Reconnection error: {str(e)}"))
             
     def reset_error(self):
         """Сбросить ошибку переключения"""
@@ -345,7 +347,7 @@ class LightSwitcherStatusWidget(QFrame):
                 
         except Exception as e:
             logger.error(f"Error resetting error: {e}")
-            self.show_error(f"Ошибка при сбросе: {str(e)}")
+            self.show_error(self.interface_text.light_switcher_error().format(error_message=f"Reset error: {str(e)}"))
             
     def hide_widget(self):
         """Скрыть виджет"""
@@ -355,7 +357,7 @@ class LightSwitcherStatusWidget(QFrame):
         """Показать статус проверки"""
         self.setVisible(True)
         self.status_icon.setText("⚪")
-        self.status_label.setText("Проверка подключения...")
+        self.status_label.setText(self.interface_text.light_switcher_checking())
         self.retry_button.setVisible(False)
         self.reset_button.setVisible(False)
         
