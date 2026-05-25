@@ -138,7 +138,7 @@ class MainWindow(QMainWindow):
             light_switcher_service.error_occurred.connect(
                 self.switch_progress.hide_switch_progress
             )
-            
+
         except Exception as e:
             logger.error(f"Error setting up light switcher connections: {e}")
     
@@ -190,7 +190,6 @@ class MainWindow(QMainWindow):
                     # Показать ошибку, но продолжить переключение вкладки
                     self.light_switcher_status.show_error(f"Ошибка запуска переключения: {message}")
                 
-                # Switch device settings to Camera (this will trigger refresh)
                 self.camera_tab.device_settings_widget.switch_to_settings(self.interface_text.camera())
                 
             elif index == 2:

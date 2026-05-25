@@ -105,8 +105,8 @@ class SwitchProgressWidget(QWidget):
         # Изначально скрываем виджет
         self.setVisible(False)
         
-        # Оверлей не перехватывает клики мыши — кнопки за ним остаются кликабельны
-        self.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+        # Оверлей перехватывает клики мыши когда видим (блокировка UI)
+        self.setAttribute(Qt.WA_TransparentForMouseEvents, False)
         
         # Устанавливаем полупрозрачный фон для всего виджета
         self.setStyleSheet("""
@@ -176,7 +176,8 @@ class SwitchProgressWidget(QWidget):
         # Устанавливаем полную непрозрачность сразу
         self.opacity_effect.setOpacity(1.0)
         
-        # Показываем виджет немедленно
+        # Показываем виджет немедленно и блокируем взаимодействие с UI
+        self.setAttribute(Qt.WA_TransparentForMouseEvents, False)
         self.setVisible(True)
         self.raise_()  # Поднимаем на передний план
         
@@ -193,7 +194,8 @@ class SwitchProgressWidget(QWidget):
         # Останавливаем анимацию иконки
         self.icon_timer.stop()
         
-        # Скрываем виджет немедленно (без анимации для надежности)
+        # Скрываем виджет и возвращаем прозрачность для событий мыши
+        self.setAttribute(Qt.WA_TransparentForMouseEvents, True)
         self.setVisible(False)
         
     def _hide_widget(self):

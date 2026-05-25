@@ -220,9 +220,9 @@ class CameraSettingsWidget(QWidget):
             "Does NOT affect the running camera. Use Apply to update camera."
         )
 
+        button_row1_layout.addWidget(self.btn_apply)
         button_row1_layout.addWidget(self.btn_load_slot)
         button_row1_layout.addWidget(self.btn_save_slot)
-        button_row1_layout.addWidget(self.btn_apply)
         button_row1_layout.addStretch()
 
         layout.addLayout(button_row1_layout)
