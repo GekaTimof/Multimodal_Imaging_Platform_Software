@@ -146,7 +146,7 @@ class SwitchProgressWidget(QWidget):
         Args:
             mode_text: Текст режима (camera/spectrometer)
         """
-        print(f"DEBUG: Showing switch progress for mode: {mode_text}")  # Отладка
+        logger.debug(f"Showing switch progress for mode: {mode_text}")
         
         # Обновляем текст в зависимости от режима
         if self.interface_text:
@@ -188,7 +188,7 @@ class SwitchProgressWidget(QWidget):
         
     def hide_switch_progress(self):
         """Скрыть плашку прогресса"""
-        print("DEBUG: Hiding switch progress")  # Отладка
+        logger.debug("Hiding switch progress")
         
         # Останавливаем анимацию иконки
         self.icon_timer.stop()
@@ -212,7 +212,7 @@ class SwitchProgressWidget(QWidget):
             # Занимаем всю область родительского виджета
             parent_rect = self.parent().rect()
             self.setGeometry(0, 0, parent_rect.width(), parent_rect.height())
-            print(f"DEBUG: Updated geometry to {parent_rect.width()}x{parent_rect.height()}")
+            logger.debug(f"Updated geometry to {parent_rect.width()}x{parent_rect.height()}")
     
     def showEvent(self, event):
         """Обработка показа виджета"""

@@ -10,7 +10,7 @@ import pyqtgraph as pg
 from PyQt5.QtGui import QPen, QFont
 
 from services.spectrometer_service import SpectrometerService
-from models.objects.Interface_text import Interface_text
+from models.interface_text import Interface_text
 from core.constants.spectrometer_constants import (
     DEFAULT_STREAM_INTERVAL_MS, SPECTRUM_THREAD_SLEEP_MS
 )

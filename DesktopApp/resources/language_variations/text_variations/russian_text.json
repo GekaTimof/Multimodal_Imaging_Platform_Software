@@ -66,6 +66,7 @@
     "Overillumination_Warning": "ПРЕДУПРЕЖДЕНИЕ О ПЕРЕСВЕТЕ",
     "Loaded_Spectra": "Загруженные спектры:",
     "Status_Disconnected": "Статус: Отключено",
+    "Status_Connected": "Статус: Подключено",
     "Loading_Positioner_Settings": "Загрузка настроек позиционера...",
     "Positioner_Settings_Loaded": "Настройки позиционера загружены (заглушка)",
     "Applying_Positioner_Settings": "Применение настроек позиционера...",
@@ -83,5 +84,6 @@
     "Light_Switcher_Switch_Error": "Ошибка переключения: {message}",
     "Light_Switcher_Error": "Ошибка: {error_message}",
     "Light_Switcher_Reconnect": "Повторить подключение",
-    "Light_Switcher_Reset": "Сбросить"
+    "Light_Switcher_Reset": "Сбросить",
+    "Warning_No_Photo_Dir": "Папка для сохранения фото не выбрана.\nВыберите папку в Настройках файлов."
 }

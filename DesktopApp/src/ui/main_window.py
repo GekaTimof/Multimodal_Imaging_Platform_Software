@@ -8,6 +8,8 @@ The application provides three main tabs:
 - Wells: For wells analysis functionality
 """
 
+import logging
+
 from PyQt5.QtWidgets import QMainWindow, QTabWidget, QVBoxLayout, QWidget
 from PyQt5.QtCore import QTimer
 from ui.tabs.spectrometer_tab import SpectrometerTab
@@ -15,7 +17,7 @@ from ui.tabs.camera_tab import CameraTab
 from ui.tabs.wells_tab import WellsTab
 from ui.widgets.light_switcher_status_widget import LightSwitcherStatusWidget
 from ui.widgets.switch_progress_widget import SwitchProgressWidget
-from models.objects.Interface_text import Interface_text
+from models.interface_text import Interface_text
 from config import interface_config
 from services.raspberry_mode import (
     switch_to_camera_mode,
@@ -24,6 +26,8 @@ from services.raspberry_mode import (
     check_switcher_connection,
     get_light_switcher_service,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class MainWindow(QMainWindow):
@@ -136,7 +140,7 @@ class MainWindow(QMainWindow):
             )
             
         except Exception as e:
-            print(f"Error setting up light switcher connections: {e}")
+            logger.error(f"Error setting up light switcher connections: {e}")
     
     def check_initial_connection(self):
         """Проверить начальное подключение переключателя"""
@@ -153,7 +157,7 @@ class MainWindow(QMainWindow):
                 self.light_switcher_status.update_connection_status(False, message)
                 
         except Exception as e:
-            print(f"Error checking initial connection: {e}")
+            logger.error(f"Error checking initial connection: {e}")
             self.light_switcher_status.show_error(f"Ошибка при проверке подключения: {str(e)}")
 
     def handle_tab_change(self, index):
@@ -203,7 +207,7 @@ class MainWindow(QMainWindow):
             self._previous_tab_index = index
             
         except Exception as e:
-            print(f"Error handling tab change: {e}")
+            logger.error(f"Error handling tab change: {e}")
             self.light_switcher_status.show_error(f"Ошибка при смене вкладки: {str(e)}")
             # Still update the index even on error
             self._previous_tab_index = index
@@ -212,23 +216,23 @@ class MainWindow(QMainWindow):
         """Переключиться в режим соответствующий начальной вкладке"""
         try:
             current_tab = self.tabs.currentIndex()
-            print(f"DEBUG: Switching to initial mode for tab {current_tab}")
+            logger.debug(f"Switching to initial mode for tab {current_tab}")
             
             if current_tab == 0:
                 # Spectrometer mode
                 success, message = switch_to_spectrometer_mode()
-                print(f"DEBUG: Initial spectrometer switch result: {success}, {message}")
+                logger.debug(f"Initial spectrometer switch result: {success}, {message}")
             elif current_tab == 1:
                 # Camera mode
                 success, message = switch_to_camera_mode()
-                print(f"DEBUG: Initial camera switch result: {success}, {message}")
+                logger.debug(f"Initial camera switch result: {success}, {message}")
             elif current_tab == 2:
                 # Wells mode (uses camera state)
                 success, message = switch_to_wells_mode()
-                print(f"DEBUG: Initial wells switch result: {success}, {message}")
+                logger.debug(f"Initial wells switch result: {success}, {message}")
                 
         except Exception as e:
-            print(f"Error switching to initial mode: {e}")
+            logger.error(f"Error switching to initial mode: {e}")
             self.light_switcher_status.show_error(f"Ошибка при начальном переключении: {str(e)}")
     
     def resizeEvent(self, event):

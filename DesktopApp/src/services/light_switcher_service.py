@@ -32,13 +32,13 @@ class _SwitchWorker(QThread):
     def run(self):
         state = self._state
         service = self._service
-        print(f"DEBUG: Executing switch to {state} in background thread")
+        logger.debug(f"Executing switch to {state} in background thread")
 
         data = {"state": state}
         success, result = service._make_request(
             "/light-switcher/switch", method="POST", data=data, timeout=service.switch_timeout
         )
-        print(f"DEBUG: API request completed. Success: {success}")
+        logger.debug(f"API request completed. Success: {success}")
 
         if success:
             message = result.get('message', 'Переключение успешно')
@@ -59,14 +59,14 @@ class _SwitchWorker(QThread):
                 mode_text = current_state
 
             user_message = f"Режим {mode_text}: {message}"
-            print(f"DEBUG: Emitting switch_status_changed signal: {current_state}, {user_message}")
+            logger.debug(f"Emitting switch_status_changed signal: {current_state}, {user_message}")
             service.switch_status_changed.emit(current_state, user_message)
         else:
             message = f"Ошибка переключения в {state}: {result}"
             with service._lock:
                 service.current_state = SwitchState.ERROR
 
-            print(f"DEBUG: Emitting error_occurred signal: {message}")
+            logger.debug(f"Emitting error_occurred signal: {message}")
             service.error_occurred.emit(message)
 
 
@@ -249,7 +249,7 @@ class LightSwitcherService(QObject):
                 return False, "Switcher not connected"
         
         # Отправляем сигнал о начале переключения
-        print(f"DEBUG: Emitting switch_started signal for state: {state}")
+        logger.debug(f"Emitting switch_started signal for state: {state}")
         self.switch_started.emit(state)
         
         # Запускаем HTTP-запрос в фоновом потоке, чтобы не блокировать GUI

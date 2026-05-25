@@ -11,7 +11,7 @@ from PyQt5.QtWidgets import QApplication
 # Add src directory to Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
-from core.threads.main_window_thread import MainWindow
+from ui.main_window import MainWindow
 
 
 def main():

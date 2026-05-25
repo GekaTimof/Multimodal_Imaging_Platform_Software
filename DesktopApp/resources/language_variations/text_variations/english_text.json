@@ -66,6 +66,7 @@
     "Overillumination_Warning": "OVERILLUMINATION WARNING",
     "Loaded_Spectra": "Loaded Spectra:",
     "Status_Disconnected": "Status: Disconnected",
+    "Status_Connected": "Status: Connected",
     "Loading_Positioner_Settings": "Loading positioner settings...",
     "Positioner_Settings_Loaded": "Positioner settings loaded (placeholder)",
     "Applying_Positioner_Settings": "Applying positioner settings...",
@@ -83,5 +84,6 @@
     "Light_Switcher_Switch_Error": "Switch error: {message}",
     "Light_Switcher_Error": "Error: {error_message}",
     "Light_Switcher_Reconnect": "Reconnect",
-    "Light_Switcher_Reset": "Reset"
+    "Light_Switcher_Reset": "Reset",
+    "Warning_No_Photo_Dir": "Photo save directory is not configured.\nPlease select a folder in File Settings."
 }

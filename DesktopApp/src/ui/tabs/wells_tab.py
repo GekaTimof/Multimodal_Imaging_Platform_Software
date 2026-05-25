@@ -1,6 +1,6 @@
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel
-from models.objects.Interface_text import Interface_text
-from ui.widgets.device_settings_widget.device_settings_widgets import DeviceSettingsWidget
+from models.interface_text import Interface_text
+from ui.widgets.device_settings_widget import DeviceSettingsWidget
 
 class WellsTab(QWidget):
     def __init__(self, interface_text: Interface_text):

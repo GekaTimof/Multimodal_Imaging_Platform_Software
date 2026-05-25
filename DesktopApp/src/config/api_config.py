@@ -5,7 +5,10 @@ IP address of Raspberry Pi is configured in resources/settings.json ("api.base_u
 """
 
 import json
+import logging
 import os
+
+logger = logging.getLogger(__name__)
 
 _SETTINGS_FILE = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "resources", "settings.json"))
 
@@ -14,7 +17,7 @@ def _load_settings() -> dict:
         with open(_SETTINGS_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
     except Exception as e:
-        print(f"Warning: could not load settings.json: {e}")
+        logger.warning(f"Could not load settings.json: {e}")
         return {}
 
 _settings = _load_settings()

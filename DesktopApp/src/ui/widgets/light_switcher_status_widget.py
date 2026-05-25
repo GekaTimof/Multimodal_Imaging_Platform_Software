@@ -9,7 +9,7 @@ from PyQt5.QtWidgets import (QFrame, QHBoxLayout, QLabel, QPushButton,
 from PyQt5.QtCore import Qt, pyqtSlot, QTimer
 from PyQt5.QtGui import QFont, QColor, QPalette
 import logging
-from models.objects.Interface_text import Interface_text
+from models.interface_text import Interface_text
 
 logger = logging.getLogger(__name__)
 

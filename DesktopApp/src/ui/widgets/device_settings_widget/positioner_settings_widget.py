@@ -9,16 +9,18 @@ This widget provides controls for:
 - Home/zero positioning
 """
 
-import requests
-import json
-from config.api_config import API_BASE_URL
+import logging
+
+from config.api_config import API_BASE_URL, THREAD_TIMEOUT_MS
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, 
     QLabel, QSpinBox, QDoubleSpinBox, QPushButton, 
     QGridLayout, QComboBox, QLineEdit, QGroupBox
 )
-from PyQt5.QtCore import Qt, QThread, pyqtSignal
+from PyQt5.QtCore import QThread, pyqtSignal
 from PyQt5.QtGui import QFont
+
+logger = logging.getLogger(__name__)
 
 
 
@@ -205,7 +207,8 @@ class PositionerSettingsWidget(QWidget):
         self.current_settings = placeholder_settings
         self._update_ui_from_settings(placeholder_settings)
         
-        self.status_label.setText("Positioner settings loaded (placeholder)")
+        status = self.interface_text.positioner_settings_loaded() if self.interface_text else "Positioner settings loaded (placeholder)"
+        self.status_label.setText(status)
         self.status_label.setStyleSheet("QLabel { color: orange; font-weight: bold; }")
     
     def _update_ui_from_settings(self, settings):
@@ -223,7 +226,8 @@ class PositionerSettingsWidget(QWidget):
     
     def apply_settings(self):
         """Apply current positioner settings."""
-        self.status_label.setText("Applying positioner settings...")
+        status = self.interface_text.applying_positioner_settings() if self.interface_text else "Applying positioner settings..."
+        self.status_label.setText(status)
         self.status_label.setStyleSheet("QLabel { color: blue; font-weight: bold; }")
         
         # Collect current settings
@@ -237,7 +241,8 @@ class PositionerSettingsWidget(QWidget):
         
         # For now, just update locally since positioner API might not exist
         self.current_settings = settings
-        self.status_label.setText("Positioner settings applied locally")
+        status = self.interface_text.positioner_settings_applied() if self.interface_text else "Positioner settings applied locally"
+        self.status_label.setText(status)
         self.status_label.setStyleSheet("QLabel { color: orange; font-weight: bold; }")
         
         # Emit signal that settings were updated
@@ -245,27 +250,33 @@ class PositionerSettingsWidget(QWidget):
     
     def go_home(self):
         """Move positioner to home position."""
-        self.status_label.setText("Moving to home position...")
+        status = self.interface_text.moving_to_home() if self.interface_text else "Moving to home position..."
+        self.status_label.setText(status)
         self.status_label.setStyleSheet("QLabel { color: blue; font-weight: bold; }")
         
-        # Reset all positions to zero
         self.x_position.setValue(0.0)
         self.y_position.setValue(0.0)
         self.z_position.setValue(0.0)
         
-        self.status_label.setText("Positioner moved to home (simulated)")
+        status = self.interface_text.positioner_moved_home() if self.interface_text else "Positioner moved to home (simulated)"
+        self.status_label.setText(status)
         self.status_label.setStyleSheet("QLabel { color: orange; font-weight: bold; }")
     
     def move_to_position(self):
         """Move positioner to current target position."""
-        self.status_label.setText("Moving to position...")
+        status = self.interface_text.moving_to_position() if self.interface_text else "Moving to position..."
+        self.status_label.setText(status)
         self.status_label.setStyleSheet("QLabel { color: blue; font-weight: bold; }")
         
         x = self.x_position.value()
         y = self.y_position.value()
         z = self.z_position.value()
         
-        self.status_label.setText(f"Moved to position: X={x:.2f}, Y={y:.2f}, Z={z:.2f} (simulated)")
+        if self.interface_text:
+            status = self.interface_text.moved_to_position().format(x=x, y=y, z=z)
+        else:
+            status = f"Moved to position: X={x:.2f}, Y={y:.2f}, Z={z:.2f} (simulated)"
+        self.status_label.setText(status)
         self.status_label.setStyleSheet("QLabel { color: orange; font-weight: bold; }")
     
     def save_preset(self):
@@ -273,7 +284,11 @@ class PositionerSettingsWidget(QWidget):
         preset_name = self.preset_combo.currentText()
         
         # For now, just show status message
-        self.status_label.setText(f"Position saved as preset: {preset_name} (simulated)")
+        if self.interface_text:
+            status = self.interface_text.position_saved().format(preset_name=preset_name)
+        else:
+            status = f"Position saved as preset: {preset_name} (simulated)"
+        self.status_label.setText(status)
         self.status_label.setStyleSheet("QLabel { color: orange; font-weight: bold; }")
     
     def _cleanup_thread(self, thread):
@@ -287,6 +302,6 @@ class PositionerSettingsWidget(QWidget):
         for thread in self.active_threads:
             if thread.isRunning():
                 thread.terminate()
-                thread.wait(1000)  # Wait up to 1 second for thread to finish
+                thread.wait(THREAD_TIMEOUT_MS)
         self.active_threads.clear()
         super().closeEvent(event)

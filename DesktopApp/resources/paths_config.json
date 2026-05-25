@@ -1,10 +1,10 @@
 {
     "base_directories": {
-        "home": "/home/evgeniy",
-        "downloads": "/home/evgeniy/Downloads",
-        "documents": "/home/evgeniy/Documents",
-        "desktop": "/home/evgeniy/Desktop",
-        "app_data": "/home/evgeniy/.lab_app_data"
+        "home": "",
+        "downloads": "",
+        "documents": "",
+        "desktop": "",
+        "app_data": ""
     },
     "file_operations": {
         "photo": {
@@ -50,6 +50,9 @@
             "filename_template": "app_log_{date}.txt",
             "format": "TXT",
             "max_log_files": 10
+        },
+        "spectrum": {
+            "default_save_dir": "C:/Users/Evgeniy/Downloads"
         }
     },
     "path_validation": {

@@ -10,7 +10,6 @@ Features:
 - Save directory management
 """
 
-import json
 import logging
 import os
 from typing import Optional
@@ -18,16 +17,16 @@ from typing import Optional
 import requests
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QPixmap, QImage
-from PyQt5.QtWidgets import QHBoxLayout, QLabel, QProgressBar, QPushButton, QScrollArea, QSizePolicy, QVBoxLayout, QWidget
+from PyQt5.QtWidgets import QHBoxLayout, QLabel, QMessageBox, QProgressBar, QPushButton, QScrollArea, QSizePolicy, QVBoxLayout, QWidget
 
 from config.api_config import CAMERA_STREAM_URL, API_BASE_URL
 from core.constants.camera_constants import DEFAULT_CAMERA_SLOT
 from core.constants.ui_strings import CameraTabStrings
-from models.objects.Interface_text import Interface_text
+from models.interface_text import Interface_text
 from services.save_photo import save_photo
 from core.threads.camera_thread import CameraThread
 from core.threads.photo_capture_thread import PhotoCaptureThread
-from ui.widgets.device_settings_widget.device_settings_widgets import DeviceSettingsWidget
+from ui.widgets.device_settings_widget import DeviceSettingsWidget
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +52,7 @@ class CameraTab(QWidget):
         super().__init__()
 
         self.interface_text = interface_text  # Store reference to interface_text
-        self.camera_source = self.load_camera_source()
+        self.camera_source = CAMERA_STREAM_URL
         self.current_frame = None
         self.thread: Optional[CameraThread] = None
         self.photo_thread: Optional[PhotoCaptureThread] = None
@@ -328,11 +327,17 @@ class CameraTab(QWidget):
         self._stop_progress_timer()
 
         photo_dir = self.device_settings_widget.file_tab.get_photo_save_directory()
+        if not photo_dir:
+            warn_msg = (
+                self.interface_text.warning_no_photo_dir() if self.interface_text
+                else "Photo save directory is not configured.\nPlease select a folder in File Settings."
+            )
+            QMessageBox.warning(self, "Save Directory", warn_msg)
+            self.progress_bar.setVisible(False)
+            self.save_image_button.setEnabled(True)
+            return
         try:
-            if photo_dir:
-                saved_path = save_photo(image, photo_dir)
-            else:
-                saved_path = save_photo(image)
+            saved_path = save_photo(image, photo_dir)
         except (ValueError, RuntimeError) as save_error:
             logger.error(f"Failed to save photo: {save_error}")
             self.status_label.setText(f"Error saving photo: {save_error}")
@@ -387,17 +392,3 @@ class CameraTab(QWidget):
         max_video_h = int(h * 0.95)
         self.video_label.setMaximumSize(max_video_w, max_video_h)
 
-    def load_camera_source(self) -> str:
-        """Load camera stream URL from settings file."""
-        settings_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), 'resources', 'settings.json')
-        try:
-            with open(settings_path, 'r', encoding='utf-8') as f:
-                settings = json.load(f)
-            return settings.get('camera', {}).get('stream_url', CAMERA_STREAM_URL)
-        except (FileNotFoundError, json.JSONDecodeError) as e:
-            logger.warning(f"Could not load settings from {settings_path}: {e}")
-            return CAMERA_STREAM_URL
-
-
-    # Future enhancement: Add video stream reception from Raspberry Pi
-    # Future enhancement: Replace direct camera control with API commands to Raspberry Pi

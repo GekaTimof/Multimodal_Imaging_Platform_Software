@@ -4,24 +4,21 @@ Handles all file paths for saving and loading operations without hardcoding.
 Provides centralized path management for different file types and operations.
 """
 
+import logging
 import os
 import json
-from datetime import datetime
-from typing import Dict, Any, Optional, List
+import sys
+from pathlib import Path
+from typing import Dict, Any, Optional
 from services.directory_control import get_home_directory
+
+logger = logging.getLogger(__name__)
 
 
 class PathManager:
     """Centralized path management for file operations."""
     
     DEFAULT_PATHS = {
-        "base_directories": {
-            "home": get_home_directory(),
-            "downloads": os.path.join(get_home_directory(), "Downloads"),
-            "documents": os.path.join(get_home_directory(), "Documents"),
-            "desktop": os.path.join(get_home_directory(), "Desktop"),
-            "app_data": os.path.join(get_home_directory(), ".lab_app_data")
-        },
         "file_operations": {
             "photo": {
                 "default_save_dir": "",
@@ -70,7 +67,7 @@ class PathManager:
             config_file: Path to paths config file. If None, uses default location.
         """
         if config_file is None:
-            config_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "config", "paths_config.json")
+            config_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "resources", "paths_config.json")
         
         self.config_file = config_file
         self._ensure_config_dir()
@@ -90,7 +87,7 @@ class PathManager:
                 # Merge with defaults
                 return self._merge_configs(self.DEFAULT_PATHS, loaded_paths)
             except (json.JSONDecodeError, FileNotFoundError) as e:
-                print(f"Error loading paths config, using defaults: {e}")
+                logger.warning(f"Error loading paths config, using defaults: {e}")
                 return self.DEFAULT_PATHS.copy()
         else:
             # Create default config file
@@ -113,50 +110,35 @@ class PathManager:
             with open(self.config_file, 'w', encoding='utf-8') as f:
                 json.dump(paths, f, indent=4, ensure_ascii=False)
         except Exception as e:
-            print(f"Error saving paths config: {e}")
-    
-    def get_base_directory(self, dir_name: str) -> str:
-        """
-        Get base directory path.
-        
-        Args:
-            dir_name: Name of base directory ('home', 'downloads', etc.)
-            
-        Returns:
-            Full path to base directory
-        """
-        base_dirs = self.paths.get('base_directories', {})
-        path = base_dirs.get(dir_name, get_home_directory())
-        
-        # Ensure directory exists
-        os.makedirs(path, exist_ok=True)
-        return path
+            logger.error(f"Error saving paths config: {e}")
     
     def get_save_directory(self, operation: str) -> str:
         """
-        Get save directory for specific operation.
-        
+        Get configured save directory for specific operation.
+
         Args:
             operation: Operation type ('photo', 'spectrometer', 'wells')
-            
+
         Returns:
             Save directory path
+
+        Raises:
+            ValueError: If no save directory has been configured for the operation
         """
-        file_ops = self.paths.get('file_operations', {})
-        op_config = file_ops.get(operation, {})
-        save_dir = op_config.get('default_save_dir', '')
-        
+        save_dir = self.get_configured_save_directory(operation)
         if not save_dir:
-            # Use default base directory
-            if operation == 'photo':
-                save_dir = self.get_base_directory('downloads')
-            else:
-                save_dir = self.get_base_directory('documents')
-        
-        # Ensure directory exists
-        os.makedirs(save_dir, exist_ok=True)
+            raise ValueError(f"No save directory configured for '{operation}'. "
+                             f"Please set it in File Settings.")
         return save_dir
     
+    def get_configured_save_directory(self, operation: str) -> str:
+        """Return only the stored directory path, without fallback or makedirs.
+        
+        Returns empty string if no directory has been configured yet.
+        """
+        file_ops = self.paths.get('file_operations', {})
+        return file_ops.get(operation, {}).get('default_save_dir', '')
+
     def set_save_directory(self, operation: str, directory: str):
         """
         Set save directory for specific operation.
@@ -165,164 +147,55 @@ class PathManager:
             operation: Operation type ('photo', 'spectrometer', 'wells')
             directory: Directory path
         """
-        if self.validate_path(directory):
-            if 'file_operations' not in self.paths:
-                self.paths['file_operations'] = {}
-            if operation not in self.paths['file_operations']:
-                self.paths['file_operations'][operation] = {}
-            
-            self.paths['file_operations'][operation]['default_save_dir'] = directory
-            self._save_paths(self.paths)
-        else:
-            raise ValueError(f"Invalid path: {directory}")
+        is_valid, reason = self.validate_directory(directory)
+        if not is_valid:
+            raise ValueError(reason)
+        if 'file_operations' not in self.paths:
+            self.paths['file_operations'] = {}
+        if operation not in self.paths['file_operations']:
+            self.paths['file_operations'][operation] = {}
+        self.paths['file_operations'][operation]['default_save_dir'] = directory
+        self._save_paths(self.paths)
     
-    def generate_filename(self, operation: str, custom_template: Optional[str] = None) -> str:
+    def validate_directory(self, path: str) -> tuple:
+        """Validate a directory path and return (is_valid: bool, reason: str).
+
+        Checks (in order):
+        1. Not empty
+        2. No forbidden characters
+        3. Does not exceed max path length
+        4. Must be inside the user home directory
+        5. The directory actually exists on disk
         """
-        Generate filename for operation using template.
-        
-        Args:
-            operation: Operation type
-            custom_template: Custom filename template (overrides default)
-            
-        Returns:
-            Generated filename
-        """
-        file_ops = self.paths.get('file_operations', {})
-        op_config = file_ops.get(operation, {})
-        
-        template = custom_template or op_config.get('filename_template', 'file_{timestamp}.txt')
-        file_format = op_config.get('format', 'txt')
-        
-        # Prepare template variables
-        now = datetime.now()
-        variables = {
-            'timestamp': now.strftime('%Y%m%d_%H%M%S'),
-            'date': now.strftime('%Y%m%d'),
-            'time': now.strftime('%H%M%S'),
-            'datetime': now.strftime('%Y-%m-%d_%H-%M-%S'),
-            'year': now.strftime('%Y'),
-            'month': now.strftime('%m'),
-            'day': now.strftime('%d'),
-            'hour': now.strftime('%H'),
-            'minute': now.strftime('%M'),
-            'second': now.strftime('%S')
-        }
-        
-        try:
-            filename = template.format(**variables)
-        except KeyError as e:
-            print(f"Template variable not found: {e}")
-            filename = f"file_{variables['timestamp']}.{file_format.lower()}"
-        
-        # Ensure correct extension
-        if not filename.lower().endswith(f'.{file_format.lower()}'):
-            filename = f"{filename}.{file_format.lower()}"
-        
-        return filename
-    
-    def get_full_path(self, operation: str, custom_template: Optional[str] = None) -> str:
-        """
-        Get full file path for operation.
-        
-        Args:
-            operation: Operation type
-            custom_template: Custom filename template
-            
-        Returns:
-            Full file path
-        """
-        save_dir = self.get_save_directory(operation)
-        filename = self.generate_filename(operation, custom_template)
-        
-        # Check if subdirectories should be created
-        file_ops = self.paths.get('file_operations', {})
-        op_config = file_ops.get(operation, {})
-        
-        if op_config.get('create_subdirs', False):
-            subdir_format = op_config.get('subdir_format', '{date}')
-            try:
-                now = datetime.now()
-                subdir = subdir_format.format(
-                    date=now.strftime('%Y%m%d'),
-                    year=now.strftime('%Y'),
-                    month=now.strftime('%m'),
-                    day=now.strftime('%d')
-                )
-                save_dir = os.path.join(save_dir, subdir)
-                os.makedirs(save_dir, exist_ok=True)
-            except KeyError:
-                pass  # Use main directory if template fails
-        
-        return os.path.join(save_dir, filename)
-    
-    def validate_path(self, path: str) -> bool:
-        """
-        Validate path according to configuration rules.
-        
-        Args:
-            path: Path to validate
-            
-        Returns:
-            True if path is valid
-        """
+        if not path or not path.strip():
+            return False, "Path is empty"
+
         validation = self.paths.get('path_validation', {})
-        
-        # Check forbidden characters (skip ":" for Windows drive letter, e.g. C:\)
-        forbidden_chars = validation.get('forbidden_chars', [])
-        import sys as _sys
+
         check_path = path
-        if _sys.platform == "win32" and len(path) >= 2 and path[1] == ":":
+        if sys.platform == "win32" and len(path) >= 2 and path[1] == ":":
             check_path = path[2:]
+        forbidden_chars = validation.get('forbidden_chars', [])
         for char in forbidden_chars:
             if char in check_path:
-                return False
-        
-        # Check path length
+                return False, f"Path contains forbidden character: '{char}'"
+
         max_length = validation.get('max_path_length', 255)
         if len(path) > max_length:
-            return False
-        
-        # Check if path must be under home directory
+            return False, f"Path exceeds maximum length of {max_length} characters"
+
         if validation.get('require_home_subdir', True):
-            from pathlib import Path as _Path
             home_dir = get_home_directory()
             try:
-                _Path(os.path.abspath(path)).relative_to(os.path.abspath(home_dir))
+                Path(os.path.abspath(path)).relative_to(os.path.abspath(home_dir))
             except ValueError:
-                return False
-        
-        return True
-    
-    def get_allowed_formats(self, operation: str) -> List[str]:
-        """Get allowed file formats for operation."""
-        file_ops = self.paths.get('file_operations', {})
-        op_config = file_ops.get(operation, {})
-        return op_config.get('allowed_formats', ['TXT'])
-    
-    def set_filename_template(self, operation: str, template: str):
-        """Set filename template for operation."""
-        if 'file_operations' not in self.paths:
-            self.paths['file_operations'] = {}
-        if operation not in self.paths['file_operations']:
-            self.paths['file_operations'][operation] = {}
-        
-        self.paths['file_operations'][operation]['filename_template'] = template
-        self._save_paths(self.paths)
-    
-    def set_file_format(self, operation: str, format_name: str):
-        """Set file format for operation."""
-        allowed_formats = self.get_allowed_formats(operation)
-        if format_name.upper() not in allowed_formats:
-            raise ValueError(f"Format {format_name} not allowed for {operation}")
-        
-        if 'file_operations' not in self.paths:
-            self.paths['file_operations'] = {}
-        if operation not in self.paths['file_operations']:
-            self.paths['file_operations'][operation] = {}
-        
-        self.paths['file_operations'][operation]['format'] = format_name.upper()
-        self._save_paths(self.paths)
-    
+                return False, f"Path must be inside the home directory: {home_dir}"
+
+        if not os.path.isdir(path):
+            return False, f"Directory does not exist: {path}"
+
+        return True, ""
+
     def reset_to_defaults(self):
         """Reset all paths to defaults."""
         self.paths = self.DEFAULT_PATHS.copy()

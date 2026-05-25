@@ -9,9 +9,12 @@ methods to access translated strings for UI elements.
 import sys
 import os
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Add DesktopApp root (parent of 'src/') to path so that 'resources' package is importable
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from resources.language_variations.language_link import Languages
 from .errors import Wrong_argument_exception
@@ -36,24 +39,23 @@ class Interface_text():
             Wrong_argument_exception: If language not supported or file not found
         """
         if name not in Languages.keys():
-            print(f"Language '{name}' not found in available languages: {list(Languages.keys())}")
-            # Fallback to first available language
+            logger.warning(f"Language '{name}' not found in available languages: {list(Languages.keys())}")
             name = list(Languages.keys())[0]
-            print(f"Falling back to language: {name}")
+            logger.warning(f"Falling back to language: {name}")
         
         # Get absolute path to language file relative to this script
-        # Go up from src/models/objects/ to DesktopApp/ then to resources/
-        desktop_app_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+        # Go up from src/models/ to DesktopApp/
+        desktop_app_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         link = os.path.join(desktop_app_root, 'resources', Languages[name])
         self.file = link
         try:
             with open(link, 'r', encoding='utf-8') as f:
                 self.text_json = json.load(f)
         except FileNotFoundError:
-            print(f"Language file not found: {link}")
+            logger.error(f"Language file not found: {link}")
             raise Wrong_argument_exception(f"Language file not found: {link}")
         except json.JSONDecodeError as e:
-            print(f"Invalid JSON in language file: {link} - {e}")
+            logger.error(f"Invalid JSON in language file: {link} - {e}")
             raise Wrong_argument_exception(f"Invalid JSON in language file: {link}")
         
     def abbreviation(self):
@@ -254,6 +256,9 @@ class Interface_text():
     
     def status_disconnected(self):
         return self.text_json["Status_Disconnected"]
+
+    def status_connected(self):
+        return self.text_json["Status_Connected"]
     
     def loading_positioner_settings(self):
         return self.text_json["Loading_Positioner_Settings"]
@@ -296,17 +301,15 @@ class Interface_text():
     
     def light_switcher_switching_camera(self):
         """Текст для переключения в режим камеры"""
-        if self.language == "Russian":
-            return "Пожалуйста, подождите пока переключается камера..."
-        else:
-            return "Please wait while switching camera position..."
-    
+        camera_text = self.text_json.get("Camera", "Camera")
+        switching_template = self.text_json.get("Light_Switcher_Switching", "Switching to {mode_text} mode...")
+        return switching_template.format(mode_text=camera_text)
+
     def light_switcher_switching_spectrometer(self):
         """Текст для переключения в режим спектрометра"""
-        if self.language == "Russian":
-            return "Пожалуйста, подождите пока переключается спектрометр..."
-        else:
-            return "Please wait while switching spectrometer position..."
+        spectrometer_text = self.text_json.get("Spectrometer", "Spectrometer")
+        switching_template = self.text_json.get("Light_Switcher_Switching", "Switching to {mode_text} mode...")
+        return switching_template.format(mode_text=spectrometer_text)
     
     def light_switcher_switch_error(self):
         return self.text_json["Light_Switcher_Switch_Error"]
@@ -319,4 +322,9 @@ class Interface_text():
     
     def light_switcher_reset(self):
         return self.text_json["Light_Switcher_Reset"]
-    
+
+    def warning_no_photo_dir(self) -> str:
+        return self.text_json.get("Warning_No_Photo_Dir",
+                                  "Photo save directory is not configured.\n"
+                                  "Please select a folder in File Settings.")
+

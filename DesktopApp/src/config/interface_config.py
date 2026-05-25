@@ -6,8 +6,11 @@ window settings, and other UI preferences.
 """
 
 import json
+import logging
 import os
 from typing import Dict, Any, Optional
+
+logger = logging.getLogger(__name__)
 
 
 class InterfaceConfig:
@@ -52,7 +55,7 @@ class InterfaceConfig:
             config_file: Path to config file. If None, uses default location.
         """
         if config_file is None:
-            config_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "config", "interface_settings.json")
+            config_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "resources", "interface_settings.json")
         
         self.config_file = config_file
         self._ensure_config_dir()
@@ -72,7 +75,7 @@ class InterfaceConfig:
                 # Merge with defaults to ensure all keys exist
                 return self._merge_configs(self.DEFAULT_CONFIG, loaded_config)
             except (json.JSONDecodeError, FileNotFoundError) as e:
-                print(f"Error loading config, using defaults: {e}")
+                logger.warning(f"Error loading config, using defaults: {e}")
                 return self.DEFAULT_CONFIG.copy()
         else:
             # Create default config file
@@ -95,7 +98,7 @@ class InterfaceConfig:
             with open(self.config_file, 'w', encoding='utf-8') as f:
                 json.dump(config, f, indent=4, ensure_ascii=False)
         except Exception as e:
-            print(f"Error saving config: {e}")
+            logger.error(f"Error saving config: {e}")
     
     def get(self, key_path: str, default=None):
         """
