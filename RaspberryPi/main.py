@@ -4,6 +4,7 @@ import uvicorn
 from src.core.streaming import CameraStreamServer
 from src.core.spectrum_streaming import SpectrumStreamServer
 from src.services.fastapi_server import app, camera_service, spectrometer_service
+from src.services.light_switcher_service import light_switcher_service
 from src.config.settings import config
 
 
@@ -40,6 +41,7 @@ if __name__ == '__main__':
     # Start shared services once — both streaming server and FastAPI reuse them
     camera_service.start()
     spectrometer_service.start()
+    light_switcher_service.connect()
 
     # Create threads for all servers
     api_thread = threading.Thread(target=run_api_server, daemon=True)
@@ -59,4 +61,5 @@ if __name__ == '__main__':
         print("\nShutting down servers...")
         camera_service.stop()
         spectrometer_service.stop()
+        light_switcher_service.disconnect()
         print("Services stopped.")

@@ -40,6 +40,7 @@ class LightSwitcherService:
         self.serial_connection: Optional[serial.Serial] = None
         self.is_connected = False
         self.current_state = SwitchState.UNKNOWN
+        self.arduino_responsive = False
         self._lock = threading.Lock()
         self.logger = logger
         
@@ -104,10 +105,15 @@ class LightSwitcherService:
                 # Ожидание инициализации Arduino (reset after open)
                 time.sleep(2.5)
                 
+                # Сброс буферов после загрузки — убираем мусор от предыдущих сессий
+                self.serial_connection.reset_input_buffer()
+                self.serial_connection.reset_output_buffer()
+                
                 # Проверка что порт открыт
                 if self.serial_connection.is_open:
                     self.is_connected = True
                     self.logger.info(f"Connected to Arduino on {self.port}")
+                    self._test_connection()
                     return True
                 else:
                     self.serial_connection.close()
@@ -130,6 +136,7 @@ class LightSwitcherService:
                 if self.serial_connection and self.serial_connection.is_open:
                     self.serial_connection.close()
                 self.is_connected = False
+                self.arduino_responsive = False
                 self.logger.info("Disconnected from Arduino")
         except Exception as e:
             self.logger.error(f"Error during disconnection: {e}")
@@ -151,10 +158,11 @@ class LightSwitcherService:
             # Реальная проверка - отправляем команду и проверяем ответ
             # Используем "set1" с очень коротким таймаутом как ping
             old_timeout = self.serial_connection.timeout
-            self.serial_connection.timeout = 0.5  # Короткий таймаут для проверки
+            self.serial_connection.timeout = 2.0  # Таймаут для ожидания ответа Arduino
             
-            # Очистка буферов
-            self.serial_connection.reset_input_buffer()
+            # Drain any pending input (don't discard mid-flight bytes with reset)
+            if self.serial_connection.in_waiting:
+                self.serial_connection.read(self.serial_connection.in_waiting)
             self.serial_connection.reset_output_buffer()
             
             # Отправляем команду set1 - если концевик нажат, ответит "alreadyset"
@@ -162,24 +170,43 @@ class LightSwitcherService:
             self.serial_connection.flush()
             
             # Ждем ответ (любой - done, alreadyset, timeout)
-            response = self.serial_connection.readline().decode('utf-8').strip()
+            # Read up to 5 lines: Arduino may emit noise lines before the real response
+            EXPECTED = {"done", "alreadyset", "timeout"}
+            response = None
+            for _ in range(5):
+                raw = self.serial_connection.readline().decode('utf-8', errors='replace')
+                if not raw:
+                    break
+                # Extract all tokens from line (handles 'lde\ralreadyset' style)
+                tokens = [t.strip() for t in raw.replace('\r', '\n').split('\n') if t.strip()]
+                for token in tokens:
+                    if token in EXPECTED:
+                        response = token
+                        break
+                if response:
+                    break
+                self.logger.debug(f"Noise line ignored: {repr(raw)}")
             
             # Восстанавливаем таймаут
             self.serial_connection.timeout = old_timeout
             
-            # Если получили любой ответ - Arduino жив
-            if response in ["done", "alreadyset", "timeout"]:
+            if response in EXPECTED:
+                self.arduino_responsive = True
                 return True
+            self.arduino_responsive = False
+            self.logger.debug(f"No expected response received, last raw: {repr(raw)}")
             return False
             
         except (serial.SerialException, OSError) as e:
             # Порт отключен физически или ошибка
             self.logger.warning(f"Connection test failed - port disconnected: {e}")
             self.is_connected = False
+            self.arduino_responsive = False
             return False
         except Exception as e:
             self.logger.warning(f"Connection test failed: {e}")
             self.is_connected = False
+            self.arduino_responsive = False
             return False
         finally:
             # Восстанавливаем таймаут в любом случае
@@ -204,8 +231,9 @@ class LightSwitcherService:
             raise ConnectionError("Not connected to Arduino")
         
         try:
-            # Очистка буферов
-            self.serial_connection.reset_input_buffer()
+            # Drain any pending input (don't discard mid-flight bytes with reset)
+            if self.serial_connection.in_waiting:
+                self.serial_connection.read(self.serial_connection.in_waiting)
             self.serial_connection.reset_output_buffer()
             
             # Отправка команды
@@ -216,10 +244,25 @@ class LightSwitcherService:
             self.logger.debug(f"Sent command: {command}")
             
             if expect_response:
-                # Ожидание ответа
-                response = self.serial_connection.readline().decode('utf-8').strip()
-                self.logger.debug(f"Received response: {response}")
-                return response
+                # Read up to 5 lines to find the actual keyword among noise lines
+                EXPECTED = {"done", "alreadyset", "timeout", "unknown"}
+                response = None
+                raw = ''
+                for _ in range(5):
+                    raw = self.serial_connection.readline().decode('utf-8', errors='replace')
+                    if not raw:
+                        break
+                    tokens = [t.strip() for t in raw.replace('\r', '\n').split('\n') if t.strip()]
+                    for token in tokens:
+                        if token in EXPECTED:
+                            response = token
+                            break
+                    if response:
+                        break
+                    self.logger.debug(f"Noise line ignored: {repr(raw)}")
+                result = response if response else ''
+                self.logger.debug(f"Received response: {repr(raw)} -> parsed: {repr(result)}")
+                return result
             else:
                 return None
                 
@@ -241,31 +284,49 @@ class LightSwitcherService:
         Returns:
             Tuple[bool, str]: (success, message)
         """
-        try:
-            # Temporarily increase timeout for movement command (up to 15s + buffer)
+        for attempt in range(2):
+            if not self.is_connected and not self.connect():
+                return False, "Not connected to Arduino"
             old_timeout = self.serial_connection.timeout
-            self.serial_connection.timeout = self.movement_timeout
-            response = self._send_command("set1")
-            self.serial_connection.timeout = old_timeout
-            
-            if response == "done":
-                self.current_state = SwitchState.STATE_1
-                return True, "Successfully switched to state 1 (left end switch)"
-            elif response == "alreadyset":
-                self.current_state = SwitchState.STATE_1
-                return True, "Already in state 1 (left end switch)"
-            elif response == "timeout":
-                self.current_state = SwitchState.ERROR
-                return False, "Timeout while moving to state 1"
-            elif response == "unknown":
-                return False, "Unknown command received"
-            else:
-                self.current_state = SwitchState.ERROR
-                return False, f"Unexpected response: {response}"
+            try:
+                self.serial_connection.timeout = self.movement_timeout
+                response = self._send_command("set1")
                 
-        except Exception as e:
-            self.current_state = SwitchState.ERROR
-            return False, f"Error switching to state 1: {str(e)}"
+                if response == "done":
+                    self.current_state = SwitchState.STATE_1
+                    self.arduino_responsive = True
+                    return True, "Successfully switched to state 1 (left end switch)"
+                elif response == "alreadyset":
+                    self.current_state = SwitchState.STATE_1
+                    self.arduino_responsive = True
+                    return True, "Already in state 1 (left end switch)"
+                elif response == "timeout":
+                    self.current_state = SwitchState.ERROR
+                    self.arduino_responsive = True
+                    return False, "Timeout while moving to state 1"
+                elif response == "unknown":
+                    self.arduino_responsive = True
+                    return False, "Unknown command received"
+                else:
+                    self.current_state = SwitchState.ERROR
+                    return False, f"Unexpected response: {response}"
+                    
+            except (serial.SerialException, OSError):
+                self.is_connected = False
+                self.arduino_responsive = False
+                if attempt == 0:
+                    self.logger.warning("Serial error on state1, reconnecting...")
+                    self.port = None
+                    continue
+                self.current_state = SwitchState.ERROR
+                return False, "Serial connection lost, reconnect failed"
+            except Exception as e:
+                self.current_state = SwitchState.ERROR
+                return False, f"Error switching to state 1: {str(e)}"
+            finally:
+                if self.serial_connection:
+                    self.serial_connection.timeout = old_timeout
+        return False, "Failed to switch to state 1 after reconnect"
     
     def switch_to_state_2(self) -> Tuple[bool, str]:
         """
@@ -274,31 +335,49 @@ class LightSwitcherService:
         Returns:
             Tuple[bool, str]: (success, message)
         """
-        try:
-            # Temporarily increase timeout for movement command
+        for attempt in range(2):
+            if not self.is_connected and not self.connect():
+                return False, "Not connected to Arduino"
             old_timeout = self.serial_connection.timeout
-            self.serial_connection.timeout = self.movement_timeout
-            response = self._send_command("set2")
-            self.serial_connection.timeout = old_timeout
-            
-            if response == "done":
-                self.current_state = SwitchState.STATE_2
-                return True, "Successfully switched to state 2 (right end switch)"
-            elif response == "alreadyset":
-                self.current_state = SwitchState.STATE_2
-                return True, "Already in state 2 (right end switch)"
-            elif response == "timeout":
-                self.current_state = SwitchState.ERROR
-                return False, "Timeout while moving to state 2"
-            elif response == "unknown":
-                return False, "Unknown command received"
-            else:
-                self.current_state = SwitchState.ERROR
-                return False, f"Unexpected response: {response}"
+            try:
+                self.serial_connection.timeout = self.movement_timeout
+                response = self._send_command("set2")
                 
-        except Exception as e:
-            self.current_state = SwitchState.ERROR
-            return False, f"Error switching to state 2: {str(e)}"
+                if response == "done":
+                    self.current_state = SwitchState.STATE_2
+                    self.arduino_responsive = True
+                    return True, "Successfully switched to state 2 (right end switch)"
+                elif response == "alreadyset":
+                    self.current_state = SwitchState.STATE_2
+                    self.arduino_responsive = True
+                    return True, "Already in state 2 (right end switch)"
+                elif response == "timeout":
+                    self.current_state = SwitchState.ERROR
+                    self.arduino_responsive = True
+                    return False, "Timeout while moving to state 2"
+                elif response == "unknown":
+                    self.arduino_responsive = True
+                    return False, "Unknown command received"
+                else:
+                    self.current_state = SwitchState.ERROR
+                    return False, f"Unexpected response: {response}"
+                    
+            except (serial.SerialException, OSError):
+                self.is_connected = False
+                self.arduino_responsive = False
+                if attempt == 0:
+                    self.logger.warning("Serial error on state2, reconnecting...")
+                    self.port = None
+                    continue
+                self.current_state = SwitchState.ERROR
+                return False, "Serial connection lost, reconnect failed"
+            except Exception as e:
+                self.current_state = SwitchState.ERROR
+                return False, f"Error switching to state 2: {str(e)}"
+            finally:
+                if self.serial_connection:
+                    self.serial_connection.timeout = old_timeout
+        return False, "Failed to switch to state 2 after reconnect"
     
     def get_status(self) -> dict:
         """
@@ -312,7 +391,7 @@ class LightSwitcherService:
             "port": self.port,
             "baudrate": self.baudrate,
             "current_state": self.current_state.value,
-            "arduino_responsive": self._test_connection() if self.is_connected else False
+            "arduino_responsive": self.arduino_responsive
         }
     
     def __enter__(self):

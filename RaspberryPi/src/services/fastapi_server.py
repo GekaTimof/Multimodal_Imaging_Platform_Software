@@ -178,13 +178,13 @@ class APIResponse(BaseModel):
 
 class ErrorApiResponse(BaseModel):
     success: bool = False
-    error: str
+    error: Union[str, Dict[str, Any]]
     details: Optional[Dict[str, Any]] = None
 
 
 class LightSwitcherStatusResponse(BaseModel):
     connected: bool
-    port: str
+    port: Optional[str] = None
     baudrate: int
     current_state: str
     arduino_responsive: bool
@@ -232,7 +232,10 @@ async def connect_light_switcher():
                 data=light_switcher_service.get_status()
             )
         else:
-            raise HTTPException(status_code=500, detail="Failed to connect to Arduino light switcher")
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to connect to Arduino light switcher"
+            )
     except HTTPException:
         raise
     except Exception as e:
