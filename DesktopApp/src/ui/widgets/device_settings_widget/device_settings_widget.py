@@ -78,7 +78,6 @@ class DeviceSettingsWidget(QWidget):
 
         if text == camera_text:
             self.stacked_widget.setCurrentWidget(self.camera_tab)
-            self.camera_tab.load_settings()
         elif text == spectrometer_text:
             self.stacked_widget.setCurrentWidget(self.spectrometer_tab)
         elif text == positioner_text:
@@ -91,9 +90,4 @@ class DeviceSettingsWidget(QWidget):
         """Switch to a specific settings panel by its localized name."""
         index = self.settings_type_combo.findText(settings_type)
         if index >= 0:
-            if self.settings_type_combo.currentIndex() != index:
-                self.settings_type_combo.setCurrentIndex(index)
-            else:
-                camera_text = self.interface_text.camera() if self.interface_text else "Camera"
-                if settings_type == camera_text:
-                    self.camera_tab.load_settings()
+            self.settings_type_combo.setCurrentIndex(index)

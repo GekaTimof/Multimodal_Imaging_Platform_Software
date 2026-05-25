@@ -201,11 +201,7 @@ class CameraSettingsWidget(QWidget):
 
         # Buttons
         button_row1_layout = QHBoxLayout()
-        button_row2_layout = QHBoxLayout()
 
-        self.btn_refresh = QPushButton(
-            self.interface_text.refresh() if self.interface_text else SettingsWidgetStrings.REFRESH
-        )
         self.btn_load_slot = QPushButton(
             self.interface_text.load() if self.interface_text else SettingsWidgetStrings.LOAD
         )
@@ -224,16 +220,12 @@ class CameraSettingsWidget(QWidget):
             "Does NOT affect the running camera. Use Apply to update camera."
         )
 
-        button_row1_layout.addWidget(self.btn_refresh)
         button_row1_layout.addWidget(self.btn_load_slot)
         button_row1_layout.addWidget(self.btn_save_slot)
+        button_row1_layout.addWidget(self.btn_apply)
         button_row1_layout.addStretch()
 
-        button_row2_layout.addWidget(self.btn_apply)
-        button_row2_layout.addStretch()
-
         layout.addLayout(button_row1_layout)
-        layout.addLayout(button_row2_layout)
 
         self.status_label = QLabel(SettingsWidgetStrings.READY)
         self.status_label.setStyleSheet("QLabel { color: green; font-weight: bold; }")
@@ -243,7 +235,6 @@ class CameraSettingsWidget(QWidget):
 
         layout.addStretch()
 
-        self.btn_refresh.clicked.connect(self.load_settings)
         self.btn_load_slot.clicked.connect(self.show_slot_selection_dialog)
         self.btn_save_slot.clicked.connect(self.save_to_slot_dialog)
         self.btn_apply.clicked.connect(self.apply_settings)
@@ -382,28 +373,6 @@ class CameraSettingsWidget(QWidget):
                 thread.wait(THREAD_TIMEOUT_MS)
         self.active_threads.clear()
         super().closeEvent(event)
-
-    def load_settings(self) -> None:
-        """Load current camera settings from API."""
-        self.status_label.setText(SettingsWidgetStrings.LOADING_SETTINGS)
-        self.status_label.setStyleSheet("QLabel { color: blue; font-weight: bold; }")
-        thread = APIClientThread('GET', ENDPOINTS["camera_settings"])
-        thread.response_received.connect(self._on_settings_loaded)
-        thread.finished.connect(lambda: self._cleanup_thread(thread))
-        self.active_threads.append(thread)
-        thread.start()
-
-    def _on_settings_loaded(self, success: bool, message: str, data: Dict[str, Any]) -> None:
-        if success and (data.get('success') or 'id' in data):
-            settings = data if 'id' in data else data.get('data', {})
-            self.current_settings = settings
-            self._update_ui_from_settings(settings)
-            self.status_label.setText(SettingsWidgetStrings.SETTINGS_LOADED)
-            self.status_label.setStyleSheet("QLabel { color: green; font-weight: bold; }")
-        else:
-            logger.error(f"Failed to load settings: {message}")
-            self.status_label.setText(SettingsWidgetStrings.FAILED_TO_LOAD)
-            self.status_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
 
     def apply_settings(self) -> None:
         """Apply current settings to the camera without saving to database."""
