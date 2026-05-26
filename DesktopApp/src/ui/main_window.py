@@ -57,7 +57,7 @@ class MainWindow(QMainWindow):
         
         if window_config.get('start_maximized', True):
             self.showMaximized()
-        
+
         # Set resizable property
         if not window_config.get('resizable', True):
             self.setFixedSize(self.size())
