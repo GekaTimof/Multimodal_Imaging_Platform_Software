@@ -104,21 +104,39 @@ DesktopApp/
 
 - Python 3.8+
 - PyQt5
-- matplotlib
+- pyqtgraph
 - requests
 
 ### Installation
 
 ```bash
 cd DesktopApp
-pip install -r requirements.txt
+python3 -m venv .venv
+.venv/bin/python -m pip install --upgrade pip
+.venv/bin/python -m pip install -r requirements.txt
+```
+
+On Linux distributions with an externally managed Python environment, do not install the dependencies with system `pip`. Use the virtual environment above. If you already have PyQt5 installed in the user/system environment and installation fails on Python 3.12 because of PyQt5 build dependencies, create the environment with access to system site packages and install the missing dependencies there:
+
+```bash
+cd DesktopApp
+python3 -m venv --system-site-packages .venv
+.venv/bin/python -m pip install pyqtgraph==0.13.3
 ```
 
 ### Running the Application
 
 ```bash
-python main.py
+.venv/bin/python main.py
 ```
+
+If you run the application from the repository root with the root virtual environment, use:
+
+```bash
+/home/evgeniy/Projects/Multimodal_Imaging_Platform_Software/.venv/bin/python /home/evgeniy/Projects/Multimodal_Imaging_Platform_Software/DesktopApp/main.py
+```
+
+If the application starts but prints `Connection refused` for `10.78.112.189:8000` or `10.78.112.189:8080`, the desktop app is running but the Raspberry Pi backend/video server is not reachable.
 
 ### Configuration
 
@@ -245,21 +263,39 @@ DesktopApp/
 
 - Python 3.8+
 - PyQt5
-- matplotlib
+- pyqtgraph
 - requests
 
 ### Установка
 
 ```bash
 cd DesktopApp
-pip install -r requirements.txt
+python3 -m venv .venv
+.venv/bin/python -m pip install --upgrade pip
+.venv/bin/python -m pip install -r requirements.txt
+```
+
+В Linux-дистрибутивах с защищённым системным Python не устанавливайте зависимости через системный `pip`. Используйте виртуальное окружение выше. Если PyQt5 уже установлен в пользовательском/системном окружении, а установка на Python 3.12 падает из-за build-зависимостей PyQt5, создайте окружение с доступом к системным пакетам и установите недостающие зависимости туда:
+
+```bash
+cd DesktopApp
+python3 -m venv --system-site-packages .venv
+.venv/bin/python -m pip install pyqtgraph==0.13.3
 ```
 
 ### Запуск Приложения
 
 ```bash
-python main.py
+.venv/bin/python main.py
 ```
+
+Если приложение запускается из корня репозитория через корневое виртуальное окружение, используйте:
+
+```bash
+/home/evgeniy/Projects/Multimodal_Imaging_Platform_Software/.venv/bin/python /home/evgeniy/Projects/Multimodal_Imaging_Platform_Software/DesktopApp/main.py
+```
+
+Если приложение запускается, но выводит `Connection refused` для `10.78.112.189:8000` или `10.78.112.189:8080`, значит DesktopApp уже стартовал, но backend/video server на Raspberry Pi недоступен.
 
 ### Конфигурация
 
