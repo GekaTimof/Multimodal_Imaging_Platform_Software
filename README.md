@@ -1,4 +1,4 @@
-# Multimodal Imaging Platform Software / Мультимодальная Платформа Управления
+# Multimodal Imaging Platform / Мультимодальная Платформа
 
 **[English](#english) | [Русский](#русский)**
 
@@ -7,272 +7,148 @@
 <a name="english"></a>
 ## English
 
-A comprehensive platform for controlling scientific instruments (spectrometer, camera, acquisition analysis) through a desktop application connected to Raspberry Pi hardware.
+A platform for controlling scientific instruments (spectrometer, camera, positioner) through a PyQt5 desktop application connected to Raspberry Pi 5 hardware.
 
 ### Overview
-
-This software platform provides an intuitive graphical interface for managing scientific instruments with multilingual support (English/Russian). It consists of two main components:
 
 - **DesktopApp** — PyQt5 GUI application running on user's computer
 - **RaspberryPi** — Hardware control server running on Raspberry Pi 5
 
-### Architecture
-
-The platform follows a client-server architecture:
-- DesktopApp communicates with RaspberryPi via REST API
-- Single database located on Raspberry Pi (DevicesSettings.db)
-- Real-time video streaming and spectrometer data acquisition
-
-See `ARCHITECTURE.md` for detailed architecture documentation.
-
 ### Project Structure
 
 ```
-Multimodal_Imaging_Platform_Software/
-├── README.md                    # This file (EN/RU)
-├── ARCHITECTURE.md             # Architecture documentation
-├── .gitignore                  # Git ignore patterns
-├── requirements-base.txt       # Base dependencies
-├── DesktopApp/                 # Desktop GUI application
-│   ├── main.py                 # Application entry point
-│   ├── README.md               # Desktop app documentation (EN/RU)
-│   ├── requirements.txt        # DesktopApp dependencies
+├── DesktopApp/              # Desktop GUI application
+│   ├── main.py             # Entry point
 │   ├── src/
-│   │   ├── config/            # Configuration modules
-│   │   ├── core/              # Core application logic
-│   │   ├── models/            # Data models
-│   │   └── ui/                # UI components and widgets
-│   └── tests/                 # DesktopApp tests
-├── RaspberryPi/                # Raspberry Pi server code
-│   ├── main.py                 # Server entry point
-│   ├── README.md               # Pi server documentation (EN/RU)
-│   ├── requirements.txt        # RaspberryPi dependencies
-│   ├── raspberrypi-settings.service  # Systemd service file
+│   │   ├── config/        # Configuration (API, interface, theme)
+│   │   ├── core/          # Constants and worker threads
+│   │   ├── models/        # Data models and translations
+│   │   ├── services/      # API clients and utilities
+│   │   ├── ui/            # Main window, tabs, widgets
+│   │   └── utils/         # Error handlers
+│   ├── resources/         # Settings and translations
+│   └── tests/             # Unit and integration tests
+├── RaspberryPi/           # Hardware control server
+│   ├── main.py            # Server entry point
 │   ├── src/
-│   │   ├── config/            # Server configuration
-│   │   ├── core/              # Core server logic
-│   │   │   ├── streaming.py   # MJPEG video streaming
-│   │   │   └── spectrum_streaming.py  # Spectrometer streaming
-│   │   └── services/          # Device control services
-│   ├── Spectrometer/          # Spectrometer utilities
-│   └── Light_switcher/        # Arduino light control
-├── docs/                       # Documentation
-│   ├── Diploma/               # Diploma thesis materials
-│   └── reports/               # Development reports
-└── tests/                     # Test suite
-    ├── unit/                   # Unit tests
-    ├── integration/            # Integration tests
-    └── fixtures/               # Test data and mocks
+│   │   ├── config/        # Server configuration
+│   │   ├── core/          # Streaming servers (video, spectrum)
+│   │   ├── services/      # FastAPI, camera, spectrometer, database
+│   │   └── utils/         # Error handlers
+│   ├── Spectrometer/      # Spectrometer utilities
+│   └── Light_switcher/    # Arduino light control
+└── docs/Diploma/          # Thesis materials
 ```
 
 ### Quick Start
 
-1. **Create virtual environment:**
 ```bash
+# 1. Create virtual environment
 python3 -m venv .venv
 source .venv/bin/activate  # Linux/Mac
-.venv\Scripts\activate     # Windows
-```
+# .venv\Scripts\activate   # Windows
 
-2. **Install dependencies:**
-```bash
+# 2. Install base dependencies
 pip install -r requirements-base.txt
-```
 
-3. **Configure Raspberry Pi:**
-   - Install Raspberry Pi OS on Raspberry Pi 5
-   - Enable Camera and GPIO interfaces
-   - Install dependencies: `pip install -r RaspberryPi/requirements.txt`
-   - Run server: `cd RaspberryPi && python main.py`
+# 3. Start Raspberry Pi server
+cd RaspberryPi
+pip install -r requirements.txt
+python main.py
 
-4. **Run Desktop Application:**
-```bash
+# 4. Start Desktop App (in another terminal)
 cd DesktopApp
 pip install -r requirements.txt
 python main.py
 ```
 
-5. **Verify connection:**
-   - Check API: `http://<raspberry-pi-ip>:8000/api/health`
-   - Check video stream: `http://<raspberry-pi-ip>:8080/video`
+### Services
 
-### Features
-
-| Feature | Description |
-|---------|-------------|
-| **Camera Control** | IP camera video streaming, image capture, parameter configuration |
-| **Spectrometer** | Spectral data acquisition, integration time control, dark spectrum calibration |
-| **Acquisition Analysis** | Acquisition data visualization and analysis |
-| **Multilingual UI** | English and Russian interface support |
-| **Settings Management** | Slot-based settings storage (10 slots per device) |
-| **Real-time Streaming** | MJPEG video and spectrum data streaming |
-
-### API Endpoints
-
-Base URL: `http://<raspberry-pi-ip>:8000/api`
-
-- `GET /api/health` — Health check
-- `GET /api/settings/{table}` — Get settings from table
-- `POST /api/settings/update` — Update single parameter
-- `GET /api/settings/camera/slot/{slot_id}` — Get camera settings slot (0-9)
-- `POST /api/settings/camera/save-slot/{slot_id}` — Save settings to slot
-- `GET /api/settings/camera/validation-rules` — Get validation rules
-
-### Testing
-
-```bash
-# Unit tests
-python -m pytest tests/unit/
-
-# Integration tests
-python -m pytest tests/integration/
-
-# All tests
-python -m pytest tests/
-```
+| Service | Port | Description |
+|---------|------|-------------|
+| FastAPI | 8000 | REST API for device control |
+| Video | 8080 | MJPEG camera stream |
+| Spectrum | 8081 | Spectrometer data stream |
 
 ### Documentation
 
-- `ARCHITECTURE.md` — Detailed architecture documentation
-- `DesktopApp/README.md` — Desktop application documentation
-- `RaspberryPi/README.md` — Raspberry Pi server documentation
-- `docs/reports/` — Development reports
+- `ARCHITECTURE.md` — Architecture overview
+- `DesktopApp/README.md` — Desktop app details
+- `RaspberryPi/README.md` — Server details
 
 ---
 
 <a name="русский"></a>
 ## Русский
 
-Комплексная платформа для управления научными приборами (спектрометр, камера, анализ лунок) через десктопное приложение, подключенное к оборудованию Raspberry Pi.
+Платформа для управления научными приборами (спектрометр, камера, позиционер) через десктопное PyQt5-приложение, подключенное к оборудованию Raspberry Pi 5.
 
 ### Обзор
 
-Эта программная платформа предоставляет интуитивный графический интерфейс для управления научными приборами с поддержкой нескольких языков (Английский/Русский). Состоит из двух основных компонентов:
-
-- **DesktopApp** — GUI приложение на PyQt5, работающее на компьютере пользователя
+- **DesktopApp** — GUI-приложение на PyQt5, работающее на компьютере пользователя
 - **RaspberryPi** — Сервер управления оборудованием на Raspberry Pi 5
-
-### Архитектура
-
-Платформа использует клиент-серверную архитектуру:
-- DesktopApp взаимодействует с RaspberryPi через REST API
-- Единая база данных на Raspberry Pi (DevicesSettings.db)
-- Потоковая передача видео и данных спектрометра в реальном времени
-
-Подробная документация архитектуры в файле `ARCHITECTURE.md`.
 
 ### Структура проекта
 
 ```
-Multimodal_Imaging_Platform_Software/
-├── README.md                    # Этот файл (EN/RU)
-├── ARCHITECTURE.md             # Документация архитектуры
-├── .gitignore                  # Шаблоны Git ignore
-├── requirements-base.txt       # Базовые зависимости
-├── DesktopApp/                 # Десктопное GUI приложение
-│   ├── main.py                 # Точка входа
-│   ├── README.md               # Документация (EN/RU)
-│   ├── requirements.txt        # Зависимости DesktopApp
+├── DesktopApp/              # Десктопное GUI-приложение
+│   ├── main.py             # Точка входа
 │   ├── src/
-│   │   ├── config/            # Модули конфигурации
-│   │   ├── core/              # Основная логика приложения
-│   │   ├── models/            # Модели данных
-│   │   └── ui/                # UI компоненты и виджеты
-│   └── tests/                 # Тесты DesktopApp
-├── RaspberryPi/                # Код сервера Raspberry Pi
-│   ├── main.py                 # Точка входа сервера
-│   ├── README.md               # Документация сервера (EN/RU)
-│   ├── requirements.txt        # Зависимости RaspberryPi
-│   ├── raspberrypi-settings.service  # Файл systemd сервиса
+│   │   ├── config/        # Конфигурация (API, интерфейс, тема)
+│   │   ├── core/          # Константы и рабочие потоки
+│   │   ├── models/        # Модели данных и переводы
+│   │   ├── services/      # API-клиенты и утилиты
+│   │   ├── ui/            # Главное окно, вкладки, виджеты
+│   │   └── utils/         # Обработчики ошибок
+│   ├── resources/         # Настройки и переводы
+│   └── tests/             # Модульные и интеграционные тесты
+├── RaspberryPi/           # Сервер управления оборудованием
+│   ├── main.py            # Точка входа сервера
 │   ├── src/
-│   │   ├── config/            # Конфигурация сервера
-│   │   ├── core/              # Основная логика сервера
-│   │   │   ├── streaming.py   # MJPEG видеостриминг
-│   │   │   └── spectrum_streaming.py  # Стриминг спектрометра
-│   │   └── services/          # Сервисы управления устройствами
-│   ├── Spectrometer/          # Утилиты спектрометра
-│   └── Light_switcher/        # Управление подсветкой Arduino
-├── docs/                       # Документация
-│   ├── Diploma/               # Материалы диплома
-│   └── reports/               # Отчеты разработки
-└── tests/                     # Тестовый набор
-    ├── unit/                   # Модульные тесты
-    ├── integration/            # Интеграционные тесты
-    └── fixtures/               # Тестовые данные и моки
+│   │   ├── config/        # Конфигурация сервера
+│   │   ├── core/          # Стриминговые серверы (видео, спектр)
+│   │   ├── services/      # FastAPI, камера, спектрометр, БД
+│   │   └── utils/         # Обработчики ошибок
+│   ├── Spectrometer/      # Утилиты спектрометра
+│   └── Light_switcher/    # Управление подсветкой Arduino
+└── docs/Diploma/          # Материалы диплома
 ```
 
 ### Быстрый старт
 
-1. **Создать виртуальное окружение:**
 ```bash
+# 1. Создать виртуальное окружение
 python3 -m venv .venv
 source .venv/bin/activate  # Linux/Mac
-.venv\Scripts\activate     # Windows
-```
+# .venv\Scripts\activate   # Windows
 
-2. **Установить зависимости:**
-```bash
+# 2. Установить базовые зависимости
 pip install -r requirements-base.txt
-```
 
-3. **Настроить Raspberry Pi:**
-   - Установить Raspberry Pi OS на Raspberry Pi 5
-   - Включить интерфейсы Camera и GPIO
-   - Установить зависимости: `pip install -r RaspberryPi/requirements.txt`
-   - Запустить сервер: `cd RaspberryPi && python main.py`
+# 3. Запустить сервер Raspberry Pi
+cd RaspberryPi
+pip install -r requirements.txt
+python main.py
 
-4. **Запустить Desktop Application:**
-```bash
+# 4. Запустить Desktop App (в другом терминале)
 cd DesktopApp
 pip install -r requirements.txt
 python main.py
 ```
 
-5. **Проверить подключение:**
-   - Проверить API: `http://<ip-raspberry-pi>:8000/api/health`
-   - Проверить видеопоток: `http://<ip-raspberry-pi>:8080/video`
+### Сервисы
 
-### Возможности
-
-| Возможность | Описание |
-|-------------|----------|
-| **Управление камерой** | Потоковое видео с IP-камеры, захват изображений, настройка параметров |
-| **Спектрометр** | Сбор спектральных данных, управление временем интеграции, калибровка темнового спектра |
-| **Анализ приобретения** | Визуализация и анализ данных приобретения |
-| **Мультиязычный UI** | Поддержка английского и русского интерфейса |
-| **Управление настройками** | Хранение настроек в слотах (10 слотов на устройство) |
-| **Потоковая передача** | MJPEG видео и данные спектрометра в реальном времени |
-
-### API Endpoints
-
-Базовый URL: `http://<ip-raspberry-pi>:8000/api`
-
-- `GET /api/health` — Проверка работоспособности
-- `GET /api/settings/{table}` — Получить настройки из таблицы
-- `POST /api/settings/update` — Обновить параметр
-- `GET /api/settings/camera/slot/{slot_id}` — Получить слот настроек камеры (0-9)
-- `POST /api/settings/camera/save-slot/{slot_id}` — Сохранить настройки в слот
-- `GET /api/settings/camera/validation-rules` — Получить правила валидации
-
-### Тестирование
-
-```bash
-# Модульные тесты
-python -m pytest tests/unit/
-
-# Интеграционные тесты
-python -m pytest tests/integration/
-
-# Все тесты
-python -m pytest tests/
-```
+| Сервис | Порт | Описание |
+|--------|------|----------|
+| FastAPI | 8000 | REST API для управления устройствами |
+| Video | 8080 | MJPEG поток с камеры |
+| Spectrum | 8081 | Поток данных спектрометра |
 
 ### Документация
 
-- `ARCHITECTURE.md` — Подробная документация архитектуры
-- `DesktopApp/README.md` — Документация десктопного приложения
-- `RaspberryPi/README.md` — Документация сервера Raspberry Pi
-- `docs/reports/` — Отчеты разработки
+- `ARCHITECTURE.md` — Обзор архитектуры
+- `DesktopApp/README.md` — Детали десктопного приложения
+- `RaspberryPi/README.md` — Детали сервера
 
 ---
 

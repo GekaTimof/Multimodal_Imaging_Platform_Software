@@ -1,135 +1,119 @@
-# Запуск приложения
-## Запуск с запросом пароля
-Установка зависимостей для пользователя, выполнить кманду:
+# Spectrometer / Спектрометр
 
-    pip3 install --user -r requirements.txt
+**[English](#english) | [Русский](#русский)**
 
+---
 
-В файл run.sh написать путь запуска программы:
+<a name="english"></a>
+## English
 
-    \#!/bin/bash
-    sudo python3 путь_к/Visualisation/main.py
+Standalone spectrometer visualization application for Raspberry Pi.
 
+### Installation
 
-## Запуск без пароля
-Получить имя пользователя, выполните команду:
+```bash
+# Install dependencies
+pip3 install --user -r requirements.txt
+```
 
-    whoami
+### Configuration
 
+Edit `run.sh`:
+```bash
+#!/bin/bash
+sudo python3 /path/to/Visualization/main.py
+```
 
-Установка зависимостей для sudo, выполнить кманду:
+### Running
 
-    sudo pip3 install -r requirements.txt
+```bash
+./run.sh
+```
 
+### Customization
 
-Получить расположение python3, выполним команду:
+Edit `Visualization/SpectrometerApplication/Constants.py`:
 
-    which python3
+| Parameter | Description |
+|-----------|-------------|
+| `BASE_FILES_DIR` | Default save/load directory |
+| `DARK_THEME` | `True` = dark, `False` = light |
+| `FONT_SIZE` | Button text size |
+| `FONT` | Font family name |
+| `WARNING_FONT_SIZE` | Saturation warning text size |
+| `COORDINATES_FONT_SIZE` | Mouse coordinates text size |
 
+### Desktop Shortcut
 
-Установить разрешение запуска без пароля, выполните команду:
-    
-    sudo visudo
+```bash
+nano ~/.local/share/applications/spectrometer.desktop
+```
 
-    
-В самом конце файла добавьте строку:
+```ini
+[Desktop Entry]
+Name=Spectrometer
+Comment=Spectrometer Visualization Tool
+Exec=/path/to/run.sh
+Icon=/path/to/Visualization/Assets/icon.png
+Terminal=false
+Type=Application
+Categories=Utility;
+```
 
-    имя_пользователя ALL=(ALL) NOPASSWD: путь_к_/python3 путь_к/Visualisation/main.py
-*Подставте пути к файлу python3 и main.py 
+---
 
+<a name="русский"></a>
+## Русский
 
-В файл run.sh заменить строчку на:
+Автономное приложение визуализации спектрометра для Raspberry Pi.
 
-    sudo путь_к_/python3 путь_к/Visualisation/main.py
-*Подставте пути к файлу python3 и main.py 
+### Установка
 
+```bash
+# Установка зависимостей
+pip3 install --user -r requirements.txt
+```
 
-Запрет редактирования файлов программы в Spectrometer
+### Конфигурация
 
-    sudo chmod -R 755 Spectrometer
+Отредактируйте `run.sh`:
+```bash
+#!/bin/bash
+sudo python3 /path/to/Visualization/main.py
+```
 
+### Запуск
 
-Разрешаем редактирование файлов нужныйх для кастомизации приложения
+```bash
+./run.sh
+```
 
-    sudo chattr -i /Visualization/SpectrometerApplication и открыть файл Constants.py
+### Настройка
 
+Отредактируйте `Visualization/SpectrometerApplication/Constants.py`:
 
+| Параметр | Описание |
+|----------|----------|
+| `BASE_FILES_DIR` | Директория сохранения/загрузки по умолчанию |
+| `DARK_THEME` | `True` = тёмная тема, `False` = светлая |
+| `FONT_SIZE` | Размер текста кнопок |
+| `FONT` | Название шрифта |
+| `WARNING_FONT_SIZE` | Размер текста предупреждения о пересвете |
+| `COORDINATES_FONT_SIZE` | Размер текста координат мыши |
 
-## Создание ярлыка
+### Ярлык на рабочем столе
 
-Откройте терминал и введите:
+```bash
+nano ~/.local/share/applications/spectrometer.desktop
+```
 
-    nano ~/.local/share/applications/spectrometer.desktop
-
-Вставьте в открывшийся файл следующее содержимое:
-    
-    [Desktop Entry]
-    Name=Spectrometer
-    Comment=Spectrometer Visualization Tool
-    Exec=путь_к/run.sh
-    Icon=путь_к/Visualization/Assets/icon.png
-    Terminal=false
-    Type=Application
-    Categories=Utility;
-*Подставте пути к файлу run.sh и icon.png
-
-Сохраните:
-
-    Нажмите Ctrl + O, затем Enter
-    Выйдите: Ctrl + X
-
-    
-Сделайте run.sh и .desktop исполняемыми:
-
-    chmod +x путь_к/run.sh
-    chmod +x ~/.local/share/applications/spectrometer.desktop    
-*Подставте пути к файлу run.sh    
-    
- 
-    
-# Настройка приложения под себя
-## Настройка папки сохранения и загрузки спектральных файлов
-Перейти в папку **/Visualization/SpectrometerApplication и открыть файл Constants.py**
-
-Найти строку **BASE_FILES_DIR = "..."**
-
-Вписать в нужный путь **вместо "..."**
-
-
-## Настройка темы по умолчанию
-Перейти в папку **/Visualization/SpectrometerApplication и открыть файл Constants.py**
-
-Найти строку **DARK_THEME = "..."**
-
-Что-бы установить тёмную тему по умолчанию, впишите True **вместо "..."**
-
-Что-бы установить светлую тему по умолчанию, впишите False **вместо "..."**
-
-
-## Настройка шрифтов
-Перейти в папку **/Visualization/SpectrometerApplication и открыть файл Constants.py**
-
-Для настройки шрифтов можете изменить следующие параметры, заменяя **"..."** на своё значение:
-
-**FONT_SIZE = "..."** -> размер ткста кнопок (чисто)
-
-**FONT = "..."** -> шрифт всего текста (название шрифта)
-
-**WARNING_FONT_SIZE = "..."** -> размер текста предупреждения  пересвете
-
-**COORDINATES_FONT_SIZE = "..."** -> размер текста координат мыши
-
-    
-## Настройка отображения линии спектра на графике
-Перейти в папку **/Visualization/SpectrometerApplication и открыть файл Constants.py**
-
-Для настройки отображения линии спектра на графике можете изменить следующие параметры, заменяя **"..."** на своё значение
-
-
-
-# Информация для отладки
-Что-бы посмотреть ошибки и информацию о них, необходимо запустить приложение через консоль
-
-./Visualization/run.sh
-
-После зпуска в консоль будет выводиться информация о появившихся ошибках 
+```ini
+[Desktop Entry]
+Name=Spectrometer
+Comment=Spectrometer Visualization Tool
+Exec=/путь/к/run.sh
+Icon=/путь/к/Visualization/Assets/icon.png
+Terminal=false
+Type=Application
+Categories=Utility;
+``` 
