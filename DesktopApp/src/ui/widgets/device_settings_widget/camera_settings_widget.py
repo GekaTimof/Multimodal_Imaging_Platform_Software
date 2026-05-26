@@ -112,14 +112,14 @@ class CameraSettingsWidget(QWidget):
         settings_layout.addWidget(self.chk_awb, 7, 0, 1, 2)
 
         # Exposure Time
-        exp_time_label = QLabel(
+        self.exp_time_label = QLabel(
             self.interface_text.exposure_time() if self.interface_text else SettingsWidgetStrings.EXPOSURE_TIME
         )
-        exp_time_label.setStyleSheet("QLabel { font-weight: bold; }")
-        exp_time_range_label = QLabel(f"({EXPOSURE_TIME_RANGE[0]} - {EXPOSURE_TIME_RANGE[1]} μs)")
-        exp_time_range_label.setStyleSheet("QLabel { font-size: 10px; color: gray; }")
-        settings_layout.addWidget(exp_time_label, 8, 0)
-        settings_layout.addWidget(exp_time_range_label, 8, 1)
+        self.exp_time_label.setStyleSheet("QLabel { font-weight: bold; }")
+        self.exp_time_range_label = QLabel(f"({EXPOSURE_TIME_RANGE[0]} - {EXPOSURE_TIME_RANGE[1]} μs)")
+        self.exp_time_range_label.setStyleSheet("QLabel { font-size: 10px; color: gray; }")
+        settings_layout.addWidget(self.exp_time_label, 8, 0)
+        settings_layout.addWidget(self.exp_time_range_label, 8, 1)
 
         self.exp_time = QSpinBox()
         self.exp_time.setRange(0, 2147483647)
@@ -128,14 +128,14 @@ class CameraSettingsWidget(QWidget):
         settings_layout.addWidget(self.exp_time, 9, 0, 1, 2)
 
         # Analogue Gain
-        gain_label = QLabel(
+        self.gain_label = QLabel(
             self.interface_text.analogue_gain() if self.interface_text else SettingsWidgetStrings.ANALOGUE_GAIN
         )
-        gain_label.setStyleSheet("QLabel { font-weight: bold; }")
-        gain_range_label = QLabel(f"({ANALOGUE_GAIN_RANGE[0]} - {ANALOGUE_GAIN_RANGE[1]})")
-        gain_range_label.setStyleSheet("QLabel { font-size: 10px; color: gray; }")
-        settings_layout.addWidget(gain_label, 10, 0)
-        settings_layout.addWidget(gain_range_label, 10, 1)
+        self.gain_label.setStyleSheet("QLabel { font-weight: bold; }")
+        self.gain_range_label = QLabel(f"({ANALOGUE_GAIN_RANGE[0]} - {ANALOGUE_GAIN_RANGE[1]})")
+        self.gain_range_label.setStyleSheet("QLabel { font-size: 10px; color: gray; }")
+        settings_layout.addWidget(self.gain_label, 10, 0)
+        settings_layout.addWidget(self.gain_range_label, 10, 1)
 
         self.gain = QDoubleSpinBox()
         self.gain.setRange(-1e9, 1e9)
@@ -144,14 +144,14 @@ class CameraSettingsWidget(QWidget):
         settings_layout.addWidget(self.gain, 11, 0, 1, 2)
 
         # Exposure Value
-        exp_value_label = QLabel(
+        self.exp_value_label = QLabel(
             self.interface_text.exposure_value() if self.interface_text else SettingsWidgetStrings.EXPOSURE_VALUE
         )
-        exp_value_label.setStyleSheet("QLabel { font-weight: bold; }")
-        exp_value_range_label = QLabel(f"({EXPOSURE_VALUE_RANGE[0]} - {EXPOSURE_VALUE_RANGE[1]})")
-        exp_value_range_label.setStyleSheet("QLabel { font-size: 10px; color: gray; }")
-        settings_layout.addWidget(exp_value_label, 12, 0)
-        settings_layout.addWidget(exp_value_range_label, 12, 1)
+        self.exp_value_label.setStyleSheet("QLabel { font-weight: bold; }")
+        self.exp_value_range_label = QLabel(f"({EXPOSURE_VALUE_RANGE[0]} - {EXPOSURE_VALUE_RANGE[1]})")
+        self.exp_value_range_label.setStyleSheet("QLabel { font-size: 10px; color: gray; }")
+        settings_layout.addWidget(self.exp_value_label, 12, 0)
+        settings_layout.addWidget(self.exp_value_range_label, 12, 1)
 
         self.exp_value = QDoubleSpinBox()
         self.exp_value.setRange(-1e9, 1e9)
@@ -160,14 +160,14 @@ class CameraSettingsWidget(QWidget):
         settings_layout.addWidget(self.exp_value, 13, 0, 1, 2)
 
         # Red Gain
-        red_gain_label = QLabel(
+        self.red_gain_label = QLabel(
             self.interface_text.red_gain() if self.interface_text else SettingsWidgetStrings.RED_GAIN
         )
-        red_gain_label.setStyleSheet("QLabel { font-weight: bold; }")
-        red_gain_range_label = QLabel(f"({RED_GAIN_RANGE[0]} - {RED_GAIN_RANGE[1]})")
-        red_gain_range_label.setStyleSheet("QLabel { font-size: 10px; color: gray; }")
-        settings_layout.addWidget(red_gain_label, 14, 0)
-        settings_layout.addWidget(red_gain_range_label, 14, 1)
+        self.red_gain_label.setStyleSheet("QLabel { font-weight: bold; }")
+        self.red_gain_range_label = QLabel(f"({RED_GAIN_RANGE[0]} - {RED_GAIN_RANGE[1]})")
+        self.red_gain_range_label.setStyleSheet("QLabel { font-size: 10px; color: gray; }")
+        settings_layout.addWidget(self.red_gain_label, 14, 0)
+        settings_layout.addWidget(self.red_gain_range_label, 14, 1)
 
         self.red_gain = QDoubleSpinBox()
         self.red_gain.setRange(-1e9, 1e9)
@@ -176,14 +176,14 @@ class CameraSettingsWidget(QWidget):
         settings_layout.addWidget(self.red_gain, 15, 0, 1, 2)
 
         # Blue Gain
-        blue_gain_label = QLabel(
+        self.blue_gain_label = QLabel(
             self.interface_text.blue_gain() if self.interface_text else SettingsWidgetStrings.BLUE_GAIN
         )
-        blue_gain_label.setStyleSheet("QLabel { font-weight: bold; }")
-        blue_gain_range_label = QLabel(f"({BLUE_GAIN_RANGE[0]} - {BLUE_GAIN_RANGE[1]})")
-        blue_gain_range_label.setStyleSheet("QLabel { font-size: 10px; color: gray; }")
-        settings_layout.addWidget(blue_gain_label, 16, 0)
-        settings_layout.addWidget(blue_gain_range_label, 16, 1)
+        self.blue_gain_label.setStyleSheet("QLabel { font-weight: bold; }")
+        self.blue_gain_range_label = QLabel(f"({BLUE_GAIN_RANGE[0]} - {BLUE_GAIN_RANGE[1]})")
+        self.blue_gain_range_label.setStyleSheet("QLabel { font-size: 10px; color: gray; }")
+        settings_layout.addWidget(self.blue_gain_label, 16, 0)
+        settings_layout.addWidget(self.blue_gain_range_label, 16, 1)
 
         self.blue_gain = QDoubleSpinBox()
         self.blue_gain.setRange(-1e9, 1e9)
@@ -252,6 +252,19 @@ class CameraSettingsWidget(QWidget):
         self.exp_value.setEnabled(ae_enabled)
         self.red_gain.setEnabled(not awb_enabled)
         self.blue_gain.setEnabled(not awb_enabled)
+        self._set_manual_control_visual_state([self.exp_time_label, self.exp_time_range_label], not ae_enabled)
+        self._set_manual_control_visual_state([self.gain_label, self.gain_range_label], not ae_enabled)
+        self._set_manual_control_visual_state([self.exp_value_label, self.exp_value_range_label], ae_enabled)
+        self._set_manual_control_visual_state([self.red_gain_label, self.red_gain_range_label], not awb_enabled)
+        self._set_manual_control_visual_state([self.blue_gain_label, self.blue_gain_range_label], not awb_enabled)
+
+    def _set_manual_control_visual_state(self, labels, enabled):
+        main_color = "inherit" if enabled else "#777"
+        range_color = "gray" if enabled else "#777"
+        if labels:
+            labels[0].setStyleSheet(f"QLabel {{ color: {main_color}; font-weight: bold; }}")
+        if len(labels) > 1:
+            labels[1].setStyleSheet(f"QLabel {{ font-size: 10px; color: {range_color}; }}")
 
     def _clamp_value(self, value, min_val, max_val, default_val, value_type=float):
         """Clamp value to valid range."""

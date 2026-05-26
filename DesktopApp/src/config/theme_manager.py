@@ -68,6 +68,11 @@ QLineEdit, QSpinBox, QDoubleSpinBox {
     padding: 3px;
     border-radius: 3px;
 }
+QLineEdit:disabled, QSpinBox:disabled, QDoubleSpinBox:disabled {
+    background-color: #303030;
+    color: #777;
+    border: 1px solid #444;
+}
 QLabel {
     background-color: transparent;
     color: #f0f0f0;
@@ -167,6 +172,11 @@ QLineEdit, QSpinBox, QDoubleSpinBox {
     border: 1px solid #aaa;
     padding: 3px;
     border-radius: 3px;
+}
+QLineEdit:disabled, QSpinBox:disabled, QDoubleSpinBox:disabled {
+    background-color: #eeeeee;
+    color: #888;
+    border: 1px solid #ccc;
 }
 QLabel {
     background-color: transparent;
