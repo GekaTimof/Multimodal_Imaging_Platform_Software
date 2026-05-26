@@ -33,9 +33,10 @@ class CameraSettingsWidget(QWidget):
     slot_changed = pyqtSignal(int)
     settings_updated = pyqtSignal()
 
-    def __init__(self, interface_text=None):
+    def __init__(self, interface_text=None, theme_manager=None):
         super().__init__()
         self.interface_text = interface_text
+        self._theme_manager = theme_manager
         self.api_base_url = API_BASE_URL
         self.current_settings: Dict[str, Any] = {}
         self.active_threads: List[QThread] = []
@@ -259,8 +260,13 @@ class CameraSettingsWidget(QWidget):
         self._set_manual_control_visual_state([self.blue_gain_label, self.blue_gain_range_label], not awb_enabled)
 
     def _set_manual_control_visual_state(self, labels, enabled):
-        main_color = "inherit" if enabled else "#777"
-        range_color = "gray" if enabled else "#777"
+        if enabled:
+            is_dark = self._theme_manager.is_dark if self._theme_manager is not None else False
+            main_color = "#f0f0f0" if is_dark else "#1a1a1a"
+            range_color = "gray"
+        else:
+            main_color = "#777"
+            range_color = "#777"
         if labels:
             labels[0].setStyleSheet(f"QLabel {{ color: {main_color}; font-weight: bold; }}")
         if len(labels) > 1:

@@ -62,7 +62,7 @@ class DeviceSettingsWidget(QWidget):
 
         # Stacked widget
         self.stacked_widget = QStackedWidget()
-        self.camera_tab = CameraSettingsWidget(self.interface_text)
+        self.camera_tab = CameraSettingsWidget(self.interface_text, self._theme_manager)
         self.spectrometer_tab = SpectrometerSettingsWidget(self.interface_text)
         self.positioner_tab = PositionerSettingsWidget(self.interface_text)
         self.file_tab = FileSettingsWidget(self.interface_text)
@@ -122,3 +122,4 @@ class DeviceSettingsWidget(QWidget):
         """Sync button icon when ThemeManager broadcasts a change."""
         self.theme_toggle_btn.setText("\u263d" if dark else "\u2600")
         self.theme_toggle_requested.emit(dark)
+        self.camera_tab._update_control_states()

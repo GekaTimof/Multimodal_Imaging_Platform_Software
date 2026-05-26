@@ -1,3 +1,4 @@
+import base64
 import json as _json
 import tempfile
 import uvicorn

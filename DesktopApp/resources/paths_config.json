@@ -1,14 +1,7 @@
 {
-    "base_directories": {
-        "home": "",
-        "downloads": "",
-        "documents": "",
-        "desktop": "",
-        "app_data": ""
-    },
     "file_operations": {
         "photo": {
-            "default_save_dir": "",
+            "default_save_dir": "/home/evgeniy/Downloads",
             "filename_template": "camera_snapshot_{timestamp}.png",
             "format": "PNG",
             "allowed_formats": [
@@ -17,6 +10,18 @@
                 "JPEG",
                 "BMP",
                 "TIFF"
+            ],
+            "create_subdirs": false,
+            "subdir_format": "{date}"
+        },
+        "spectrum": {
+            "default_save_dir": "/home/evgeniy/Downloads",
+            "filename_template": "spectrum_{timestamp}.txt",
+            "format": "TXT",
+            "allowed_formats": [
+                "TXT",
+                "CSV",
+                "JSON"
             ],
             "create_subdirs": false,
             "subdir_format": "{date}"
@@ -38,18 +43,6 @@
             "filename_template": "app_log_{date}.txt",
             "format": "TXT",
             "max_log_files": 10
-        },
-        "spectrum": {
-            "default_save_dir": "",
-            "filename_template": "spectrum_{timestamp}.txt",
-            "format": "TXT",
-            "allowed_formats": [
-                "TXT",
-                "CSV",
-                "JSON"
-            ],
-            "create_subdirs": false,
-            "subdir_format": "{date}"
         }
     },
     "path_validation": {
@@ -71,5 +64,12 @@
             "?",
             "*"
         ]
+    },
+    "base_directories": {
+        "home": "",
+        "downloads": "",
+        "documents": "",
+        "desktop": "",
+        "app_data": ""
     }
 }

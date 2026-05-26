@@ -308,6 +308,16 @@ class CameraTab(QWidget):
         if self.photo_thread is not None and self.photo_thread.isRunning():
             return  # Already capturing
 
+        # Check if save directory is configured before starting capture
+        photo_dir = self.device_settings_widget.file_tab.get_photo_save_directory()
+        if not photo_dir:
+            warn_msg = (
+                self.interface_text.warning_no_photo_dir() if self.interface_text
+                else "Photo save directory is not configured.\nPlease select a folder in File Settings."
+            )
+            QMessageBox.warning(self, "Save Directory", warn_msg)
+            return
+
         # Estimate capture duration for progress animation and HTTP timeout
         self._progress_total_ms, http_timeout_s = self._get_expected_capture_duration_ms()
         self._progress_elapsed_ms = 0
