@@ -8,7 +8,6 @@ import logging
 import os
 import json
 import sys
-from pathlib import Path
 from typing import Dict, Any, Optional
 from services.directory_control import get_home_directory
 
@@ -28,7 +27,7 @@ class PathManager:
                 "create_subdirs": False,
                 "subdir_format": "{date}"
             },
-            "spectrometer": {
+            "spectrum": {
                 "default_save_dir": "",
                 "filename_template": "spectrum_{timestamp}.txt",
                 "format": "TXT",
@@ -137,7 +136,13 @@ class PathManager:
         Returns empty string if no directory has been configured yet.
         """
         file_ops = self.paths.get('file_operations', {})
-        return file_ops.get(operation, {}).get('default_save_dir', '')
+        save_dir = file_ops.get(operation, {}).get('default_save_dir', '')
+        if save_dir:
+            is_valid, reason = self.validate_directory(save_dir)
+            if not is_valid:
+                logger.warning(f"Ignoring invalid saved directory for '{operation}': {reason}")
+                return ''
+        return save_dir
 
     def set_save_directory(self, operation: str, directory: str):
         """
@@ -186,9 +191,8 @@ class PathManager:
 
         if validation.get('require_home_subdir', True):
             home_dir = get_home_directory()
-            try:
-                Path(os.path.abspath(path)).relative_to(os.path.abspath(home_dir))
-            except ValueError:
+            from services.directory_control import is_path_inside
+            if not is_path_inside(path, home_dir):
                 return False, f"Path must be inside the home directory: {home_dir}"
 
         if not os.path.isdir(path):

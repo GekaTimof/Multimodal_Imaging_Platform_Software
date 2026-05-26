@@ -17,6 +17,7 @@ from PyQt5.QtWidgets import (
 )
 import pyqtgraph as pg
 
+from config import interface_config
 from config.theme_manager import ThemeManager
 from models.interface_text import Interface_text
 from ui.widgets.device_settings_widget import DeviceSettingsWidget
@@ -105,7 +106,7 @@ class SpectrometerTab(QWidget):
 
         right_panel = QWidget()
         right_panel.setLayout(right_layout)
-        right_panel.setMinimumWidth(260)
+        right_panel.setMinimumWidth(interface_config.get('ui_scaling.side_panel_min_width', 320))
         right_panel.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
 
         # ---- Main horizontal layout ----

@@ -168,23 +168,13 @@ class FileSettingsWidget(QWidget):
     def _load_settings(self):
         try:
             from config import path_manager
-            warnings = []
-
             photo_dir = path_manager.get_configured_save_directory('photo')
             if photo_dir:
                 self.photo_dir_label.setText(photo_dir)
-                if not os.path.isdir(photo_dir):
-                    warnings.append(f"Photo dir not found: {photo_dir}")
 
             spectrum_dir = path_manager.get_configured_save_directory('spectrum')
             if spectrum_dir:
                 self.spectrum_dir_label.setText(spectrum_dir)
-                if not os.path.isdir(spectrum_dir):
-                    warnings.append(f"Spectrum dir not found: {spectrum_dir}")
-
-            if warnings:
-                self.status_label.setText(" | ".join(warnings))
-                self.status_label.setStyleSheet("QLabel { color: orange; font-weight: bold; }")
         except Exception as e:
             logger.error(f"Error loading file settings: {e}")
 

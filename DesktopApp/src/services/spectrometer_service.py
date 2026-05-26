@@ -67,7 +67,13 @@ class SpectrometerService(QObject):
                     return None
                 
                 if response.status_code == 200:
-                    return response.json()
+                    payload = response.json()
+                    if isinstance(payload, dict) and isinstance(payload.get("data"), dict):
+                        normalized = payload["data"].copy()
+                        normalized.setdefault("success", payload.get("success", True))
+                        normalized.setdefault("message", payload.get("message", ""))
+                        return normalized
+                    return payload
                 else:
                     logger.warning(f"Request failed with status {response.status_code}: {response.text}")
                     

@@ -74,8 +74,9 @@ class MainWindow(QMainWindow):
 
         # Create status container with fixed height to prevent layout shifts
         status_container = QWidget()
-        status_container.setMinimumHeight(44)
-        status_container.setMaximumHeight(44)
+        status_height = interface_config.get('ui_scaling.status_bar_height', 52)
+        status_container.setMinimumHeight(status_height)
+        status_container.setMaximumHeight(status_height)
         status_layout = QHBoxLayout(status_container)
         status_layout.setContentsMargins(0, 2, 0, 2)
         status_layout.setSpacing(0)

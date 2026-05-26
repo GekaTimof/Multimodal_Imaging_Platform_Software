@@ -111,7 +111,10 @@ class CameraThread(QThread):
             settings = self.load_camera_settings()
             
             # Simple camera connection
-            cap = cv2.VideoCapture(self.camera_source)
+            if isinstance(self.camera_source, str) and self.camera_source.startswith(("http://", "https://")):
+                cap = cv2.VideoCapture(self.camera_source, cv2.CAP_FFMPEG)
+            else:
+                cap = cv2.VideoCapture(self.camera_source)
             if not cap.isOpened():
                 self.status_ready.emit(f"Camera not opened: {self.camera_source}")
                 return

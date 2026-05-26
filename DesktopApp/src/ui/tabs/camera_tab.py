@@ -35,6 +35,7 @@ from core.constants.camera_constants import (
     PHOTO_EXPECTED_ADDITIONS,
 )
 from core.constants.ui_strings import CameraTabStrings
+from config import interface_config
 from config.theme_manager import ThemeManager
 from models.interface_text import Interface_text
 from services.save_photo import save_photo
@@ -133,7 +134,7 @@ class CameraTab(QWidget):
         # Right panel wrapper widget with fixed minimum width
         right_panel_widget = QWidget()
         right_panel_widget.setLayout(right_panel_layout)
-        right_panel_widget.setMinimumWidth(260)
+        right_panel_widget.setMinimumWidth(interface_config.get('ui_scaling.side_panel_min_width', 320))
         right_panel_widget.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
 
         # Main horizontal layout (video expands, controls stay fixed)

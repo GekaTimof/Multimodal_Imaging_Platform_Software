@@ -11,9 +11,14 @@ def is_path_inside(path: str, parent: str) -> bool:
     Корректно работает на Windows (регистронезависимо) и Linux.
     """
     try:
-        Path(os.path.abspath(path)).relative_to(os.path.abspath(parent))
+        resolved_path = Path(path).expanduser().resolve()
+        resolved_parent = Path(parent).expanduser().resolve()
+        if os.name == "nt":
+            resolved_path = Path(os.path.normcase(str(resolved_path)))
+            resolved_parent = Path(os.path.normcase(str(resolved_parent)))
+        resolved_path.relative_to(resolved_parent)
         return True
-    except ValueError:
+    except (OSError, ValueError):
         return False
 
 def is_directory_allowed(directory):

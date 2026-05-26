@@ -44,6 +44,12 @@ class InterfaceConfig:
             "tooltips": True,
             "animations": True,
             "auto_save": True
+        },
+        "ui_scaling": {
+            "font_family": "DejaVu Sans",
+            "font_point_size": 11,
+            "status_bar_height": 52,
+            "side_panel_min_width": 320
         }
     }
     
