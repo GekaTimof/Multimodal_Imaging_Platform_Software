@@ -3,7 +3,7 @@ import pexpect
 import numpy as np
 
 from SpectrometerOptoskyConnection.Constants import OVERILLUMINATION_THRESHOLD, MINIMUM_WAITING_TIME, WAITING_TIME_MULTIPLIER, SPECTROMETER_DIR, SPECTROMETER_FILE, START_INTEGRAL_TIME, WAVELENGTH_RANGE_LEN, SPECTRUM_LEN
-from SpectrometerOptoskyConnection.Constants import OptoskySpectrometerCommands, Command_get_modul_production_date, Command_get_modul_version, Command_get_SN, Command_get_PN, Command_get_vendor, Command_open_spectrometer, Command_get_wavelength_range, Command_get_dark_spectrum, Command_get_current_spectrum
+from SpectrometerOptoskyConnection.Constants import OptoskySpectrometerCommands, Command_initialize, Command_get_modul_production_date, Command_get_modul_version, Command_get_SN, Command_get_PN, Command_get_vendor, Command_open_spectrometer, Command_get_wavelength_range, Command_get_dark_spectrum, Command_get_current_spectrum
 
 # class that contain spectrometer connection
 class SpectrometerConnection:
@@ -13,6 +13,7 @@ class SpectrometerConnection:
         self.Commands = OptoskySpectrometerCommands
 
         # set spectrometer commands
+        self.Initialize = Command_initialize
         self.Open_spectrometer = Command_open_spectrometer
         self.Get_wavelength_range = Command_get_wavelength_range
         self.Get_dark_spectrum = Command_get_dark_spectrum
@@ -60,8 +61,8 @@ class SpectrometerConnection:
         if not os.path.isfile(self.spectrometer_path):
             raise FileNotFoundError(f"Spectrometer script not found: {self.spectrometer_path}")
 
-        # set spectrometer connection proses
-        self.process = pexpect.spawn(f'{self.spectrometer_path}', cwd=self.working_directory, encoding="utf-8", timeout=10)
+        # set spectrometer connection proses (sudo required for USB access)
+        self.process = pexpect.spawn(f'sudo {self.spectrometer_path}', cwd=self.working_directory, encoding="utf-8", timeout=10)
 
 
     # method return spectrometer working_directory
@@ -110,8 +111,29 @@ class SpectrometerConnection:
         return response
 
 
+    # method to initialize SDK (must be called before open_spectrometer in SDK V2.7)
+    def initialize(self):
+        # get command parameters
+        command_id = self.Commands[self.Initialize][0]
+        expected_answers = self.Commands[self.Initialize][1]
+
+        # try to initialize
+        try:
+            self.send_command(command_id)
+            # checking initialization
+            self.wait_for_response(expected_answers[0], MINIMUM_WAITING_TIME)
+            # skip before next request
+            self.wait_for_response(expected_answers[1], MINIMUM_WAITING_TIME)
+        except:
+            raise Exception(f"Can't initialize spectrometer SDK")
+        return self
+
+
     # method to connect to spectrometer
     def open_spectrometer(self):
+        # initialize SDK first (required for V2.7+)
+        self.initialize()
+
         # get command parameters
         command_id = self.Commands[self.Open_spectrometer][0]
         expected_answers = self.Commands[self.Open_spectrometer][1]

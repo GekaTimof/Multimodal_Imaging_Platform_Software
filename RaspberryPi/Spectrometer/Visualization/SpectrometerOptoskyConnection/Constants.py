@@ -25,6 +25,7 @@ TEST_DATA_Y_PATH = os.path.join(CURRENT_DIR, "..", Test_data_directory_name, Tes
 Test_wavelength_len = 1024
 
 # Optosky spectrometer commands
+Command_initialize = "initialize"
 Command_open_spectrometer = "open_spectrometer"
 Command_get_wavelength_range = "get_wavelength_range"
 Command_get_dark_spectrum = "get_dark_spectrum"
@@ -40,6 +41,7 @@ Command_get_modul_production_date = "get_modul_production_date"
 # val[0] - command id,
 # val[1] - contain array or key phrases to extract values from request
 OptoskySpectrometerCommands = {
+    Command_initialize: ("96", ["API Initialize success!", "=====", "Enter :"]),
     Command_open_spectrometer: ("0", ["Open spectrometer success!", "=====", "Enter :"]),
     Command_get_vendor: ("2", ["API Get vendor", "=====", "Enter :"]),
     Command_get_PN: ("3", ["API Get PN number", "=====", "Enter :"]),
