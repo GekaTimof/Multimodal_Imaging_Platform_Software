@@ -31,7 +31,7 @@ def main():
         id INTEGER PRIMARY KEY,
         SettingsName TEXT NOT NULL DEFAULT 'Basic',
         IntegralTime INTEGER NOT NULL DEFAULT 100 CHECK(IntegralTime BETWEEN 1 AND 99999),
-        DarkSpectrumPath TEXT DEFAULT '',
+        UseDarkSpectrum INTEGER NOT NULL DEFAULT 0 CHECK(UseDarkSpectrum IN (0, 1)),
         AutoDarkCorrection INTEGER NOT NULL DEFAULT 1 CHECK(AutoDarkCorrection IN (0, 1)),
         OverilluminationThreshold INTEGER NOT NULL DEFAULT 65535 CHECK(OverilluminationThreshold BETWEEN 0 AND 65535),
         LastUpdated TEXT DEFAULT CURRENT_TIMESTAMP
@@ -106,28 +106,50 @@ def main():
     # Check if SpectrometerSettings table has the new structure, migrate if needed
     cursor.execute("PRAGMA table_info(SpectrometerSettings)")
     columns = [row[1] for row in cursor.fetchall()]
-    
-    # If old structure exists, drop and recreate
-    if 'parameter1' in columns:
-        cursor.execute("DROP TABLE SpectrometerSettings")
+
+    # Migrate from old structure (parameter1 or DarkSpectrumPath) to new structure (UseDarkSpectrum)
+    if 'parameter1' in columns or 'DarkSpectrumPath' in columns:
+        print("Migrating SpectrometerSettings table...")
+        # Backup old data if exists
+        try:
+            cursor.execute("SELECT * FROM SpectrometerSettings WHERE id = 0")
+            old_data = cursor.fetchone()
+        except:
+            old_data = None
+
+        cursor.execute("DROP TABLE IF EXISTS SpectrometerSettings")
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS SpectrometerSettings (
             id INTEGER PRIMARY KEY,
             SettingsName TEXT NOT NULL DEFAULT 'Basic',
             IntegralTime INTEGER NOT NULL DEFAULT 100 CHECK(IntegralTime BETWEEN 1 AND 99999),
-            DarkSpectrumPath TEXT DEFAULT '',
+            UseDarkSpectrum INTEGER NOT NULL DEFAULT 0 CHECK(UseDarkSpectrum IN (0, 1)),
             AutoDarkCorrection INTEGER NOT NULL DEFAULT 1 CHECK(AutoDarkCorrection IN (0, 1)),
             OverilluminationThreshold INTEGER NOT NULL DEFAULT 65535 CHECK(OverilluminationThreshold BETWEEN 0 AND 65535),
             LastUpdated TEXT DEFAULT CURRENT_TIMESTAMP
         )
         """)
+
+        # Restore old data if migration was from valid table
+        if old_data and len(old_data) > 0:
+            # Map old columns to new (DarkSpectrumPath -> UseDarkSpectrum: if path was not empty, set to 1)
+            old_integral_time = old_data[2] if len(old_data) > 2 else 100
+            old_dark_path = old_data[3] if len(old_data) > 3 else ''
+            use_dark = 1 if old_dark_path and str(old_dark_path).strip() else 0
+            old_auto_dark = old_data[4] if len(old_data) > 4 else 1
+            old_threshold = old_data[5] if len(old_data) > 5 else 65535
+
+            cursor.execute("""
+            INSERT INTO SpectrometerSettings (id, SettingsName, IntegralTime, UseDarkSpectrum, AutoDarkCorrection, OverilluminationThreshold, LastUpdated)
+            VALUES (?, 'Migrated', ?, ?, ?, ?, datetime('now'))
+            """, (0, old_integral_time, use_dark, old_auto_dark, old_threshold))
     
     # Insert default spectrometer settings for slot 0 if not exists
     cursor.execute("SELECT COUNT(*) FROM SpectrometerSettings WHERE id = 0")
     if cursor.fetchone()[0] == 0:
         cursor.execute("""
-        INSERT INTO SpectrometerSettings (id, SettingsName, IntegralTime, DarkSpectrumPath, AutoDarkCorrection, OverilluminationThreshold, LastUpdated)
-        VALUES (0, 'Basic', 100, '', 1, 65535, datetime('now'))
+        INSERT INTO SpectrometerSettings (id, SettingsName, IntegralTime, UseDarkSpectrum, AutoDarkCorrection, OverilluminationThreshold, LastUpdated)
+        VALUES (0, 'Basic', 100, 0, 1, 65535, datetime('now'))
         """)
     
     conn.commit()

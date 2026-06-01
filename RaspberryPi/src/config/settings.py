@@ -27,6 +27,16 @@ class Config:
     
     # Data Storage Configuration
     DATA_DIR = os.getenv('DATA_DIR', os.path.join(os.path.dirname(__file__), '..', '..', 'data'))
+
+    # Spectrometer Configuration
+    DARK_SPECTRUM_FILENAME = 'dark_spectrum.npy'
+
+    @classmethod
+    def get_dark_spectrum_path(cls) -> str:
+        """Get standard dark spectrum file path."""
+        dark_spectra_dir = os.path.join(cls.DATA_DIR, 'dark_spectra')
+        os.makedirs(dark_spectra_dir, exist_ok=True)
+        return os.path.join(dark_spectra_dir, cls.DARK_SPECTRUM_FILENAME)
     
     # API Configuration
     API_TIMEOUT_SECONDS = int(os.getenv('API_TIMEOUT_SECONDS', '5'))
@@ -86,7 +96,7 @@ class Config:
     DEFAULT_SPECTROMETER_SETTINGS = {
         'SettingsName': 'Basic',
         'IntegralTime': 100,
-        'DarkSpectrumPath': '',
+        'UseDarkSpectrum': False,
         'AutoDarkCorrection': True,
         'OverilluminationThreshold': 65535
     }
@@ -207,20 +217,20 @@ class Config:
                 return False, f"OverilluminationThreshold {value} out of range [{cls.MIN_OVERILLUMINATION_THRESHOLD}, {cls.MAX_OVERILLUMINATION_THRESHOLD}]"
             return True, value
 
-        elif parameter == 'AutoDarkCorrection':
+        elif parameter in ['AutoDarkCorrection', 'UseDarkSpectrum']:
             if isinstance(value, str):
                 if value.lower() in ('true', '1', 'on'):
                     return True, 1
                 elif value.lower() in ('false', '0', 'off'):
                     return True, 0
                 else:
-                    return False, f"Invalid boolean value for AutoDarkCorrection: {value}"
+                    return False, f"Invalid boolean value for {parameter}: {value}"
             elif isinstance(value, bool):
                 return True, int(value)
             elif isinstance(value, int):
                 return True, int(bool(value))
             else:
-                return False, f"AutoDarkCorrection must be boolean, got {type(value).__name__}"
+                return False, f"{parameter} must be boolean, got {type(value).__name__}"
 
         elif parameter == 'DarkSpectrumPath':
             if isinstance(value, str):

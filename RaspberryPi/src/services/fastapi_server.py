@@ -202,7 +202,7 @@ class SpectrometerSettingsResponse(BaseModel):
     id: Optional[int] = Field(default=0, description="Settings slot ID")
     SettingsName: str = Field(default="Basic", description="Settings profile name")
     IntegralTime: int = Field(default=100, description="Integration time in milliseconds (1-99999)")
-    DarkSpectrumPath: str = Field(default="", description="Path to saved dark spectrum file")
+    UseDarkSpectrum: bool = Field(default=False, description="Use dark spectrum for correction")
     AutoDarkCorrection: bool = Field(default=True, description="Automatically apply dark correction")
     OverilluminationThreshold: int = Field(default=65535, description="Threshold for overillumination detection (0-65535)")
     LastUpdated: Optional[str] = Field(default=None, description="Last update timestamp")
@@ -212,14 +212,14 @@ class SpectrometerSettingsResponse(BaseModel):
             "id": 0,
             "SettingsName": "Basic",
             "IntegralTime": 100,
-            "DarkSpectrumPath": "",
+            "UseDarkSpectrum": False,
             "AutoDarkCorrection": True,
             "OverilluminationThreshold": 65535,
             "LastUpdated": "2024-01-01T12:00:00"
         }
     })
 
-    @field_validator('AutoDarkCorrection', mode='before')
+    @field_validator('UseDarkSpectrum', 'AutoDarkCorrection', mode='before')
     @classmethod
     def convert_boolean_input(cls, v):
         if hasattr(v, 'item'):
@@ -239,8 +239,9 @@ class SpectrometerSettingsResponse(BaseModel):
 class SpectrometerInfoResponse(BaseModel):
     connected: bool = Field(..., description="Spectrometer hardware connection status")
     integral_time: int = Field(..., description="Current integration time")
-    dark_spectrum_loaded: bool = Field(..., description="Whether dark spectrum is loaded")
-    dark_spectrum_path: str = Field(..., description="Path to dark spectrum file")
+    use_dark_spectrum: bool = Field(..., description="Dark spectrum usage enabled")
+    dark_spectrum_loaded: bool = Field(..., description="Whether dark spectrum is loaded in memory")
+    dark_spectrum_file_exists: bool = Field(..., description="Whether dark spectrum file exists")
     auto_dark_correction: bool = Field(..., description="Auto dark correction enabled")
     overillumination: bool = Field(..., description="Current overillumination status")
     overillumination_threshold: int = Field(..., description="Overillumination threshold")
@@ -261,6 +262,13 @@ class SpectrometerSpectrumResponse(BaseModel):
     spectrum: list = Field(..., description="Raw spectrum data")
     real_spectrum: list = Field(..., description="Dark-corrected spectrum data")
     overillumination: bool = Field(..., description="Overillumination flag")
+
+
+class DarkSpectrumResponse(BaseModel):
+    """Response model for dark spectrum data."""
+    dark_spectrum: list = Field(..., description="Dark spectrum array")
+    use_dark_spectrum: bool = Field(..., description="Whether dark spectrum is enabled")
+    dark_spectrum_file_exists: bool = Field(..., description="Whether dark spectrum file exists")
 
 
 # API Endpoints
@@ -789,7 +797,8 @@ async def set_spectrometer_integral_time(request: SpectrometerIntegralTimeReques
 
 @app.post("/api/spectrometer/dark-spectrum/capture", response_model=APIResponse)
 async def capture_dark_spectrum():
-    """Capture and save dark spectrum (ensure no light is entering the spectrometer)."""
+    """Capture and save dark spectrum (ensure no light is entering the spectrometer).
+    Saves to standard location and enables UseDarkSpectrum automatically."""
     try:
         success = spectrometer_service.set_dark_spectrum()
         if success:
@@ -798,7 +807,7 @@ async def capture_dark_spectrum():
                 message="Dark spectrum captured and saved successfully",
                 data={
                     "dark_spectrum_loaded": spectrometer_service.dark_spectrum is not None,
-                    "dark_spectrum_path": spectrometer_service.dark_spectrum_path
+                    "use_dark_spectrum": spectrometer_service.use_dark_spectrum
                 }
             )
         else:
@@ -811,35 +820,60 @@ async def capture_dark_spectrum():
 
 @app.post("/api/spectrometer/dark-spectrum/clear", response_model=APIResponse)
 async def clear_dark_spectrum():
-    """Clear the current dark spectrum."""
+    """Clear the current dark spectrum. Deletes the file and disables UseDarkSpectrum."""
     try:
         spectrometer_service.clear_dark_spectrum()
         return APIResponse(
             success=True,
             message="Dark spectrum cleared successfully",
-            data={"dark_spectrum_loaded": False}
+            data={
+                "dark_spectrum_loaded": False,
+                "use_dark_spectrum": False
+            }
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error clearing dark spectrum: {str(e)}")
 
 
 @app.post("/api/spectrometer/dark-spectrum/load", response_model=APIResponse)
-async def load_dark_spectrum(filepath: str):
-    """Load dark spectrum from a file path."""
+async def load_dark_spectrum():
+    """Load dark spectrum from standard file location.
+    Enables UseDarkSpectrum if file exists."""
     try:
-        success = spectrometer_service.load_dark_spectrum_file(filepath)
+        success = spectrometer_service.load_dark_spectrum_file()
         if success:
             return APIResponse(
                 success=True,
-                message=f"Dark spectrum loaded from {filepath}",
-                data={"dark_spectrum_path": filepath}
+                message="Dark spectrum loaded from standard location",
+                data={
+                    "dark_spectrum_loaded": spectrometer_service.dark_spectrum is not None,
+                    "use_dark_spectrum": spectrometer_service.use_dark_spectrum
+                }
             )
         else:
-            raise HTTPException(status_code=400, detail=f"Failed to load dark spectrum from {filepath}")
+            raise HTTPException(status_code=400, detail="Failed to load dark spectrum from standard location")
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error loading dark spectrum: {str(e)}")
+
+
+@app.get("/api/spectrometer/dark-spectrum", response_model=DarkSpectrumResponse)
+async def get_dark_spectrum():
+    """Get the current dark spectrum data.
+    Returns the stored dark spectrum array if available."""
+    try:
+        dark_spectrum, use_dark = spectrometer_service.get_dark_spectrum_data()
+        dark_file_exists = os.path.exists(config.get_dark_spectrum_path())
+
+        response_data = {
+            'dark_spectrum': dark_spectrum.tolist() if dark_spectrum is not None else [],
+            'use_dark_spectrum': use_dark,
+            'dark_spectrum_file_exists': dark_file_exists
+        }
+        return DarkSpectrumResponse(**response_data)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting dark spectrum: {str(e)}")
 
 
 @app.get("/api/spectrometer/validation-rules")
@@ -906,7 +940,8 @@ if __name__ == "__main__":
     logger.info("    POST /api/spectrometer/integral-time - Set integration time")
     logger.info("    POST /api/spectrometer/dark-spectrum/capture - Capture dark spectrum")
     logger.info("    POST /api/spectrometer/dark-spectrum/clear - Clear dark spectrum")
-    logger.info("    POST /api/spectrometer/dark-spectrum/load - Load dark spectrum from file")
+    logger.info("    POST /api/spectrometer/dark-spectrum/load - Load dark spectrum from standard location")
+    logger.info("    GET  /api/spectrometer/dark-spectrum - Get dark spectrum data")
     logger.info("    GET  /api/spectrometer/validation-rules - Get validation rules")
     logger.info("  Spectrometer Streaming (port %s):", config.SPECTRUM_STREAM_PORT)
     logger.info("    GET  /spectrum - SSE stream of spectrum data")

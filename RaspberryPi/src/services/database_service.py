@@ -85,8 +85,8 @@ class DatabaseService:
                     return False, "IntegralTime must be between 1 and 99999"
             except (ValueError, TypeError):
                 return False, "IntegralTime must be an integer"
-        
-        elif parameter == 'AutoDarkCorrection':
+
+        elif parameter in ['AutoDarkCorrection', 'UseDarkSpectrum']:
             if isinstance(value, bool):
                 return True, int(value)
             elif str(value).lower() in ('true', '1', 'yes'):
@@ -94,8 +94,8 @@ class DatabaseService:
             elif str(value).lower() in ('false', '0', 'no'):
                 return True, 0
             else:
-                return False, "AutoDarkCorrection must be boolean (0 or 1)"
-        
+                return False, f"{parameter} must be boolean (0 or 1)"
+
         elif parameter == 'OverilluminationThreshold':
             try:
                 int_value = int(value)
@@ -105,19 +105,13 @@ class DatabaseService:
                     return False, "OverilluminationThreshold must be between 0 and 65535"
             except (ValueError, TypeError):
                 return False, "OverilluminationThreshold must be an integer"
-        
-        elif parameter == 'DarkSpectrumPath':
-            if isinstance(value, str):
-                return True, str(value)
-            else:
-                return False, "DarkSpectrumPath must be a string"
-        
+
         elif parameter == 'SettingsName':
             if isinstance(value, str) and len(value.strip()) > 0:
                 return True, str(value).strip()
             else:
                 return False, "SettingsName must be a non-empty string"
-        
+
         else:
             return False, f"Unknown parameter: {parameter}"
     
@@ -397,6 +391,7 @@ class DatabaseService:
                 columns = [desc[0] for desc in cursor.description]
                 settings = dict(zip(columns, row))
                 # Convert boolean fields properly
+                settings['UseDarkSpectrum'] = bool(settings['UseDarkSpectrum'])
                 settings['AutoDarkCorrection'] = bool(settings['AutoDarkCorrection'])
                 return settings
             else:
@@ -405,25 +400,25 @@ class DatabaseService:
                     'id': 0,
                     'SettingsName': 'Basic',
                     'IntegralTime': 100,
-                    'DarkSpectrumPath': '',
+                    'UseDarkSpectrum': False,
                     'AutoDarkCorrection': True,
                     'OverilluminationThreshold': 65535,
                     'LastUpdated': ''
                 }
-                
+
                 # Insert default settings into database
                 cursor.execute("""
-                INSERT OR IGNORE INTO SpectrometerSettings 
-                (id, SettingsName, IntegralTime, DarkSpectrumPath, AutoDarkCorrection, OverilluminationThreshold, LastUpdated)
+                INSERT OR IGNORE INTO SpectrometerSettings
+                (id, SettingsName, IntegralTime, UseDarkSpectrum, AutoDarkCorrection, OverilluminationThreshold, LastUpdated)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
                 """, (
                     0, default_settings['SettingsName'],
-                    default_settings['IntegralTime'], default_settings['DarkSpectrumPath'],
+                    default_settings['IntegralTime'], int(default_settings['UseDarkSpectrum']),
                     int(default_settings['AutoDarkCorrection']), default_settings['OverilluminationThreshold'],
                     default_settings['LastUpdated']
                 ))
                 conn.commit()
-                
+
                 return default_settings
                 
         except sqlite3.Error as e:
@@ -439,23 +434,23 @@ class DatabaseService:
         try:
             conn = sqlite3.connect(db_path)
             cursor = conn.cursor()
-            
+
             # Check if slot 0 exists
             cursor.execute("SELECT id FROM SpectrometerSettings WHERE id = 0")
             exists = cursor.fetchone()
-            
+
             if exists:
                 # Update existing settings
                 query = """
-                UPDATE SpectrometerSettings 
-                SET SettingsName = ?, IntegralTime = ?, DarkSpectrumPath = ?, AutoDarkCorrection = ?,
+                UPDATE SpectrometerSettings
+                SET SettingsName = ?, IntegralTime = ?, UseDarkSpectrum = ?, AutoDarkCorrection = ?,
                     OverilluminationThreshold = ?, LastUpdated = ?
                 WHERE id = ?
                 """
                 cursor.execute(query, (
                     settings.get('SettingsName', 'Basic'),
                     settings.get('IntegralTime', 100),
-                    settings.get('DarkSpectrumPath', ''),
+                    int(settings.get('UseDarkSpectrum', False)),
                     int(settings.get('AutoDarkCorrection', True)),
                     settings.get('OverilluminationThreshold', 65535),
                     settings.get('LastUpdated', ''),
@@ -464,23 +459,23 @@ class DatabaseService:
             else:
                 # Insert new settings
                 query = """
-                INSERT INTO SpectrometerSettings 
-                (id, SettingsName, IntegralTime, DarkSpectrumPath, AutoDarkCorrection, OverilluminationThreshold, LastUpdated)
+                INSERT INTO SpectrometerSettings
+                (id, SettingsName, IntegralTime, UseDarkSpectrum, AutoDarkCorrection, OverilluminationThreshold, LastUpdated)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
                 """
                 cursor.execute(query, (
                     0,
                     settings.get('SettingsName', 'Basic'),
                     settings.get('IntegralTime', 100),
-                    settings.get('DarkSpectrumPath', ''),
+                    int(settings.get('UseDarkSpectrum', False)),
                     int(settings.get('AutoDarkCorrection', True)),
                     settings.get('OverilluminationThreshold', 65535),
                     settings.get('LastUpdated', '')
                 ))
-            
+
             conn.commit()
             return True, "Spectrometer settings saved successfully"
-            
+
         except sqlite3.Error as e:
             return False, f"Database error: {e}"
         finally:

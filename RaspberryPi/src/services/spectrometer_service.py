@@ -80,21 +80,30 @@ class SpectrometerService:
             settings = db_service.get_spectrometer_settings()
             if settings:
                 self.integral_time = settings.get('IntegralTime', START_INTEGRAL_TIME)
-                self.dark_spectrum_path = settings.get('DarkSpectrumPath', '')
+                self.use_dark_spectrum = settings.get('UseDarkSpectrum', False)
                 self.auto_dark_correction = settings.get('AutoDarkCorrection', True)
                 self.overillumination_threshold = settings.get('OverilluminationThreshold', 65535)
+
+                # Validate: if UseDarkSpectrum is True but file doesn't exist, disable it
+                if self.use_dark_spectrum:
+                    dark_file_path = config.get_dark_spectrum_path()
+                    if not os.path.exists(dark_file_path):
+                        logger.warning(f"UseDarkSpectrum was True but dark spectrum file not found at {dark_file_path}")
+                        self.use_dark_spectrum = False
+                        # Update database to reflect this
+                        self._save_settings()
             else:
                 # Default settings
                 self.integral_time = START_INTEGRAL_TIME
-                self.dark_spectrum_path = ''
+                self.use_dark_spectrum = False
                 self.auto_dark_correction = True
                 self.overillumination_threshold = 65535
-                
+
         except Exception as e:
             logger.error(f"Error loading spectrometer settings: {e}")
             # Fallback to default settings
             self.integral_time = START_INTEGRAL_TIME
-            self.dark_spectrum_path = ''
+            self.use_dark_spectrum = False
             self.auto_dark_correction = True
             self.overillumination_threshold = 65535
     
@@ -103,7 +112,7 @@ class SpectrometerService:
         try:
             settings = {
                 'IntegralTime': self.integral_time,
-                'DarkSpectrumPath': self.dark_spectrum_path,
+                'UseDarkSpectrum': self.use_dark_spectrum,
                 'AutoDarkCorrection': self.auto_dark_correction,
                 'OverilluminationThreshold': self.overillumination_threshold,
                 'LastUpdated': datetime.now().isoformat()
@@ -197,18 +206,21 @@ class SpectrometerService:
             )
     
     def set_dark_spectrum(self) -> bool:
-        """Capture and set dark spectrum."""
+        """Capture and set dark spectrum. Saves to standard location."""
         if not self.use_real_spectrometer or not self.spectrometer:
             logger.warning("Cannot set dark spectrum: spectrometer not available")
             return False
-        
+
         try:
             self.spectrometer.retrieve_and_set_dark_spectrum()
             with self.spectrum_lock:
                 self.dark_spectrum = self.spectrometer.return_dark_spectrum().copy()
-            
-            # Save dark spectrum to file
+
+            # Save dark spectrum to standard file location
             self._save_dark_spectrum_file()
+            # Enable dark spectrum usage
+            self.use_dark_spectrum = True
+            self._save_settings()
             logger.info("Dark spectrum captured and saved")
             return True
         except Exception as e:
@@ -219,71 +231,80 @@ class SpectrometerService:
         """Clear the dark spectrum."""
         with self.spectrum_lock:
             self.dark_spectrum = None
-        
+
         if self.use_real_spectrometer and self.spectrometer:
             try:
                 self.spectrometer.clear_dark_spectrum()
             except Exception as e:
                 logger.error(f"Failed to clear dark spectrum in spectrometer: {e}")
-        
-        # Clear saved path
-        self.dark_spectrum_path = ''
+
+        # Delete the standard dark spectrum file if it exists
+        try:
+            dark_file_path = config.get_dark_spectrum_path()
+            if os.path.exists(dark_file_path):
+                os.remove(dark_file_path)
+                logger.info(f"Deleted dark spectrum file: {dark_file_path}")
+        except Exception as e:
+            logger.error(f"Failed to delete dark spectrum file: {e}")
+
+        # Disable dark spectrum usage
+        self.use_dark_spectrum = False
         self._save_settings()
         logger.info("Dark spectrum cleared")
     
     def _save_dark_spectrum_file(self):
-        """Save dark spectrum to file on Raspberry Pi."""
+        """Save dark spectrum to standard file location on Raspberry Pi."""
         if self.dark_spectrum is None:
             return
-        
+
         try:
-            # Create directory for dark spectra if it doesn't exist
-            dark_spectra_dir = os.path.join(config.DATA_DIR, 'dark_spectra')
-            os.makedirs(dark_spectra_dir, exist_ok=True)
-            
-            # Generate filename with timestamp
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"dark_spectrum_{timestamp}.npy"
-            filepath = os.path.join(dark_spectra_dir, filename)
-            
+            # Get standard dark spectrum path
+            filepath = config.get_dark_spectrum_path()
+
             # Save as numpy array
             np.save(filepath, self.dark_spectrum)
-            
-            # Also save as text file for compatibility
-            txt_filepath = os.path.join(dark_spectra_dir, f"dark_spectrum_{timestamp}.txt")
-            np.savetxt(txt_filepath, self.dark_spectrum, fmt='%d')
-            
-            # Update settings
-            self.dark_spectrum_path = filepath
-            self._save_settings()
-            
+
             logger.info(f"Dark spectrum saved to {filepath}")
-            
+
         except Exception as e:
             logger.error(f"Failed to save dark spectrum file: {e}")
     
-    def load_dark_spectrum_file(self, filepath: str) -> bool:
-        """Load dark spectrum from file."""
+    def load_dark_spectrum_file(self, filepath: str = None) -> bool:
+        """Load dark spectrum from file. If no filepath provided, uses standard location."""
         try:
+            # Use standard path if no filepath provided
+            if filepath is None:
+                filepath = config.get_dark_spectrum_path()
+
+            if not os.path.exists(filepath):
+                logger.warning(f"Dark spectrum file not found: {filepath}")
+                return False
+
             if filepath.endswith('.npy'):
                 self.dark_spectrum = np.load(filepath)
             else:
                 self.dark_spectrum = np.loadtxt(filepath, dtype=np.uint16)
-            
-            # Update spectrometer if available
-            if self.use_real_spectrometer and self.spectrometer:
-                # Note: The original spectrometer connection doesn't have a method to set dark spectrum directly
-                # We'll store it internally and apply correction in our service
-                pass
-            
-            self.dark_spectrum_path = filepath
+
+            # Enable dark spectrum usage
+            self.use_dark_spectrum = True
             self._save_settings()
             logger.info(f"Dark spectrum loaded from {filepath}")
             return True
-            
+
         except Exception as e:
             logger.error(f"Failed to load dark spectrum from {filepath}: {e}")
             return False
+
+    def get_dark_spectrum_data(self) -> Tuple[Optional[np.ndarray], bool]:
+        """Get the current dark spectrum data.
+
+        Returns:
+            Tuple of (dark_spectrum array, use_dark_spectrum flag)
+        """
+        with self.spectrum_lock:
+            if self.dark_spectrum is not None:
+                return self.dark_spectrum.copy(), self.use_dark_spectrum
+            return None, self.use_dark_spectrum
     
     def set_integral_time(self, integral_time: int) -> bool:
         """Set the integration time."""
@@ -306,16 +327,20 @@ class SpectrometerService:
     
     def get_spectrometer_info(self) -> Dict[str, Any]:
         """Get spectrometer information."""
+        # Check if dark spectrum file exists at standard location
+        dark_file_exists = os.path.exists(config.get_dark_spectrum_path())
+
         info = {
             'connected': self.use_real_spectrometer,
             'integral_time': self.integral_time,
+            'use_dark_spectrum': self.use_dark_spectrum,
             'dark_spectrum_loaded': self.dark_spectrum is not None,
-            'dark_spectrum_path': self.dark_spectrum_path,
+            'dark_spectrum_file_exists': dark_file_exists,
             'auto_dark_correction': self.auto_dark_correction,
             'overillumination': self.overillumination,
             'overillumination_threshold': self.overillumination_threshold
         }
-        
+
         if self.use_real_spectrometer and self.spectrometer:
             try:
                 self.spectrometer.set_session_info()
@@ -328,7 +353,7 @@ class SpectrometerService:
                 })
             except Exception as e:
                 logger.error(f"Failed to get spectrometer info: {e}")
-        
+
         return info
     
     def reload_settings(self):
