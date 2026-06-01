@@ -24,6 +24,8 @@
  
     "Start_Camera": "Start camera",
     "Stop_Camera": "Stop camera",
+    "Start_Spectrometer": "Start spectrometer",
+    "Stop_Spectrometer": "Stop spectrometer",
     "Select_save_directory": "Select save directory",
     "Save_Image": "Save image",
     "No_video": "No video",

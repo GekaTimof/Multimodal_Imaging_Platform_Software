@@ -3,78 +3,23 @@ Spectrometer Widget
 Pure spectrum graph display widget. Controls and file operations are managed by SpectrometerTab.
 """
 
+from typing import Optional
+
 import numpy as np
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QSizePolicy
-from PyQt5.QtCore import Qt, QThread, pyqtSignal, QMutex
+from PyQt5.QtCore import Qt
 import pyqtgraph as pg
 from PyQt5.QtGui import QPen, QFont
 
 from services.spectrometer_service import SpectrometerService
+from core.threads.spectrum_thread import SpectrumThread
 from models.interface_text import Interface_text
-from core.constants.spectrometer_constants import (
-    DEFAULT_STREAM_INTERVAL_MS, SPECTRUM_THREAD_SLEEP_MS
-)
-
-
-class SpectrumDataThread(QThread):
-    """Thread for handling spectrum data streaming."""
-    
-    new_data = pyqtSignal(np.ndarray, np.ndarray)
-    connection_status = pyqtSignal(bool)
-    error_occurred = pyqtSignal(str)
-    
-    def __init__(self, spectrometer_service: SpectrometerService):
-        super().__init__()
-        self.service = spectrometer_service
-        self.running = False
-        self.mutex = QMutex()
-        
-        self.service.spectrum_received.connect(self.on_spectrum_received)
-        self.service.connection_status_changed.connect(self.on_connection_changed)
-        self.service.error_occurred.connect(self.on_error)
-    
-    def start_streaming(self):
-        """Start spectrum streaming."""
-        self.mutex.lock()
-        self.running = True
-        self.mutex.unlock()
-        self.start()
-    
-    def stop_streaming(self):
-        """Stop spectrum streaming."""
-        self.mutex.lock()
-        self.running = False
-        self.mutex.unlock()
-        self.service.stop_spectrum_stream()
-        self.quit()
-        self.wait()
-    
-    def on_spectrum_received(self, x_data, y_data):
-        self.new_data.emit(x_data, y_data)
-    
-    def on_connection_changed(self, connected):
-        self.connection_status.emit(connected)
-    
-    def on_error(self, error_msg):
-        self.error_occurred.emit(error_msg)
-    
-    def run(self):
-        """Main thread loop."""
-        if self.service.check_connection():
-            self.service.start_spectrum_stream()
-        else:
-            self.service.connect_spectrometer()
-            if self.service.check_connection():
-                self.service.start_spectrum_stream()
-        
-        while self.running:
-            self.msleep(SPECTRUM_THREAD_SLEEP_MS)
 
 
 class SpectrometerWidget(QWidget):
     """
     Pure spectrum graph display widget.
-    Manages the spectrometer service and data thread.
+    Manages the spectrometer service and spectrum streaming thread.
     All UI controls live in SpectrometerTab (upper-right tools panel).
     """
 
@@ -82,7 +27,7 @@ class SpectrometerWidget(QWidget):
         super().__init__()
         self.interface_text = interface_text
         self.spectrometer_service = SpectrometerService()
-        self.data_thread = SpectrumDataThread(self.spectrometer_service)
+        self.thread: Optional[SpectrumThread] = None
 
         self.is_dark_theme = False
         self.loaded_spectra = {}
@@ -90,11 +35,6 @@ class SpectrometerWidget(QWidget):
         self.start_graph_reset = True
 
         self._init_graph()
-
-        self.data_thread.new_data.connect(self._update_graph)
-        self.data_thread.connection_status.connect(self._on_connection_changed)
-
-        self.data_thread.start_streaming()
 
     def _init_graph(self):
         """Build the plot widget."""
@@ -151,9 +91,22 @@ class SpectrometerWidget(QWidget):
     # Public API called by SpectrometerTab
     # ------------------------------------------------------------------
 
+    def start_spectrometer(self):
+        """Start the spectrum streaming thread (analogous to CameraTab.start_camera)."""
+        if self.thread is not None and self.thread.isRunning():
+            return
+
+        self.thread = SpectrumThread()
+        self.thread.spectrum_ready.connect(self._update_graph)
+        self.thread.status_ready.connect(self._on_status)
+        self.thread.start()
+
     def stop_spectrometer(self):
-        """Stop the data thread."""
-        self.data_thread.stop_streaming()
+        """Stop the spectrum streaming thread (analogous to CameraTab.stop_camera)."""
+        if self.thread is None:
+            return
+        self.thread.stop()
+        self.thread = None
 
     def reset_graph_view(self):
         """Fit all visible data into the view."""
@@ -223,8 +176,9 @@ class SpectrometerWidget(QWidget):
         else:
             self.overillumination_label.hide()
 
-    def _on_connection_changed(self, connected):
-        pass  # forwarded to SpectrometerTab via data_thread signal
+    def _on_status(self, message: str):
+        """Forward status from SpectrumThread — SpectrometerTab connects to this."""
+        pass  # Status is handled by SpectrometerTab via thread.status_ready signal
 
     def _on_mouse_move(self, pos):
         from PyQt5.QtWidgets import QApplication

@@ -15,9 +15,10 @@ import os
 logger = logging.getLogger(__name__)
 
 # Значения по умолчанию
-_DEFAULT_RASPBERRY_PI_IP = "10.78.112.189"
+_DEFAULT_RASPBERRY_PI_IP = "10.136.106.189"
 _DEFAULT_API_PORT = "8000"
 _DEFAULT_STREAM_PORT = "8080"
+_DEFAULT_SPECTRUM_STREAM_PORT = "8081"
 
 _SETTINGS_FILE = os.path.normpath(
     os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "resources", "settings.json")
@@ -52,6 +53,15 @@ def _get_stream_url_from_env() -> str | None:
     return None
 
 
+def _get_spectrum_stream_url_from_env() -> str | None:
+    """Получить URL потока спектрометра из переменных окружения."""
+    ip = os.getenv("RASPBERRY_PI_IP")
+    port = os.getenv("SPECTRUM_STREAM_PORT", _DEFAULT_SPECTRUM_STREAM_PORT)
+    if ip:
+        return f"http://{ip}:{port}/spectrum"
+    return None
+
+
 _settings = _load_settings()
 
 # Приоритет: переменные окружения > settings.json > значения по умолчанию
@@ -65,6 +75,12 @@ CAMERA_STREAM_URL: str = (
     _get_stream_url_from_env()
     or _settings.get("camera", {}).get("stream_url")
     or f"http://{_DEFAULT_RASPBERRY_PI_IP}:{_DEFAULT_STREAM_PORT}/video"
+)
+
+SPECTRUM_STREAM_URL: str = (
+    _get_spectrum_stream_url_from_env()
+    or _settings.get("spectrometer", {}).get("stream_url")
+    or f"http://{_DEFAULT_RASPBERRY_PI_IP}:{_DEFAULT_SPECTRUM_STREAM_PORT}/spectrum"
 )
 
 # Connection settings

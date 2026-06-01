@@ -2,10 +2,11 @@
 Spectrometer Tab
 Layout mirrors CameraTab:
   - Left:  spectrum graph (SpectrometerWidget)
-  - Right (upper): tools — file ops, spectrum list, navigation controls
+  - Right (upper): tools — start/stop, file ops, spectrum list, navigation controls
   - Right (lower): device settings panel (SpectrometerSettingsWidget inside DeviceSettingsWidget)
 """
 
+import logging
 import os
 import numpy as np
 
@@ -17,11 +18,14 @@ from PyQt5.QtWidgets import (
 )
 import pyqtgraph as pg
 
+from config.api_config import SPECTRUM_STREAM_URL
 from config import interface_config
 from config.theme_manager import ThemeManager
 from models.interface_text import Interface_text
 from ui.widgets.device_settings_widget import DeviceSettingsWidget
 from ui.widgets.spectrometer_widget import SpectrometerWidget
+
+logger = logging.getLogger(__name__)
 
 
 class SpectrometerTab(QWidget):
@@ -41,6 +45,16 @@ class SpectrometerTab(QWidget):
         # ---- Right upper: tools panel ----
         upper_tools_layout = QVBoxLayout()
         upper_tools_layout.setSpacing(6)
+
+        # Start / Stop buttons (mirrors CameraTab)
+        self.start_button = QPushButton(interface_text.start_spectrometer())
+        self.stop_button = QPushButton(interface_text.stop_spectrometer())
+        self.start_button.clicked.connect(self.start_spectrometer)
+        self.stop_button.clicked.connect(self.stop_spectrometer)
+        upper_tools_layout.addWidget(self.start_button)
+        upper_tools_layout.addWidget(self.stop_button)
+
+        upper_tools_layout.addWidget(QLabel(f"Stream URL: {SPECTRUM_STREAM_URL}"))
 
         # Save & load buttons
         self.save_button = QPushButton(interface_text.save_spectrum())
@@ -71,6 +85,11 @@ class SpectrometerTab(QWidget):
         self.progress_bar = QProgressBar()
         self.progress_bar.setVisible(False)
         upper_tools_layout.addWidget(self.progress_bar)
+
+        # Status label
+        self.status_label = QLabel("")
+        self.status_label.setWordWrap(True)
+        upper_tools_layout.addWidget(self.status_label)
 
         upper_tools_layout.addStretch()
 
@@ -122,12 +141,8 @@ class SpectrometerTab(QWidget):
         spec_settings.set_dark_requested.connect(self._set_dark_spectrum)
         spec_settings.clear_dark_requested.connect(self._clear_dark_spectrum)
 
-        # Forward connection status from data thread to settings widget
-        self.spectrometer_widget.data_thread.connection_status.connect(
-            spec_settings.set_connection_status
-        )
-        # Forward errors
-        self.spectrometer_widget.data_thread.error_occurred.connect(self._on_error)
+        # Forward errors from service
+        self.spectrometer_widget.spectrometer_service.error_occurred.connect(self._on_error)
 
         # Theme: connect ThemeManager (global) or fallback to local signal
         if theme_manager is not None:
@@ -135,6 +150,43 @@ class SpectrometerTab(QWidget):
             self._toggle_theme(theme_manager.is_dark)
         else:
             self.device_settings_widget.theme_toggle_requested.connect(self._toggle_theme)
+
+    # ------------------------------------------------------------------
+    # Spectrometer start / stop (mirrors CameraTab.start_camera / stop_camera)
+    # ------------------------------------------------------------------
+
+    def start_spectrometer(self):
+        """Start spectrum streaming."""
+        self.spectrometer_widget.start_spectrometer()
+
+        # Connect thread status signal to our status label
+        thread = self.spectrometer_widget.thread
+        if thread is not None:
+            thread.status_ready.connect(self._on_spectrometer_status)
+
+        self.start_button.setEnabled(False)
+        self.stop_button.setEnabled(True)
+
+    def stop_spectrometer(self):
+        """Stop spectrum streaming."""
+        self.status_label.setText("Stopping spectrometer...")
+        self.spectrometer_widget.stop_spectrometer()
+        self.status_label.setText("Spectrometer stopped")
+
+        self.start_button.setEnabled(True)
+        self.stop_button.setEnabled(False)
+
+    def _on_spectrometer_status(self, message: str):
+        """Handle status messages from the spectrum thread."""
+        self.status_label.setText(message)
+        logger.info(f"Spectrometer status: {message}")
+
+        # Update connection status in settings widget
+        spec_settings = self.device_settings_widget.spectrometer_tab
+        if "started" in message.lower():
+            spec_settings.set_connection_status(True)
+        elif "stopped" in message.lower() or "failed" in message.lower() or "error" in message.lower():
+            spec_settings.set_connection_status(False)
 
     # ------------------------------------------------------------------
     # File operations

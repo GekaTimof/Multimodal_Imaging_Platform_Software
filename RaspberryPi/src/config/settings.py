@@ -14,6 +14,7 @@ class Config:
     API_HOST = os.getenv('API_HOST', '0.0.0.0')
     API_PORT = int(os.getenv('API_PORT', '8000'))
     STREAM_PORT = int(os.getenv('STREAM_PORT', '8080'))
+    SPECTRUM_STREAM_PORT = int(os.getenv('SPECTRUM_STREAM_PORT', '8081'))
     
     # Camera Configuration
     DEFAULT_FPS = int(os.getenv('DEFAULT_FPS', '20'))
@@ -84,6 +85,11 @@ class Config:
     def get_stream_url(cls) -> str:
         """Get stream URL."""
         return f"http://{cls.RASPBERRY_PI_IP}:{cls.STREAM_PORT}/video"
+    
+    @classmethod
+    def get_spectrum_stream_url(cls) -> str:
+        """Get spectrum stream URL."""
+        return f"http://{cls.RASPBERRY_PI_IP}:{cls.SPECTRUM_STREAM_PORT}/spectrum"
     
     @classmethod
     def get_database_path(cls) -> str:

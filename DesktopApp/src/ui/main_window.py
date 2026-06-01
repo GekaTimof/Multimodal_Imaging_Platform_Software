@@ -184,6 +184,10 @@ class MainWindow(QMainWindow):
             index (int): Index of selected tab (0=Spectrometer, 1=Camera, 2=Acquisition)
         """
         try:
+            # Stop spectrometer when leaving spectrometer tab (index 0)
+            if self._previous_tab_index == 0 and index != 0:
+                self.spectrometer_tab.stop_spectrometer()
+
             # Stop camera when leaving camera tab (index 1)
             if self._previous_tab_index == 1 and index != 1:
                 self.camera_tab.stop_camera()

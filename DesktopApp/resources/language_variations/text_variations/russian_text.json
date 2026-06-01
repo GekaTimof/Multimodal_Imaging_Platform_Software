@@ -24,6 +24,8 @@
  
     "Start_Camera": "Запустить камеру",
     "Stop_Camera": "Остановить камеру",
+    "Start_Spectrometer": "Запустить спектрометр",
+    "Stop_Spectrometer": "Остановить спектрометр",
     "Select_save_directory": "Выбрать директорию сохранения",
     "Save_Image": "Сохранить изображение",
     "No_video": "Нет видео",

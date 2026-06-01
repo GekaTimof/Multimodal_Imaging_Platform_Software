@@ -10,13 +10,13 @@ from src.config.settings import config
 
 def run_camera_server():
     """Run camera streaming server in a separate thread"""
-    server = CameraStreamServer(host='0.0.0.0', port=8080, camera_service=camera_service)
+    server = CameraStreamServer(host='0.0.0.0', port=config.STREAM_PORT, camera_service=camera_service)
     server.run()
 
 
 def run_spectrum_server():
     """Run spectrum streaming server in a separate thread"""
-    server = SpectrumStreamServer(host='0.0.0.0', port=8081, spectrometer_service=spectrometer_service)
+    server = SpectrumStreamServer(host='0.0.0.0', port=config.SPECTRUM_STREAM_PORT, spectrometer_service=spectrometer_service)
     server.run()
 
 
@@ -34,8 +34,8 @@ def run_api_server():
 if __name__ == '__main__':
     print("Starting Multimodal Imaging Platform...")
     print(f"API server will be available at http://0.0.0.0:{config.API_PORT}/api")
-    print("Camera stream will be available at http://0.0.0.0:8080/video")
-    print("Spectrum stream will be available at http://0.0.0.0:8081/spectrum")
+    print(f"Camera stream will be available at http://0.0.0.0:{config.STREAM_PORT}/video")
+    print(f"Spectrum stream will be available at http://0.0.0.0:{config.SPECTRUM_STREAM_PORT}/spectrum")
     print("Press Ctrl+C to stop all servers")
 
     # Start shared services once — both streaming server and FastAPI reuse them

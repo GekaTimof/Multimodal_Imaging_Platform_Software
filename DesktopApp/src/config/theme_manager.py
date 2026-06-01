@@ -77,8 +77,48 @@ QLabel {
     background-color: transparent;
     color: #f0f0f0;
 }
-QScrollArea, QScrollBar {
+QScrollArea {
     background-color: #2b2b2b;
+}
+QScrollBar:vertical {
+    background-color: #2b2b2b;
+    width: 12px;
+    margin: 0px;
+}
+QScrollBar::handle:vertical {
+    background-color: #555;
+    min-height: 20px;
+    border-radius: 4px;
+    margin: 2px;
+}
+QScrollBar::handle:vertical:hover {
+    background-color: #666;
+}
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0px;
+}
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+    background: none;
+}
+QScrollBar:horizontal {
+    background-color: #2b2b2b;
+    height: 12px;
+    margin: 0px;
+}
+QScrollBar::handle:horizontal {
+    background-color: #555;
+    min-width: 20px;
+    border-radius: 4px;
+    margin: 2px;
+}
+QScrollBar::handle:horizontal:hover {
+    background-color: #666;
+}
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+    width: 0px;
+}
+QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
+    background: none;
 }
 QListWidget {
     background-color: #3c3f41;
@@ -182,8 +222,48 @@ QLabel {
     background-color: transparent;
     color: #1a1a1a;
 }
-QScrollArea, QScrollBar {
+QScrollArea {
     background-color: #f5f5f5;
+}
+QScrollBar:vertical {
+    background-color: #f5f5f5;
+    width: 12px;
+    margin: 0px;
+}
+QScrollBar::handle:vertical {
+    background-color: #bbb;
+    min-height: 20px;
+    border-radius: 4px;
+    margin: 2px;
+}
+QScrollBar::handle:vertical:hover {
+    background-color: #999;
+}
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0px;
+}
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+    background: none;
+}
+QScrollBar:horizontal {
+    background-color: #f5f5f5;
+    height: 12px;
+    margin: 0px;
+}
+QScrollBar::handle:horizontal {
+    background-color: #bbb;
+    min-width: 20px;
+    border-radius: 4px;
+    margin: 2px;
+}
+QScrollBar::handle:horizontal:hover {
+    background-color: #999;
+}
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+    width: 0px;
+}
+QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
+    background: none;
 }
 QListWidget {
     background-color: #ffffff;

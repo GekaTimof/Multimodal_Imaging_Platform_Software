@@ -135,6 +135,14 @@ class Interface_text():
         # Returns the text for the 'Stop Camera' button
         return self.text_json["Stop_Camera"]
     
+    def start_spectrometer(self):
+        """Return 'Start Spectrometer' button text."""
+        return self.text_json["Start_Spectrometer"]
+    
+    def stop_spectrometer(self):
+        """Return 'Stop Spectrometer' button text."""
+        return self.text_json["Stop_Spectrometer"]
+    
     def select_save_directory(self):
         # Returns the text for the 'Select Save Directory' button
         return self.text_json["Select_save_directory"]
