@@ -102,7 +102,7 @@ class SpectrometerTab(QWidget):
         upper_scroll.setWidget(upper_tools_widget)
 
         # ---- Right lower: device settings ----
-        self.device_settings_widget = DeviceSettingsWidget(interface_text, theme_manager)
+        self.device_settings_widget = DeviceSettingsWidget(interface_text, theme_manager, self.spectrometer_widget.spectrometer_service)
 
         # Switch dropdown to Spectrometer by default
         if hasattr(interface_text, 'spectrometer'):
@@ -140,6 +140,8 @@ class SpectrometerTab(QWidget):
         )
         spec_settings.set_dark_requested.connect(self._set_dark_spectrum)
         spec_settings.clear_dark_requested.connect(self._clear_dark_spectrum)
+        spec_settings.load_dark_requested.connect(self._load_dark_spectrum)
+        spec_settings.settings_changed.connect(self._on_settings_changed)
 
         # Forward errors from service
         self.spectrometer_widget.spectrometer_service.error_occurred.connect(self._on_error)
@@ -257,6 +259,16 @@ class SpectrometerTab(QWidget):
             QMessageBox.information(self, "Success", "Dark spectrum cleared successfully")
         else:
             QMessageBox.warning(self, "Error", "Failed to clear dark spectrum")
+    
+    def _load_dark_spectrum(self, filepath: str):
+        """Load dark spectrum from file path."""
+        # This is handled by the spectrometer settings widget directly
+        pass
+    
+    def _on_settings_changed(self, settings: dict):
+        """Handle settings changes from spectrometer settings widget."""
+        logger.info(f"Spectrometer settings changed: {settings}")
+        # Could update status or other UI elements here if needed
 
     # ------------------------------------------------------------------
     # Theme

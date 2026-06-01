@@ -114,7 +114,16 @@ ENDPOINTS = {
     "light_switcher_status": f"{API_BASE_URL}/light-switcher/status",
     "light_switcher_connect": f"{API_BASE_URL}/light-switcher/connect",
     "light_switcher_switch": f"{API_BASE_URL}/light-switcher/switch",
-    "light_switcher_disconnect": f"{API_BASE_URL}/light-switcher/disconnect"
+    "light_switcher_disconnect": f"{API_BASE_URL}/light-switcher/disconnect",
+    # Spectrometer endpoints
+    "spectrometer_settings": f"{API_BASE_URL}/spectrometer/settings",
+    "spectrometer_info": f"{API_BASE_URL}/spectrometer/info",
+    "spectrometer_spectrum": f"{API_BASE_URL}/spectrometer/spectrum",
+    "spectrometer_integral_time": f"{API_BASE_URL}/spectrometer/integral-time",
+    "spectrometer_dark_capture": f"{API_BASE_URL}/spectrometer/dark-spectrum/capture",
+    "spectrometer_dark_clear": f"{API_BASE_URL}/spectrometer/dark-spectrum/clear",
+    "spectrometer_dark_load": f"{API_BASE_URL}/spectrometer/dark-spectrum/load",
+    "spectrometer_validation": f"{API_BASE_URL}/spectrometer/validation-rules"
 }
 
 # Headers for API requests

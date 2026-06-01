@@ -22,10 +22,11 @@ class DeviceSettingsWidget(QWidget):
     settings_updated = pyqtSignal()
     theme_toggle_requested = pyqtSignal(bool)
 
-    def __init__(self, interface_text=None, theme_manager: ThemeManager = None, parent=None):
+    def __init__(self, interface_text=None, theme_manager: ThemeManager = None, spectrometer_service=None, parent=None):
         super().__init__(parent)
         self.interface_text = interface_text
         self._theme_manager = theme_manager
+        self.spectrometer_service = spectrometer_service
         self._build_ui()
         if theme_manager is not None:
             theme_manager.theme_changed.connect(self._on_theme_changed)
@@ -63,7 +64,7 @@ class DeviceSettingsWidget(QWidget):
         # Stacked widget
         self.stacked_widget = QStackedWidget()
         self.camera_tab = CameraSettingsWidget(self.interface_text, self._theme_manager)
-        self.spectrometer_tab = SpectrometerSettingsWidget(self.interface_text)
+        self.spectrometer_tab = SpectrometerSettingsWidget(self.interface_text, self.spectrometer_service)
         self.positioner_tab = PositionerSettingsWidget(self.interface_text)
         self.file_tab = FileSettingsWidget(self.interface_text)
 
