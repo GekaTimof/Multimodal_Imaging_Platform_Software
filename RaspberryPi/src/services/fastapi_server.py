@@ -2,6 +2,7 @@ import base64
 import json as _json
 import subprocess as _sp
 import tempfile
+import time
 import uvicorn
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
@@ -195,6 +196,71 @@ class LightSwitcherSwitchRequest(BaseModel):
         if v not in allowed_states:
             raise ValueError(f"State must be one of: {allowed_states}")
         return v
+
+
+class SpectrometerSettingsResponse(BaseModel):
+    id: Optional[int] = Field(default=0, description="Settings slot ID")
+    SettingsName: str = Field(default="Basic", description="Settings profile name")
+    IntegralTime: int = Field(default=100, description="Integration time in milliseconds (1-99999)")
+    DarkSpectrumPath: str = Field(default="", description="Path to saved dark spectrum file")
+    AutoDarkCorrection: bool = Field(default=True, description="Automatically apply dark correction")
+    OverilluminationThreshold: int = Field(default=65535, description="Threshold for overillumination detection (0-65535)")
+    LastUpdated: Optional[str] = Field(default=None, description="Last update timestamp")
+
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "id": 0,
+            "SettingsName": "Basic",
+            "IntegralTime": 100,
+            "DarkSpectrumPath": "",
+            "AutoDarkCorrection": True,
+            "OverilluminationThreshold": 65535,
+            "LastUpdated": "2024-01-01T12:00:00"
+        }
+    })
+
+    @field_validator('AutoDarkCorrection', mode='before')
+    @classmethod
+    def convert_boolean_input(cls, v):
+        if hasattr(v, 'item'):
+            return bool(v.item())
+        if isinstance(v, str):
+            return v.lower() in ('true', '1', 'on')
+        return bool(v)
+
+    @field_validator('IntegralTime', mode='before')
+    @classmethod
+    def convert_integral_time(cls, v):
+        if isinstance(v, (str, bool)):
+            return int(v) if v is not False else 0
+        return int(v)
+
+
+class SpectrometerInfoResponse(BaseModel):
+    connected: bool = Field(..., description="Spectrometer hardware connection status")
+    integral_time: int = Field(..., description="Current integration time")
+    dark_spectrum_loaded: bool = Field(..., description="Whether dark spectrum is loaded")
+    dark_spectrum_path: str = Field(..., description="Path to dark spectrum file")
+    auto_dark_correction: bool = Field(..., description="Auto dark correction enabled")
+    overillumination: bool = Field(..., description="Current overillumination status")
+    overillumination_threshold: int = Field(..., description="Overillumination threshold")
+    vendor: Optional[str] = Field(default=None, description="Spectrometer vendor")
+    pn: Optional[str] = Field(default=None, description="Part number")
+    sn: Optional[str] = Field(default=None, description="Serial number")
+    module_version: Optional[str] = Field(default=None, description="Module firmware version")
+    production_date: Optional[str] = Field(default=None, description="Production date")
+
+
+class SpectrometerIntegralTimeRequest(BaseModel):
+    integral_time: int = Field(..., description="Integration time in milliseconds (1-99999)", ge=1, le=99999)
+
+
+class SpectrometerSpectrumResponse(BaseModel):
+    timestamp: float = Field(..., description="Unix timestamp of the measurement")
+    wavelength: list = Field(..., description="Wavelength array (nm)")
+    spectrum: list = Field(..., description="Raw spectrum data")
+    real_spectrum: list = Field(..., description="Dark-corrected spectrum data")
+    overillumination: bool = Field(..., description="Overillumination flag")
 
 
 # API Endpoints
@@ -626,13 +692,166 @@ async def capture_photo(output_path: Optional[str] = None):
         raise HTTPException(status_code=500, detail=f"Error capturing photo: {str(e)}")
 
 
-# Spectrometer endpoints are served by SpectrumStreamServer (port 8081).
+# Spectrometer API Endpoints (FastAPI endpoints for DesktopApp integration)
+# Additional streaming endpoints are served by SpectrumStreamServer (port 8081):
 # SSE stream:          GET  /spectrum
 # Single snapshot:     GET  /spectrum/single
 # Info:                GET  /info
 # Set integral time:   GET  /control/set_integral_time?time=N
 # Set dark spectrum:   GET  /control/set_dark_spectrum
 # Clear dark spectrum: GET  /control/clear_dark_spectrum
+
+@app.get("/api/spectrometer/settings", response_model=SpectrometerSettingsResponse)
+async def get_spectrometer_settings():
+    """Get current spectrometer settings from database."""
+    try:
+        settings = db_service.get_spectrometer_settings()
+        if not settings:
+            raise HTTPException(status_code=404, detail="No spectrometer settings found")
+        return SpectrometerSettingsResponse(**settings)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+
+@app.post("/api/spectrometer/settings", response_model=APIResponse)
+async def update_spectrometer_settings(settings: SpectrometerSettingsResponse):
+    """Update all spectrometer settings at once."""
+    try:
+        success, message = db_service.save_spectrometer_settings(settings.model_dump())
+        if success:
+            # Reload settings in the service
+            spectrometer_service.reload_settings()
+            return APIResponse(
+                success=True,
+                message="Spectrometer settings updated successfully",
+                data=settings.model_dump()
+            )
+        else:
+            raise HTTPException(status_code=400, detail=message)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error updating spectrometer settings: {str(e)}")
+
+
+@app.get("/api/spectrometer/info", response_model=SpectrometerInfoResponse)
+async def get_spectrometer_info():
+    """Get spectrometer hardware information and status."""
+    try:
+        info = spectrometer_service.get_spectrometer_info()
+        return SpectrometerInfoResponse(**info)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting spectrometer info: {str(e)}")
+
+
+@app.get("/api/spectrometer/spectrum", response_model=SpectrometerSpectrumResponse)
+async def get_spectrometer_spectrum():
+    """Get a single spectrum snapshot."""
+    try:
+        wavelength, spectrum, real_spectrum = spectrometer_service.get_spectrum_data()
+        if wavelength is None or spectrum is None:
+            raise HTTPException(status_code=503, detail="Spectrum data not available")
+
+        response_data = {
+            'timestamp': time.time(),
+            'wavelength': wavelength.tolist() if wavelength is not None else [],
+            'spectrum': spectrum.tolist() if spectrum is not None else [],
+            'real_spectrum': real_spectrum.tolist() if real_spectrum is not None else [],
+            'overillumination': spectrometer_service.overillumination
+        }
+        return SpectrometerSpectrumResponse(**response_data)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting spectrum: {str(e)}")
+
+
+@app.post("/api/spectrometer/integral-time", response_model=APIResponse)
+async def set_spectrometer_integral_time(request: SpectrometerIntegralTimeRequest):
+    """Set spectrometer integration time."""
+    try:
+        success = spectrometer_service.set_integral_time(request.integral_time)
+        if success:
+            return APIResponse(
+                success=True,
+                message=f"Integration time set to {request.integral_time}ms",
+                data={"integral_time": request.integral_time}
+            )
+        else:
+            raise HTTPException(status_code=400, detail="Failed to set integration time")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error setting integral time: {str(e)}")
+
+
+@app.post("/api/spectrometer/dark-spectrum/capture", response_model=APIResponse)
+async def capture_dark_spectrum():
+    """Capture and save dark spectrum (ensure no light is entering the spectrometer)."""
+    try:
+        success = spectrometer_service.set_dark_spectrum()
+        if success:
+            return APIResponse(
+                success=True,
+                message="Dark spectrum captured and saved successfully",
+                data={
+                    "dark_spectrum_loaded": spectrometer_service.dark_spectrum is not None,
+                    "dark_spectrum_path": spectrometer_service.dark_spectrum_path
+                }
+            )
+        else:
+            raise HTTPException(status_code=500, detail="Failed to capture dark spectrum")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error capturing dark spectrum: {str(e)}")
+
+
+@app.post("/api/spectrometer/dark-spectrum/clear", response_model=APIResponse)
+async def clear_dark_spectrum():
+    """Clear the current dark spectrum."""
+    try:
+        spectrometer_service.clear_dark_spectrum()
+        return APIResponse(
+            success=True,
+            message="Dark spectrum cleared successfully",
+            data={"dark_spectrum_loaded": False}
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error clearing dark spectrum: {str(e)}")
+
+
+@app.post("/api/spectrometer/dark-spectrum/load", response_model=APIResponse)
+async def load_dark_spectrum(filepath: str):
+    """Load dark spectrum from a file path."""
+    try:
+        success = spectrometer_service.load_dark_spectrum_file(filepath)
+        if success:
+            return APIResponse(
+                success=True,
+                message=f"Dark spectrum loaded from {filepath}",
+                data={"dark_spectrum_path": filepath}
+            )
+        else:
+            raise HTTPException(status_code=400, detail=f"Failed to load dark spectrum from {filepath}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error loading dark spectrum: {str(e)}")
+
+
+@app.get("/api/spectrometer/validation-rules")
+async def get_spectrometer_validation_rules():
+    """Get validation rules for spectrometer parameters."""
+    return {
+        "success": True,
+        "data": {
+            "integral_time_range": [1, 99999],
+            "overillumination_threshold_range": [0, 65535]
+        }
+    }
 
 
 # Exception handlers
@@ -679,8 +898,24 @@ if __name__ == "__main__":
     logger.info("    POST /api/settings/camera/save-slot/{slot_id} - Save settings to slot")
     logger.info("    GET  /api/settings/camera/validation-rules - Get validation rules")
     logger.info("    POST /api/camera/photo - Capture high-quality photo with all settings")
-    logger.info("  Spectrometer: served by SpectrumStreamServer (port %s)", config.SPECTRUM_STREAM_PORT)
-    
+    logger.info("  Spectrometer (Streaming on port %s):", config.SPECTRUM_STREAM_PORT)
+    logger.info("    GET  /api/spectrometer/settings - Get spectrometer settings")
+    logger.info("    POST /api/spectrometer/settings - Update spectrometer settings")
+    logger.info("    GET  /api/spectrometer/info - Get spectrometer hardware info")
+    logger.info("    GET  /api/spectrometer/spectrum - Get single spectrum snapshot")
+    logger.info("    POST /api/spectrometer/integral-time - Set integration time")
+    logger.info("    POST /api/spectrometer/dark-spectrum/capture - Capture dark spectrum")
+    logger.info("    POST /api/spectrometer/dark-spectrum/clear - Clear dark spectrum")
+    logger.info("    POST /api/spectrometer/dark-spectrum/load - Load dark spectrum from file")
+    logger.info("    GET  /api/spectrometer/validation-rules - Get validation rules")
+    logger.info("  Spectrometer Streaming (port %s):", config.SPECTRUM_STREAM_PORT)
+    logger.info("    GET  /spectrum - SSE stream of spectrum data")
+    logger.info("    GET  /spectrum/single - Single spectrum snapshot")
+    logger.info("    GET  /info - Spectrometer info")
+    logger.info("    GET  /control/set_integral_time?time=N - Set integral time")
+    logger.info("    GET  /control/set_dark_spectrum - Capture dark spectrum")
+    logger.info("    GET  /control/clear_dark_spectrum - Clear dark spectrum")
+
     uvicorn.run(
         app,
         host=config.API_HOST,

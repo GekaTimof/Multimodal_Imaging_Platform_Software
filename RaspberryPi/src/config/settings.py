@@ -75,6 +75,21 @@ class Config:
         'RedGain': 2.0,
         'BlueGain': 2.0
     }
+
+    # Spectrometer validation constants
+    MIN_INTEGRAL_TIME = 1
+    MAX_INTEGRAL_TIME = 99999
+    MIN_OVERILLUMINATION_THRESHOLD = 0
+    MAX_OVERILLUMINATION_THRESHOLD = 65535
+
+    # Default spectrometer settings
+    DEFAULT_SPECTROMETER_SETTINGS = {
+        'SettingsName': 'Basic',
+        'IntegralTime': 100,
+        'DarkSpectrumPath': '',
+        'AutoDarkCorrection': True,
+        'OverilluminationThreshold': 65535
+    }
     
     @classmethod
     def get_api_base_url(cls) -> str:
@@ -170,6 +185,62 @@ class Config:
         
         else:
             return False, f"Unknown parameter: {parameter}"
+
+    @classmethod
+    def validate_spectrometer_parameter(cls, parameter: str, value: Any) -> tuple[bool, str]:
+        """Validate spectrometer parameter against configuration rules."""
+        if parameter == 'IntegralTime':
+            try:
+                value = int(value)
+            except (ValueError, TypeError):
+                return False, f"IntegralTime must be integer, got {type(value).__name__}"
+            if not cls.MIN_INTEGRAL_TIME <= value <= cls.MAX_INTEGRAL_TIME:
+                return False, f"IntegralTime {value} out of range [{cls.MIN_INTEGRAL_TIME}, {cls.MAX_INTEGRAL_TIME}]"
+            return True, value
+
+        elif parameter == 'OverilluminationThreshold':
+            try:
+                value = int(value)
+            except (ValueError, TypeError):
+                return False, f"OverilluminationThreshold must be integer, got {type(value).__name__}"
+            if not cls.MIN_OVERILLUMINATION_THRESHOLD <= value <= cls.MAX_OVERILLUMINATION_THRESHOLD:
+                return False, f"OverilluminationThreshold {value} out of range [{cls.MIN_OVERILLUMINATION_THRESHOLD}, {cls.MAX_OVERILLUMINATION_THRESHOLD}]"
+            return True, value
+
+        elif parameter == 'AutoDarkCorrection':
+            if isinstance(value, str):
+                if value.lower() in ('true', '1', 'on'):
+                    return True, 1
+                elif value.lower() in ('false', '0', 'off'):
+                    return True, 0
+                else:
+                    return False, f"Invalid boolean value for AutoDarkCorrection: {value}"
+            elif isinstance(value, bool):
+                return True, int(value)
+            elif isinstance(value, int):
+                return True, int(bool(value))
+            else:
+                return False, f"AutoDarkCorrection must be boolean, got {type(value).__name__}"
+
+        elif parameter == 'DarkSpectrumPath':
+            if isinstance(value, str):
+                return True, str(value)
+            else:
+                return False, f"DarkSpectrumPath must be string, got {type(value).__name__}"
+
+        elif parameter == 'SettingsName':
+            if isinstance(value, (int, float)):
+                value = str(value)
+            elif not isinstance(value, str):
+                return False, f"SettingsName must be string or number, got {type(value).__name__}"
+            if not str(value).strip():
+                return False, "Settings name cannot be empty"
+            if len(str(value)) > 50:
+                return False, "Settings name too long (max 50 characters)"
+            return True, value
+
+        else:
+            return False, f"Unknown spectrometer parameter: {parameter}"
 
 
 # Global configuration instance
