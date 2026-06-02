@@ -171,6 +171,10 @@ RaspberryPi/Spectrometer/*.pdf
 # Force-include the compiled ARM aarch64 library (exclude from *.so rule)
 !RaspberryPi/Spectrometer/Get_data/libOptoskySupport.so
 
+# Spectrometer compiled binary (rebuilt via make) and redundant system header copy
+RaspberryPi/Spectrometer/Get_data/OptoskyDemo
+RaspberryPi/Spectrometer/Get_data/libusb.h
+
 # IDE specific
 .vscode/settings.json
 .vscode/launch.json
