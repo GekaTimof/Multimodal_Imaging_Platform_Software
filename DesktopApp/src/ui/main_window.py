@@ -268,3 +268,31 @@ class MainWindow(QMainWindow):
             # Убедимся что плашка правильно позиционирована
             self.switch_progress.setGeometry(self.tabs.rect())
             self.switch_progress.raise_()  # Поднимаем на передний план
+
+    def closeEvent(self, event):
+        """Handle window close - stop all devices."""
+        logger.info("Closing application - stopping all devices...")
+        
+        # Stop spectrometer if running
+        if hasattr(self, 'spectrometer_tab'):
+            try:
+                self.spectrometer_tab.stop_spectrometer()
+                logger.info("Spectrometer stopped")
+            except Exception as e:
+                logger.error(f"Error stopping spectrometer: {e}")
+        
+        # Stop camera if running
+        if hasattr(self, 'camera_tab'):
+            try:
+                self.camera_tab.stop_camera()
+                logger.info("Camera stopped")
+            except Exception as e:
+                logger.error(f"Error stopping camera: {e}")
+        
+        # Call closeEvent on all tabs to clean up resources
+        if hasattr(self, 'spectrometer_tab'):
+            self.spectrometer_tab.closeEvent(event)
+        if hasattr(self, 'camera_tab'):
+            self.camera_tab.closeEvent(event)
+        
+        super().closeEvent(event)
