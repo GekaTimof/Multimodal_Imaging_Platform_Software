@@ -47,9 +47,13 @@ class SpectrometerService:
         self.running: bool = False
         self.use_real_spectrometer: bool = False
         self.overillumination: bool = False
+        self._capture_error_count: int = 0
+        self._max_capture_errors: int = 3
         
         # Spectrometer connection
         self.spectrometer: Optional[SpectrometerConnection] = None
+        # Cached device info (populated once at initialization)
+        self._device_info: Dict[str, Any] = {'vendor': None, 'pn': None, 'sn': None, 'module_version': None, 'production_date': None}
         
         # Load settings from database
         self._load_settings()
@@ -68,8 +72,20 @@ class SpectrometerService:
             self.spectrometer = SpectrometerConnection()
             self.spectrometer.open_spectrometer()
             self.spectrometer.retrieve_and_set_wavelength_range()
+            self._capture_error_count = 0
             self.use_real_spectrometer = True
             logger.info("Spectrometer initialized successfully")
+            try:
+                self.spectrometer.set_session_info()
+                self._device_info = {
+                    'vendor': self.spectrometer.return_vendor(),
+                    'pn': self.spectrometer.return_pn(),
+                    'sn': self.spectrometer.return_sn(),
+                    'module_version': self.spectrometer.return_module_version(),
+                    'production_date': self.spectrometer.return_module_production_date()
+                }
+            except Exception as e:
+                logger.warning(f"Could not read device info: {e}")
         except Exception as e:
             logger.error(f"Failed to initialize spectrometer: {e}")
             self.use_real_spectrometer = False
@@ -153,8 +169,13 @@ class SpectrometerService:
                         self.overillumination = self.spectrometer.return_overillumination()
                         
                 except Exception as e:
-                    logger.error(f"Spectrometer capture error: {e}")
-                    self.use_real_spectrometer = False
+                    self._capture_error_count += 1
+                    logger.error(f"Spectrometer capture error ({self._capture_error_count}/{self._max_capture_errors}): {e}")
+                    if self._capture_error_count >= self._max_capture_errors:
+                        logger.warning("Too many capture errors, reinitializing spectrometer...")
+                        self._capture_error_count = 0
+                        self.use_real_spectrometer = False
+                        self._initialize_spectrometer()
             else:
                 # Generate test data
                 with self.spectrum_lock:
@@ -342,17 +363,7 @@ class SpectrometerService:
         }
 
         if self.use_real_spectrometer and self.spectrometer:
-            try:
-                self.spectrometer.set_session_info()
-                info.update({
-                    'vendor': self.spectrometer.return_vendor(),
-                    'pn': self.spectrometer.return_pn(),
-                    'sn': self.spectrometer.return_sn(),
-                    'module_version': self.spectrometer.return_module_version(),
-                    'production_date': self.spectrometer.return_module_production_date()
-                })
-            except Exception as e:
-                logger.error(f"Failed to get spectrometer info: {e}")
+            info.update(self._device_info)
 
         return info
     
