@@ -164,6 +164,13 @@ Thumbs.db
 logs/
 data/
 
+# Spectrometer SDK archives and docs (large binary files)
+RaspberryPi/Spectrometer/*.zip
+RaspberryPi/Spectrometer/*.pdf
+
+# Force-include the compiled ARM aarch64 library (exclude from *.so rule)
+!RaspberryPi/Spectrometer/Get_data/libOptoskySupport.so
+
 # IDE specific
 .vscode/settings.json
 .vscode/launch.json
