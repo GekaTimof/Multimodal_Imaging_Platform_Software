@@ -40,7 +40,8 @@ class SpectrumThread(QThread):
             self.status_ready.emit("Spectrometer started")
 
             buffer = ""
-            for chunk in response.iter_content(chunk_size=1, decode_unicode=True):
+            # Larger chunk size reduces latency by minimizing HTTP read overhead
+            for chunk in response.iter_content(chunk_size=4096, decode_unicode=True):
                 if not self.running:
                     break
 

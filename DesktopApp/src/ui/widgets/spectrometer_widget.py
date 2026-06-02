@@ -61,9 +61,9 @@ class SpectrometerWidget(QWidget):
         self.graph_widget.setYRange(0, SPECTRUM_Y_MAX, padding=GRAPH_PADDING)
 
         self.light_theme_pen = QPen(Qt.blue)
-        self.light_theme_pen.setWidth(2)
+        self.light_theme_pen.setWidthF(0.7)
         self.dark_theme_pen = QPen(Qt.yellow)
-        self.dark_theme_pen.setWidth(2)
+        self.dark_theme_pen.setWidthF(0.7)
 
         self.curve = self.graph_widget.plot(pen=self.light_theme_pen)
 

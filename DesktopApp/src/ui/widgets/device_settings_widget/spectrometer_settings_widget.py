@@ -27,7 +27,6 @@ class SpectrometerSettingsWidget(QWidget):
     integral_time_changed = pyqtSignal(int)
     set_dark_requested = pyqtSignal()
     clear_dark_requested = pyqtSignal()
-    load_dark_requested = pyqtSignal()  # No filepath - API loads from standard location
     settings_changed = pyqtSignal(dict)  # settings dict
 
     def __init__(self, interface_text=None, spectrometer_service=None):
@@ -124,12 +123,6 @@ class SpectrometerSettingsWidget(QWidget):
         self.clear_dark_button.clicked.connect(self._on_clear_dark)
         dark_buttons_layout.addWidget(self.clear_dark_button)
 
-        self.load_dark_button = QPushButton(
-            self.interface_text.load_dark() if self.interface_text else "Load"
-        )
-        self.load_dark_button.clicked.connect(self._on_load_dark)
-        dark_buttons_layout.addWidget(self.load_dark_button)
-
         settings_layout.addLayout(dark_buttons_layout, 9, 0, 1, 2)
 
         layout.addLayout(settings_layout)
@@ -216,12 +209,6 @@ class SpectrometerSettingsWidget(QWidget):
         self._update_dark_status()
         self.status_label.setText("Dark spectrum cleared")
         self.status_label.setStyleSheet("QLabel { color: green; font-weight: bold; }")
-
-    def _on_load_dark(self):
-        """Handle load dark spectrum button - API loads from standard location."""
-        self.load_dark_requested.emit()
-        self.status_label.setText("Loading dark spectrum...")
-        self.status_label.setStyleSheet("QLabel { color: blue; font-weight: bold; }")
 
     def _cleanup_thread(self, thread: QThread) -> None:
         """Remove thread from active threads list."""

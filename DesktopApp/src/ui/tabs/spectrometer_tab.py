@@ -140,7 +140,6 @@ class SpectrometerTab(QWidget):
         )
         spec_settings.set_dark_requested.connect(self._set_dark_spectrum)
         spec_settings.clear_dark_requested.connect(self._clear_dark_spectrum)
-        spec_settings.load_dark_requested.connect(self._load_dark_spectrum)
         spec_settings.settings_changed.connect(self._on_settings_changed)
 
         # Forward errors from service
@@ -261,14 +260,7 @@ class SpectrometerTab(QWidget):
             QMessageBox.information(self, "Success", "Dark spectrum cleared successfully")
         else:
             QMessageBox.warning(self, "Error", "Failed to clear dark spectrum")
-    
-    def _load_dark_spectrum(self):
-        """Load dark spectrum from server standard location."""
-        svc = self.spectrometer_widget.spectrometer_service
-        if svc.load_dark_spectrum_file(None):  # API loads from standard location
-            # Status is updated by the settings widget signal
-            pass
-    
+
     def _on_settings_changed(self, settings: dict):
         """Handle settings changes from spectrometer settings widget."""
         logger.info(f"Spectrometer settings changed: {settings}")
