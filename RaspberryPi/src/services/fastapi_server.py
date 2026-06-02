@@ -767,7 +767,7 @@ async def get_spectrometer_spectrum():
             'wavelength': wavelength.tolist() if wavelength is not None else [],
             'spectrum': spectrum.tolist() if spectrum is not None else [],
             'real_spectrum': real_spectrum.tolist() if real_spectrum is not None else [],
-            'overillumination': spectrometer_service.overillumination
+            'overillumination': bool(spectrometer_service.overillumination)
         }
         return SpectrometerSpectrumResponse(**response_data)
     except HTTPException:

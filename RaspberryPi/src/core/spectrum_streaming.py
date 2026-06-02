@@ -74,7 +74,7 @@ class SpectrumStreamHandler(BaseHTTPRequestHandler):
                 'wavelength': wavelength.tolist() if wavelength is not None else [],
                 'spectrum': spectrum.tolist() if spectrum is not None else [],
                 'real_spectrum': real_spectrum.tolist() if real_spectrum is not None else [],
-                'overillumination': self.server.spectrometer_service.overillumination
+                'overillumination': bool(self.server.spectrometer_service.overillumination)
             }
             
             json_data = json.dumps(response_data).encode('utf-8')
@@ -107,7 +107,7 @@ class SpectrumStreamHandler(BaseHTTPRequestHandler):
                         'wavelength': wavelength.tolist(),
                         'spectrum': spectrum.tolist(),
                         'real_spectrum': real_spectrum.tolist(),
-                        'overillumination': self.server.spectrometer_service.overillumination
+                        'overillumination': bool(self.server.spectrometer_service.overillumination)
                     }
                     
                     # Send as Server-Sent Event
