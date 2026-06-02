@@ -3,7 +3,7 @@ CC = gcc
 #CFLAGS	= -g -O2             
 TARGET = OptoskyDemo
 #LIBS = /usr/local/lib -lusb-1.0 -lm -lpthread -lOptoskySupport
-LIBS = -lusb-1.0 -lm -lpthread ./libOptoskySupport.so
+LIBS = /usr/lib/aarch64-linux-gnu/libusb-1.0.a -lm -lpthread ./libOptoskySupport.so
 INC	= /usr/include/libusb-1.0
 EXCHAR = -fexec-charset=GB18030    
 
@@ -23,6 +23,7 @@ $(TARGET): $(OBJS)
  
 # Dependencies
 $(OBJS): %.o: %.c
+	cd libOptoskySupport;make;cd -;
 	$(CC) -c $(CFLAGS) $(EXCHAR) -o $@ $< -I$(INC)  
 #
 # Clean all object files...
@@ -31,3 +32,4 @@ $(OBJS): %.o: %.c
 clean:
 	rm $(OBJS) $(TARGET) 
  
+
