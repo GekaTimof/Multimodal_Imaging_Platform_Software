@@ -113,19 +113,19 @@ class SpectrometerSettingsWidget(QWidget):
         dark_buttons_layout = QHBoxLayout()
 
         self.set_dark_button = QPushButton(
-            self.interface_text.set_dark_spectrum() if self.interface_text else SettingsWidgetStrings.CAPTURE_DARK
+            self.interface_text.set_dark_spectrum() if self.interface_text else "Set Dark"
         )
         self.set_dark_button.clicked.connect(self._on_capture_dark)
         dark_buttons_layout.addWidget(self.set_dark_button)
 
         self.clear_dark_button = QPushButton(
-            self.interface_text.clear_dark_spectrum() if self.interface_text else SettingsWidgetStrings.CLEAR_DARK
+            self.interface_text.clear_dark_spectrum() if self.interface_text else "Clear"
         )
         self.clear_dark_button.clicked.connect(self._on_clear_dark)
         dark_buttons_layout.addWidget(self.clear_dark_button)
 
         self.load_dark_button = QPushButton(
-            self.interface_text.load_dark() if self.interface_text else SettingsWidgetStrings.LOAD_DARK
+            self.interface_text.load_dark() if self.interface_text else "Load"
         )
         self.load_dark_button.clicked.connect(self._on_load_dark)
         dark_buttons_layout.addWidget(self.load_dark_button)
@@ -138,21 +138,21 @@ class SpectrometerSettingsWidget(QWidget):
         button_row_layout = QHBoxLayout()
 
         self.btn_apply = QPushButton(
-            self.interface_text.apply() if self.interface_text else SettingsWidgetStrings.APPLY
+            self.interface_text.apply() if self.interface_text else "Apply"
         )
-        self.btn_apply.setToolTip("Apply current settings to spectrometer immediately")
+        self.btn_apply.setToolTip("Apply settings immediately")
         button_row_layout.addWidget(self.btn_apply)
 
         self.btn_reload = QPushButton(
-            self.interface_text.reload() if self.interface_text else SettingsWidgetStrings.RELOAD
+            self.interface_text.reload() if self.interface_text else "Load"
         )
-        self.btn_reload.setToolTip("Reload settings from server")
+        self.btn_reload.setToolTip("Reload from server")
         button_row_layout.addWidget(self.btn_reload)
 
         self.btn_save = QPushButton(
-            self.interface_text.save() if self.interface_text else SettingsWidgetStrings.SAVE
+            self.interface_text.save() if self.interface_text else "Save"
         )
-        self.btn_save.setToolTip("Save current settings to server database")
+        self.btn_save.setToolTip("Save to server")
         button_row_layout.addWidget(self.btn_save)
 
         button_row_layout.addStretch()
