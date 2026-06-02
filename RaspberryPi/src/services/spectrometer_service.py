@@ -61,6 +61,16 @@ class SpectrometerService:
         # Try to initialize spectrometer
         self._initialize_spectrometer()
     
+    def _close_spectrometer(self):
+        """Terminate the existing spectrometer process cleanly."""
+        if self.spectrometer is not None:
+            try:
+                self.spectrometer.process.sendline('100')  # OptoskyDemo exit command
+                self.spectrometer.process.close(force=True)
+            except Exception:
+                pass
+            self.spectrometer = None
+
     def _initialize_spectrometer(self):
         """Try to initialize the spectrometer connection."""
         if not SPECTROMETER_AVAILABLE:
@@ -175,6 +185,7 @@ class SpectrometerService:
                         logger.warning("Too many capture errors, reinitializing spectrometer...")
                         self._capture_error_count = 0
                         self.use_real_spectrometer = False
+                        self._close_spectrometer()
                         self._initialize_spectrometer()
             else:
                 # Generate test data
@@ -233,8 +244,8 @@ class SpectrometerService:
             return False
 
         try:
-            self.spectrometer.retrieve_and_set_dark_spectrum()
             with self.spectrum_lock:
+                self.spectrometer.retrieve_and_set_dark_spectrum()
                 self.dark_spectrum = self.spectrometer.return_dark_spectrum().copy()
 
             # Save dark spectrum to standard file location
@@ -337,7 +348,8 @@ class SpectrometerService:
         
         if self.use_real_spectrometer and self.spectrometer:
             try:
-                self.spectrometer.set_integral_time(integral_time)
+                with self.spectrum_lock:
+                    self.spectrometer.set_integral_time(integral_time)
                 logger.info(f"Integration time set to {integral_time}")
             except Exception as e:
                 logger.error(f"Failed to set integration time: {e}")

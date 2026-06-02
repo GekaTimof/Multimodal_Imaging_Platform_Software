@@ -3,6 +3,7 @@ import json as _json
 import subprocess as _sp
 import tempfile
 import time
+from datetime import datetime
 import uvicorn
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
@@ -727,7 +728,9 @@ async def get_spectrometer_settings():
 async def update_spectrometer_settings(settings: SpectrometerSettingsResponse):
     """Update all spectrometer settings at once."""
     try:
-        success, message = db_service.save_spectrometer_settings(settings.model_dump())
+        data = settings.model_dump()
+        data['LastUpdated'] = datetime.now().isoformat()
+        success, message = db_service.save_spectrometer_settings(data)
         if success:
             # Reload settings in the service
             spectrometer_service.reload_settings()

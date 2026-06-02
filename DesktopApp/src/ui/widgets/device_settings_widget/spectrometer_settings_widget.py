@@ -210,21 +210,50 @@ class SpectrometerSettingsWidget(QWidget):
         self.status_label.setText("Dark spectrum cleared")
         self.status_label.setStyleSheet("QLabel { color: green; font-weight: bold; }")
 
+    def _apply_settings(self):
+        """Apply all settings to spectrometer immediately via API."""
+        self.status_label.setText("Applying settings...")
+        self.status_label.setStyleSheet("QLabel { color: blue; font-weight: bold; }")
+        self._on_settings_changed()
+
+        payload = {
+            'IntegralTime': self.integral_time_input.value(),
+            'AutoDarkCorrection': self.auto_dark_checkbox.isChecked(),
+            'OverilluminationThreshold': self.overillumination_input.value(),
+            'UseDarkSpectrum': self.current_settings.get('UseDarkSpectrum', False),
+        }
+
+        # Apply integral time immediately via dedicated endpoint
+        it_thread = APIClientThread('POST', ENDPOINTS["spectrometer_integral_time"],
+                                    {"integral_time": payload['IntegralTime']})
+        it_thread.finished.connect(lambda: self._cleanup_thread(it_thread))
+        self.active_threads.append(it_thread)
+        it_thread.start()
+
+        # Apply all settings via settings endpoint
+        settings_payload = {**self.current_settings, **payload}
+        thread = APIClientThread('POST', ENDPOINTS["spectrometer_settings"], settings_payload)
+        thread.response_received.connect(self._on_settings_applied)
+        thread.finished.connect(lambda: self._cleanup_thread(thread))
+        self.active_threads.append(thread)
+        thread.start()
+
+    def _on_settings_applied(self, success: bool, message: str, data: dict):
+        """Handle apply settings response."""
+        if success:
+            self.status_label.setText("Settings applied")
+            self.status_label.setStyleSheet("QLabel { color: green; font-weight: bold; }")
+            if self.spectrometer_service:
+                self.spectrometer_service.settings_updated.emit(self.current_settings)
+        else:
+            self.status_label.setText(f"Apply failed: {message}")
+            self.status_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
+
     def _cleanup_thread(self, thread: QThread) -> None:
         """Remove thread from active threads list."""
         if thread in self.active_threads:
             self.active_threads.remove(thread)
 
-    def _apply_settings(self):
-        """Apply settings to spectrometer via API."""
-        self.status_label.setText(SettingsWidgetStrings.APPLYING_SETTINGS)
-        self.status_label.setStyleSheet("QLabel { color: blue; font-weight: bold; }")
-
-        # Emit integral time changed to apply immediately
-        self.integral_time_changed.emit(self.integral_time_input.value())
-
-        self.status_label.setText("Settings applied to spectrometer")
-        self.status_label.setStyleSheet("QLabel { color: green; font-weight: bold; }")
 
     def _reload_settings_async(self):
         """Reload settings from server asynchronously."""
