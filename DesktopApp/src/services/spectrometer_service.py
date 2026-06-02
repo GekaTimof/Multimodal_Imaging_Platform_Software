@@ -190,14 +190,16 @@ class SpectrometerService(QObject):
             self.error_occurred.emit(f"Failed to update settings: {e}")
             return False
     
-    def load_dark_spectrum_file(self, filepath: str) -> bool:
-        """Load dark spectrum from file path."""
+    def load_dark_spectrum_file(self, filepath: str = None) -> bool:
+        """Load dark spectrum from file path or standard location.
+        
+        Args:
+            filepath: If provided, used for legacy mode. New API loads from standard location.
+        """
         try:
             if self.use_fastapi:
-                response = self._make_request(
-                    "spectrometer_dark_load", method="POST", 
-                    json_data=filepath, params={"filepath": filepath}
-                )
+                # New API loads from standard location on server, no parameters needed
+                response = self._make_request("spectrometer_dark_load", method="POST")
             else:
                 # Legacy mode requires file upload - not implemented
                 logger.warning("Dark spectrum file loading not available in legacy mode")

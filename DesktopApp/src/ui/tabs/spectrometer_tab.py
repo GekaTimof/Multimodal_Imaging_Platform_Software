@@ -186,9 +186,11 @@ class SpectrometerTab(QWidget):
         # Update connection status in settings widget
         spec_settings = self.device_settings_widget.spectrometer_tab
         if "started" in message.lower():
-            spec_settings.set_connection_status(True)
+            spec_settings.status_label.setText("Connected")
+            spec_settings.status_label.setStyleSheet("color: green; font-weight: bold;")
         elif "stopped" in message.lower() or "failed" in message.lower() or "error" in message.lower():
-            spec_settings.set_connection_status(False)
+            spec_settings.status_label.setText("Disconnected")
+            spec_settings.status_label.setStyleSheet("color: red; font-weight: bold;")
 
     # ------------------------------------------------------------------
     # File operations
@@ -260,10 +262,12 @@ class SpectrometerTab(QWidget):
         else:
             QMessageBox.warning(self, "Error", "Failed to clear dark spectrum")
     
-    def _load_dark_spectrum(self, filepath: str):
-        """Load dark spectrum from file path."""
-        # This is handled by the spectrometer settings widget directly
-        pass
+    def _load_dark_spectrum(self):
+        """Load dark spectrum from server standard location."""
+        svc = self.spectrometer_widget.spectrometer_service
+        if svc.load_dark_spectrum_file(None):  # API loads from standard location
+            # Status is updated by the settings widget signal
+            pass
     
     def _on_settings_changed(self, settings: dict):
         """Handle settings changes from spectrometer settings widget."""

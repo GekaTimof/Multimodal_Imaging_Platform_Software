@@ -29,15 +29,30 @@ class SettingsWidgetStrings:
     RED_GAIN = "Red Gain"
     BLUE_GAIN = "Blue Gain"
     
+    # Spectrometer settings
+    INTEGRAL_TIME = "Integral Time (ms):"
+    AUTO_DARK_CORRECTION = "Auto Dark Correction"
+    OVERILLUMINATION_THRESHOLD = "Overillumination Threshold:"
+    CAPTURE_DARK = "Capture Dark"
+    CLEAR_DARK = "Clear Dark"
+    LOAD_DARK = "Load Dark"
+    DARK_SPECTRUM_STATUS = "Dark Spectrum:"
+    NO_DARK_SPECTRUM = "No dark spectrum loaded"
+    DARK_SPECTRUM_LOADED = "Dark spectrum loaded"
+    
     REFRESH = "Refresh"
     LOAD = "Load"
     SAVE = "Save"
     APPLY = "Apply"
+    RELOAD = "Reload"
     
     READY = "Ready"
     LOADING_SETTINGS = "Loading settings..."
+    SAVING_SETTINGS = "Saving settings..."
     SETTINGS_LOADED = "Settings loaded and applied successfully"
+    SETTINGS_SAVED = "Settings saved successfully"
     FAILED_TO_LOAD = "Failed to load settings from API"
+    FAILED_TO_SAVE = "Failed to save settings"
     APPLYING_SETTINGS = "Applying settings..."
     ALL_SETTINGS_APPLIED = "All settings applied successfully"
     

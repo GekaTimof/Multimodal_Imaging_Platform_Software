@@ -1,7 +1,7 @@
 {
     "file_operations": {
         "photo": {
-            "default_save_dir": "C:/Users/Evgeniy/Downloads",
+            "default_save_dir": "/home/evgeniy/Downloads",
             "filename_template": "camera_snapshot_{timestamp}.png",
             "format": "PNG",
             "allowed_formats": [

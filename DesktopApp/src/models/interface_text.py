@@ -203,7 +203,25 @@ class Interface_text():
     
     def apply(self):
         return self.text_json["Apply"]
-    
+
+    def reload(self):
+        return self.text_json.get("Reload", "Reload")
+
+    def auto_dark_correction(self):
+        return self.text_json.get("Auto_Dark_Correction", "Auto Dark Correction")
+
+    def overillumination_threshold(self):
+        return self.text_json.get("Overillumination_Threshold", "Overillumination Threshold:")
+
+    def dark_spectrum(self):
+        return self.text_json.get("Dark_Spectrum", "Dark Spectrum:")
+
+    def capture_dark(self):
+        return self.text_json.get("Capture_Dark", "Capture Dark")
+
+    def load_dark(self):
+        return self.text_json.get("Load_Dark", "Load Dark")
+
     def refresh(self):
         return self.text_json["Refresh"]
     
