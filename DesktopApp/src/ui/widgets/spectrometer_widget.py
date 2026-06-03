@@ -60,6 +60,7 @@ class SpectrometerWidget(QWidget):
         )
         self.graph_widget.setXRange(WAVELENGTH_MIN, WAVELENGTH_MAX, padding=GRAPH_PADDING)
         self.graph_widget.setYRange(0, SPECTRUM_Y_MAX, padding=GRAPH_PADDING)
+        self._wavelength_calibrated = False  # tracks whether real nm values are available
 
         self.light_theme_pen = QPen(Qt.blue)
         self.light_theme_pen.setWidthF(0.7)
@@ -97,6 +98,7 @@ class SpectrometerWidget(QWidget):
         if self.thread is not None and self.thread.isRunning():
             return
 
+        self.start_graph_reset = True  # re-fit view on first frame of each new session
         self.thread = SpectrumThread()
         self.thread.spectrum_ready.connect(self._on_spectrum_ready)
         self.thread.status_ready.connect(self._on_status)
@@ -169,6 +171,11 @@ class SpectrometerWidget(QWidget):
     def _on_spectrum_ready(self, wavelengths: np.ndarray, raw_spectrum: np.ndarray,
                            real_spectrum: np.ndarray, overillumination: bool):
         """Handle new spectrum data from SpectrumThread."""
+        # Update X axis label based on calibration availability
+        calibrated = bool(np.any(wavelengths != np.arange(len(wavelengths), dtype=float)))
+        if calibrated != self._wavelength_calibrated:
+            self._wavelength_calibrated = calibrated
+            self.graph_widget.setLabel("bottom", "Wavelength (nm)" if calibrated else "Pixel")
         y_data = real_spectrum if self.show_real_spectrum else raw_spectrum
         self._update_graph(wavelengths, y_data, overillumination)
 

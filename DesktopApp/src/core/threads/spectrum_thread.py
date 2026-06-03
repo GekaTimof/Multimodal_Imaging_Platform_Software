@@ -74,6 +74,9 @@ class SpectrumThread(QThread):
                     real_spectrum = np.array(real_spectrum_raw) if real_spectrum_raw else raw_spectrum.copy()
                     overillumination = bool(data.get("overillumination", False))
                     if len(wavelengths) > 0 and len(raw_spectrum) > 0:
+                        # If wavelength calibration is absent (all zeros), use pixel indices
+                        if not np.any(wavelengths):
+                            wavelengths = np.arange(len(raw_spectrum), dtype=float)
                         self.spectrum_ready.emit(wavelengths, raw_spectrum, real_spectrum, overillumination)
                 except (json.JSONDecodeError, ValueError) as e:
                     logger.warning(f"Failed to parse spectrum event: {e}")
