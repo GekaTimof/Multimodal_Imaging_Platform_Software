@@ -178,14 +178,20 @@ class PathManager:
         validation = self.paths.get('path_validation', {})
 
         check_path = path
-        if sys.platform == "win32" and len(path) >= 2 and path[1] == ":":
-            check_path = path[2:]
-        forbidden_chars = validation.get('forbidden_chars', [])
+        if sys.platform == "win32":
+            # On Windows, strip drive letter prefix before checking forbidden chars
+            if len(path) >= 2 and path[1] == ":":
+                check_path = path[2:]
+            forbidden_chars = validation.get('forbidden_chars', ["<", ">", ":", "\"", "|", "?", "*"])
+        else:
+            # On Linux/macOS only NUL and '/' are truly forbidden; '/' is the separator
+            forbidden_chars = ["\x00"]
         for char in forbidden_chars:
             if char in check_path:
                 return False, f"Path contains forbidden character: '{char}'"
 
-        max_length = validation.get('max_path_length', 255)
+        default_max = 260 if sys.platform == "win32" else 4096
+        max_length = validation.get('max_path_length', default_max)
         if len(path) > max_length:
             return False, f"Path exceeds maximum length of {max_length} characters"
 
