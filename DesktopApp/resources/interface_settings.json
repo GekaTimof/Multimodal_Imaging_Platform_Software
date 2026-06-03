@@ -15,7 +15,7 @@
         "auto_switch": false
     },
     "language": {
-        "default": "English",
+        "default": "Russian",
         "available_languages": [
             "English",
             "Russian"
@@ -38,7 +38,7 @@
         "auto_save": true
     },
     "ui_scaling": {
-        "font_family": "DejaVu Sans",
+        "font_family": "Arial",
         "font_point_size": 11,
         "status_bar_height": 52,
         "side_panel_min_width": 320

@@ -19,8 +19,9 @@ def main():
     app = QApplication(sys.argv)
 
     # Create and show main window
+    # (MainWindow.__init__ shows the window immediately with a startup overlay,
+    #  then defers heavy tab construction to the next event-loop tick)
     window = MainWindow()
-    window.show()
 
     # Start application event loop
     sys.exit(app.exec_())

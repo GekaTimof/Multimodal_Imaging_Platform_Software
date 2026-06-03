@@ -6,7 +6,7 @@ Positioner and File Settings panels using a QStackedWidget.
 
 from PyQt5.QtCore import pyqtSignal
 from PyQt5.QtGui import QFont
-from PyQt5.QtWidgets import QComboBox, QHBoxLayout, QPushButton, QStackedWidget, QVBoxLayout, QWidget
+from PyQt5.QtWidgets import QComboBox, QHBoxLayout, QStackedWidget, QVBoxLayout, QWidget
 
 from config.theme_manager import ThemeManager
 
@@ -20,7 +20,6 @@ class DeviceSettingsWidget(QWidget):
     """Main device settings widget with dropdown selector."""
 
     settings_updated = pyqtSignal()
-    theme_toggle_requested = pyqtSignal(bool)
 
     def __init__(self, interface_text=None, theme_manager: ThemeManager = None, spectrometer_service=None, parent=None):
         super().__init__(parent)
@@ -49,16 +48,9 @@ class DeviceSettingsWidget(QWidget):
             self.settings_type_combo.addItems(["Camera", "Spectrometer", "Positioner", "File Settings"])
         self.settings_type_combo.currentTextChanged.connect(self._on_settings_type_changed)
 
-        initial_dark = self._theme_manager.is_dark if self._theme_manager else False
-        self.theme_toggle_btn = QPushButton("\u263d" if initial_dark else "\u2600")
-        self.theme_toggle_btn.setFixedSize(28, 28)
-        self.theme_toggle_btn.setToolTip("Toggle dark/light theme")
-        self.theme_toggle_btn.clicked.connect(self._on_theme_toggle_clicked)
-
         combo_row = QHBoxLayout()
         combo_row.setContentsMargins(0, 0, 15, 0)
         combo_row.addWidget(self.settings_type_combo, 1)
-        combo_row.addWidget(self.theme_toggle_btn)
         layout.addLayout(combo_row)
 
         # Stacked widget
@@ -109,18 +101,6 @@ class DeviceSettingsWidget(QWidget):
         if index >= 0:
             self.settings_type_combo.setCurrentIndex(index)
 
-    def _on_theme_toggle_clicked(self):
-        if self._theme_manager is not None:
-            self._theme_manager.toggle()
-        else:
-            # Fallback: no ThemeManager wired
-            current = self.theme_toggle_btn.text() == "\u263d"
-            new_dark = not current
-            self.theme_toggle_btn.setText("\u263d" if new_dark else "\u2600")
-            self.theme_toggle_requested.emit(new_dark)
-
     def _on_theme_changed(self, dark: bool):
-        """Sync button icon when ThemeManager broadcasts a change."""
-        self.theme_toggle_btn.setText("\u263d" if dark else "\u2600")
-        self.theme_toggle_requested.emit(dark)
+        """Called when ThemeManager broadcasts a theme change."""
         self.camera_tab._update_control_states()

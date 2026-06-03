@@ -413,6 +413,14 @@ class CameraTab(QWidget):
         self.current_settings_slot = slot_id
         logger.info(f"Switched to settings slot {slot_id}")
 
+    def update_language(self, interface_text):
+        """Update all UI text when language changes."""
+        self.interface_text = interface_text
+        self.start_button.setText(interface_text.start_camera())
+        self.stop_button.setText(interface_text.stop_camera())
+        self.save_image_button.setText(interface_text.save_image())
+        self.video_label.setText(interface_text.no_video())
+
     def resizeEvent(self, event):
         """Limit video label to 4/5 width and 95% height of the window."""
         super().resizeEvent(event)

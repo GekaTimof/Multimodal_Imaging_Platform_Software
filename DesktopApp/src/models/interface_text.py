@@ -354,3 +354,34 @@ class Interface_text():
                                   "Photo save directory is not configured.\n"
                                   "Please select a folder in File Settings.")
 
+    def interface_settings(self) -> str:
+        return self.text_json.get("Interface_Settings", "Interface Settings")
+
+    def interface_settings_title(self) -> str:
+        return self.text_json.get("Interface_Settings_Title", "Interface Settings")
+
+    def font_size(self) -> str:
+        return self.text_json.get("Font_Size", "Font size (pt):")
+
+    def status_bar_height(self) -> str:
+        return self.text_json.get("Status_Bar_Height", "Status bar height (px):")
+
+    def side_panel_min_width(self) -> str:
+        return self.text_json.get("Side_Panel_Min_Width", "Side panel min width (px):")
+
+    def font_family(self) -> str:
+        return self.text_json.get("Font_Family", "Font family:")
+
+    def apply_restart(self) -> str:
+        return self.text_json.get("Apply_Restart", "Apply (restart required for full effect)")
+
+    def interface_settings_saved(self) -> str:
+        return self.text_json.get("Interface_Settings_Saved", "Settings saved")
+
+    def connecting_title(self) -> str:
+        return self.text_json.get("Connecting_Title", "Connecting...")
+
+    def connecting_desc(self) -> str:
+        return self.text_json.get("Connecting_Desc",
+                                  "Attempting to connect to Raspberry Pi and devices, please wait...")
+

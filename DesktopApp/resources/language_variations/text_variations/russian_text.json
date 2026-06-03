@@ -12,8 +12,8 @@
     "Switch_to_Dark_Theme": "Переключить на тёмную тему",
     "Reset_zoom": "Сбросить зум",
     "Integral_time": "Время интегрирования (мс):",
-    "Set_Dark_Spectrum": "Установить тёмный спектр",
-    "Clear_Dark_Spectrum": "Очистить тёмный спектр",
+    "Set_Dark_Spectrum": "Установить",
+    "Clear_Dark_Spectrum": "Сбросить",
     "Save_Directory": "Директория сохранения:",
     "No_folder_selected": "Папка не выбрана",
     "Select": "Выбрать",
@@ -87,5 +87,17 @@
     "Light_Switcher_Error": "Ошибка: {error_message}",
     "Light_Switcher_Reconnect": "Повторить подключение",
     "Light_Switcher_Reset": "Сбросить",
-    "Warning_No_Photo_Dir": "Папка для сохранения фото не выбрана.\nВыберите папку в Настройках файлов."
+    "Warning_No_Photo_Dir": "Папка для сохранения фото не выбрана.\nВыберите папку в Настройках файлов.",
+
+    "Interface_Settings": "Настройки интерфейса",
+    "Interface_Settings_Title": "Настройки интерфейса",
+    "Font_Size": "Размер шрифта (пт):",
+    "Status_Bar_Height": "Высота статус-бара (пкс):",
+    "Side_Panel_Min_Width": "Мин. ширина боковой панели (пкс):",
+    "Font_Family": "Шрифт:",
+    "Apply_Restart": "Применить (для полного эффекта требуется перезапуск)",
+    "Interface_Settings_Saved": "Настройки сохранены",
+
+    "Connecting_Title": "Подключение...",
+    "Connecting_Desc": "Пожалуйста, подождите"
 }

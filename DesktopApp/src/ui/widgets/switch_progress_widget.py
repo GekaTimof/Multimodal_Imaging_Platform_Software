@@ -130,6 +130,12 @@ class SwitchProgressWidget(QWidget):
         self.icon_timer = QTimer()
         self.icon_timer.timeout.connect(self.rotate_icon)
         self.icon_rotation = 0
+
+        # Анимация точек в описании (для startup overlay)
+        self._dots_timer = QTimer()
+        self._dots_timer.timeout.connect(self._animate_dots)
+        self._dots_base_text = ""
+        self._dots_count = 0
         
     @pyqtSlot()
     def rotate_icon(self):
@@ -138,6 +144,33 @@ class SwitchProgressWidget(QWidget):
         icons = ["🔄", "⏳", "🔄", "⏳"]
         self.icon_label.setText(icons[(self.icon_rotation // 90) % 2])
         
+    @pyqtSlot()
+    def _animate_dots(self):
+        """Animate trailing dots on the description label."""
+        self._dots_count = (self._dots_count + 1) % 4
+        self.desc_label.setText(self._dots_base_text + '.' * self._dots_count)
+
+    def show_startup_progress(self, title: str = "Connecting...", description: str = "Please wait..."):
+        """
+        Show the overlay with custom startup/connection text.
+
+        Args:
+            title: Main label text
+            description: Secondary description text
+        """
+        self.text_label.setText(title)
+        # Store base text for dots animation (strip trailing dots if any)
+        self._dots_base_text = description.rstrip('.')
+        self._dots_count = 0
+        self.desc_label.setText(self._dots_base_text)
+        self.opacity_effect.setOpacity(1.0)
+        self.setAttribute(Qt.WA_TransparentForMouseEvents, False)
+        self.setVisible(True)
+        self.raise_()
+        self.update_geometry()
+        self.icon_timer.start(500)
+        self._dots_timer.start(600)
+
     @pyqtSlot(str)
     def show_switch_progress(self, mode_text="camera"):
         """
@@ -190,9 +223,10 @@ class SwitchProgressWidget(QWidget):
     def hide_switch_progress(self):
         """Скрыть плашку прогресса"""
         logger.debug("Hiding switch progress")
-        
-        # Останавливаем анимацию иконки
+
+        # Останавливаем анимации
         self.icon_timer.stop()
+        self._dots_timer.stop()
         
         # Скрываем виджет и возвращаем прозрачность для событий мыши
         self.setAttribute(Qt.WA_TransparentForMouseEvents, True)

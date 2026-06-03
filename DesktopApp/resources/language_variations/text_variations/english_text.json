@@ -12,8 +12,8 @@
     "Switch_to_Dark_Theme": "Switch to dark theme",
     "Reset_zoom": "Reset zoom",
     "Integral_time": "Integral time (ms):",
-    "Set_Dark_Spectrum": "Set dark spectrum",
-    "Clear_Dark_Spectrum": "Clear dark spectrum",
+    "Set_Dark_Spectrum": "Set",
+    "Clear_Dark_Spectrum": "Clear",
     "Save_Directory": "Save directory:",
     "No_folder_selected": "No folder selected",
     "Select": "Select",
@@ -87,5 +87,17 @@
     "Light_Switcher_Error": "Error: {error_message}",
     "Light_Switcher_Reconnect": "Reconnect",
     "Light_Switcher_Reset": "Reset",
-    "Warning_No_Photo_Dir": "Photo save directory is not configured.\nPlease select a folder in File Settings."
+    "Warning_No_Photo_Dir": "Photo save directory is not configured.\nPlease select a folder in File Settings.",
+
+    "Interface_Settings": "Interface Settings",
+    "Interface_Settings_Title": "Interface Settings",
+    "Font_Size": "Font size (pt):",
+    "Status_Bar_Height": "Status bar height (px):",
+    "Side_Panel_Min_Width": "Side panel min width (px):",
+    "Font_Family": "Font family:",
+    "Apply_Restart": "Apply (restart required for full effect)",
+    "Interface_Settings_Saved": "Settings saved",
+
+    "Connecting_Title": "Connecting...",
+    "Connecting_Desc": "Please wait"
 }

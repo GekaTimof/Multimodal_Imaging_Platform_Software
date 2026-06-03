@@ -76,6 +76,21 @@ class SpectrometerTab(QWidget):
         self.remove_button.clicked.connect(self._remove_selected_spectrum)
         upper_tools_layout.addWidget(self.remove_button)
 
+        # Dark spectrum: label + two buttons
+        self.dark_spectrum_label = QLabel(interface_text.dark_spectrum())
+        self.dark_spectrum_label.setStyleSheet("QLabel { font-weight: bold; }")
+        upper_tools_layout.addWidget(self.dark_spectrum_label)
+
+        dark_row = QHBoxLayout()
+        self.set_dark_button = QPushButton(interface_text.set_dark_spectrum())
+        self.set_dark_button.clicked.connect(self._set_dark_spectrum)
+        dark_row.addWidget(self.set_dark_button)
+
+        self.clear_dark_button = QPushButton(interface_text.clear_dark_spectrum())
+        self.clear_dark_button.clicked.connect(self._clear_dark_spectrum)
+        dark_row.addWidget(self.clear_dark_button)
+        upper_tools_layout.addLayout(dark_row)
+
         # Navigation / view controls
         self.reset_zoom_button = QPushButton(interface_text.reset_zoom())
         self.reset_zoom_button.clicked.connect(self.spectrometer_widget.reset_graph_view)
@@ -145,12 +160,10 @@ class SpectrometerTab(QWidget):
         # Forward errors from service
         self.spectrometer_widget.spectrometer_service.error_occurred.connect(self._on_error)
 
-        # Theme: connect ThemeManager (global) or fallback to local signal
+        # Theme: connect ThemeManager (global)
         if theme_manager is not None:
             theme_manager.theme_changed.connect(self._toggle_theme)
             self._toggle_theme(theme_manager.is_dark)
-        else:
-            self.device_settings_widget.theme_toggle_requested.connect(self._toggle_theme)
 
     # ------------------------------------------------------------------
     # Spectrometer start / stop (mirrors CameraTab.start_camera / stop_camera)
@@ -294,6 +307,43 @@ class SpectrometerTab(QWidget):
         max_graph_w = int(w * 4 / 5)
         max_graph_h = int(h * 0.95)
         self.spectrometer_widget.setMaximumSize(max_graph_w, max_graph_h)
+
+    # ------------------------------------------------------------------
+    # Dark spectrum
+    # ------------------------------------------------------------------
+
+    def _set_dark_spectrum(self):
+        """Capture dark spectrum and show status in the upper panel."""
+        spec_settings = self.device_settings_widget.spectrometer_tab
+        spec_settings.set_dark_requested.emit()
+        self.status_label.setText("Capturing dark spectrum...")
+        self.status_label.setStyleSheet("QLabel { color: blue; font-weight: bold; }")
+
+    def _clear_dark_spectrum(self):
+        """Clear dark spectrum and show status in the upper panel."""
+        spec_settings = self.device_settings_widget.spectrometer_tab
+        spec_settings.clear_dark_requested.emit()
+        spec_settings.current_settings['UseDarkSpectrum'] = False
+        spec_settings._update_dark_status()
+        self.status_label.setText("Dark spectrum cleared")
+        self.status_label.setStyleSheet("QLabel { color: green; font-weight: bold; }")
+
+    # ------------------------------------------------------------------
+    # Language
+    # ------------------------------------------------------------------
+
+    def update_language(self, interface_text: Interface_text):
+        """Update all UI text when language changes."""
+        self.interface_text = interface_text
+        self.start_button.setText(interface_text.start_spectrometer())
+        self.stop_button.setText(interface_text.stop_spectrometer())
+        self.save_button.setText(interface_text.save_spectrum())
+        self.load_button.setText(interface_text.select_spectrum_file())
+        self.remove_button.setText(interface_text.remove_selected_spectrum())
+        self.dark_spectrum_label.setText(interface_text.dark_spectrum())
+        self.set_dark_button.setText(interface_text.set_dark_spectrum())
+        self.clear_dark_button.setText(interface_text.clear_dark_spectrum())
+        self.reset_zoom_button.setText(interface_text.reset_zoom())
 
     def closeEvent(self, event):
         """Handle tab close event."""
