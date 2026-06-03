@@ -75,45 +75,8 @@ class DatabaseService:
         return False, f"Unsupported table: {table_name}"
     
     def _validate_spectrometer_parameter(self, parameter: str, value: Any) -> Tuple[bool, str]:
-        """Validate spectrometer parameter values."""
-        if parameter == 'IntegralTime':
-            try:
-                int_value = int(value)
-                if 1 <= int_value <= 99999:
-                    return True, int_value
-                else:
-                    return False, "IntegralTime must be between 1 and 99999"
-            except (ValueError, TypeError):
-                return False, "IntegralTime must be an integer"
-
-        elif parameter in ['AutoDarkCorrection', 'UseDarkSpectrum']:
-            if isinstance(value, bool):
-                return True, int(value)
-            elif str(value).lower() in ('true', '1', 'yes'):
-                return True, 1
-            elif str(value).lower() in ('false', '0', 'no'):
-                return True, 0
-            else:
-                return False, f"{parameter} must be boolean (0 or 1)"
-
-        elif parameter == 'OverilluminationThreshold':
-            try:
-                int_value = int(value)
-                if 0 <= int_value <= 65535:
-                    return True, int_value
-                else:
-                    return False, "OverilluminationThreshold must be between 0 and 65535"
-            except (ValueError, TypeError):
-                return False, "OverilluminationThreshold must be an integer"
-
-        elif parameter == 'SettingsName':
-            if isinstance(value, str) and len(value.strip()) > 0:
-                return True, str(value).strip()
-            else:
-                return False, "SettingsName must be a non-empty string"
-
-        else:
-            return False, f"Unknown parameter: {parameter}"
+        """Validate spectrometer parameter values (delegates to Config)."""
+        return config.validate_spectrometer_parameter(parameter, value)
     
     @log_execution_time
     @database_error_handler
@@ -396,17 +359,7 @@ class DatabaseService:
                 return settings
             else:
                 # Create default settings for slot 0 if doesn't exist
-                default_settings = {
-                    'id': 0,
-                    'SettingsName': 'Basic',
-                    'IntegralTime': 100,
-                    'UseDarkSpectrum': False,
-                    'AutoDarkCorrection': True,
-                    'OverilluminationThreshold': 65535,
-                    'LastUpdated': ''
-                }
-
-                # Insert default settings into database
+                default_settings = {**config.DEFAULT_SPECTROMETER_SETTINGS, 'id': 0, 'LastUpdated': ''}
                 cursor.execute("""
                 INSERT OR IGNORE INTO SpectrometerSettings
                 (id, SettingsName, IntegralTime, UseDarkSpectrum, AutoDarkCorrection, OverilluminationThreshold, LastUpdated)
@@ -418,7 +371,6 @@ class DatabaseService:
                     default_settings['LastUpdated']
                 ))
                 conn.commit()
-
                 return default_settings
                 
         except sqlite3.Error as e:

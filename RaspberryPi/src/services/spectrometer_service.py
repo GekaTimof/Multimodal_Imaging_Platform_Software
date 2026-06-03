@@ -1,3 +1,4 @@
+import subprocess
 import time
 import threading
 import numpy as np
@@ -39,6 +40,7 @@ class SpectrometerService:
     def __init__(self, fps: int = config.DEFAULT_FPS):
         self.fps: int = fps
         self.spectrum_lock = threading.Lock()
+        self._spectrometer_lock = threading.Lock()  # protects init/close/capture concurrency
         self.current_wavelength: Optional[np.ndarray] = None
         self.current_spectrum: Optional[np.ndarray] = None
         self.current_real_spectrum: Optional[np.ndarray] = None
@@ -68,6 +70,11 @@ class SpectrometerService:
                 self.spectrometer.process.close(force=True)
             except Exception:
                 pass
+            try:
+                subprocess.run(['sudo', 'pkill', '-9', '-f', 'OptoskyDemo'], check=False, timeout=3)
+                time.sleep(1.5)  # wait for OS to release USB device
+            except Exception:
+                pass
             self.spectrometer = None
 
     def _initialize_spectrometer(self):
@@ -78,26 +85,31 @@ class SpectrometerService:
             return
         
         try:
-            self.spectrometer = SpectrometerConnection()
-            self.spectrometer.open_spectrometer()
-            self.spectrometer.retrieve_and_set_wavelength_range()
-            # Cache wavelength range immediately after retrieval
-            with self.spectrum_lock:
-                self.current_wavelength = self.spectrometer.return_wavelength_range().copy()
-            self._capture_error_count = 0
-            self.use_real_spectrometer = True
-            logger.info("Spectrometer initialized successfully")
+            new_spec = SpectrometerConnection()
+            new_spec.open_spectrometer()
+            new_spec.retrieve_and_set_wavelength_range()
+            # Read device info before handing off to capture loop
+            device_info = self._device_info
             try:
-                self.spectrometer.set_session_info()
-                self._device_info = {
-                    'vendor': self.spectrometer.return_vendor(),
-                    'pn': self.spectrometer.return_pn(),
-                    'sn': self.spectrometer.return_sn(),
-                    'module_version': self.spectrometer.return_module_version(),
-                    'production_date': self.spectrometer.return_module_production_date()
+                new_spec.set_session_info()
+                device_info = {
+                    'vendor': new_spec.return_vendor(),
+                    'pn': new_spec.return_pn(),
+                    'sn': new_spec.return_sn(),
+                    'module_version': new_spec.return_module_version(),
+                    'production_date': new_spec.return_module_production_date()
                 }
             except Exception as e:
                 logger.warning(f"Could not read device info: {e}")
+            # Atomically swap in the new connection
+            with self._spectrometer_lock:
+                self.spectrometer = new_spec
+                self._device_info = device_info
+                self._capture_error_count = 0
+                with self.spectrum_lock:
+                    self.current_wavelength = new_spec.return_wavelength_range().copy()
+                self.use_real_spectrometer = True
+            logger.info("Spectrometer initialized successfully")
         except Exception as e:
             logger.error(f"Failed to initialize spectrometer: {e}")
             self.use_real_spectrometer = False
@@ -164,20 +176,24 @@ class SpectrometerService:
         while self.running:
             if self.use_real_spectrometer and self.spectrometer:
                 try:
+                    with self._spectrometer_lock:
+                        spec = self.spectrometer
+                    if spec is None:
+                        raise RuntimeError("Spectrometer handle is None")
                     # Update integral time if changed
-                    if self.spectrometer.get_integral_time() != self.integral_time:
-                        self.spectrometer.set_integral_time(self.integral_time)
+                    if spec.get_integral_time() != self.integral_time:
+                        spec.set_integral_time(self.integral_time)
                     
                     # Get new spectrum data
-                    self.spectrometer.retrieve_and_set_current_spectrum()
+                    spec.retrieve_and_set_current_spectrum()
                     
                     with self.spectrum_lock:
-                        self.current_spectrum = self.spectrometer.return_current_spectrum().copy()
-                        self.current_real_spectrum = self.spectrometer.return_real_current_spectrum().copy()
+                        self.current_spectrum = spec.return_current_spectrum().copy()
+                        self.current_real_spectrum = spec.return_real_current_spectrum().copy()
                         
                         # Check for overillumination
-                        self.spectrometer.check_overillumination()
-                        self.overillumination = self.spectrometer.return_overillumination()
+                        spec.check_overillumination()
+                        self.overillumination = spec.return_overillumination()
                         
                 except Exception as e:
                     self._capture_error_count += 1
@@ -189,8 +205,10 @@ class SpectrometerService:
                         self._close_spectrometer()
                         self._initialize_spectrometer()
             else:
-                # Spectrometer not available — wait before retrying
-                time.sleep(1.0)
+                # Spectrometer not connected — retry initialization every 10 s (handles boot-time race)
+                time.sleep(10.0)
+                logger.info("Spectrometer not connected, retrying initialization...")
+                self._initialize_spectrometer()
                 continue
             
             time.sleep(1 / self.fps)
@@ -383,8 +401,9 @@ class SpectrometerService:
     def reinitialize(self) -> bool:
         """Try to reinitialize the spectrometer connection (e.g. after hot-plug)."""
         logger.info("Reinitializing spectrometer...")
-        self._close_spectrometer()
-        self.use_real_spectrometer = False
+        with self._spectrometer_lock:
+            self.use_real_spectrometer = False
+            self._close_spectrometer()
         self._initialize_spectrometer()
         return self.use_real_spectrometer
 

@@ -199,7 +199,6 @@ class SpectrometerConnection:
         # set wavelength range if we got it
         if data is not None:
             self.wavelength_range = data
-
         # skip before next request
         self.wait_for_response(expected_answers[2], MINIMUM_WAITING_TIME)
         return self
@@ -266,7 +265,6 @@ class SpectrometerConnection:
             self.current_spectrum = data
             # set new real current spectrum
             self.real_current_spectrum = self.current_spectrum - self.dark_spectrum
-
         # skip before next request
         self.wait_for_response(expected_answers[3], waiting_time)
         return self

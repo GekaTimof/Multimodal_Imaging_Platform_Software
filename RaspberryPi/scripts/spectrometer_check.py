@@ -18,8 +18,8 @@ import subprocess
 import time
 import numpy as np
 
-# Add project path
-sys.path.insert(0, '/home/minilumi/Multimodal_Imaging_Platform_Software/RaspberryPi')
+# Add project root to path (scripts/ is one level below project root)
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 def check_usb_connection():
     """Check if spectrometer USB device is detected."""

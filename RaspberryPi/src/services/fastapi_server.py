@@ -909,8 +909,8 @@ async def get_spectrometer_validation_rules():
     return {
         "success": True,
         "data": {
-            "integral_time_range": [1, 99999],
-            "overillumination_threshold_range": [0, 65535]
+            "integral_time_range": [config.MIN_INTEGRAL_TIME, config.MAX_INTEGRAL_TIME],
+            "overillumination_threshold_range": [config.MIN_OVERILLUMINATION_THRESHOLD, config.MAX_OVERILLUMINATION_THRESHOLD]
         }
     }
 

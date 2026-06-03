@@ -1,7 +1,7 @@
 #!/bin/bash
 # Light Switcher Daemon Control Script
 
-DAEMON_PATH="/home/minilumi/Multimodal_Imaging_Platform_Software/RaspberryPi/src/services/light_switcher_daemon.py"
+DAEMON_PATH="/home/minilumi/Multimodal_Imaging_Platform_Software/RaspberryPi/scripts/daemons/light_switcher_daemon.py"
 LOG_PATH="/home/minilumi/Multimodal_Imaging_Platform_Software/RaspberryPi/logs"
 PID_FILE="/tmp/light_switcher_daemon.pid"
 
