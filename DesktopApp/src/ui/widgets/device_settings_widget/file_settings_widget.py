@@ -12,6 +12,8 @@ from PyQt5.QtWidgets import (
     QProgressBar, QPushButton, QVBoxLayout, QWidget
 )
 
+from ui.ui_utils import get_relative_margin
+
 logger = logging.getLogger(__name__)
 
 
@@ -28,8 +30,11 @@ class FileSettingsWidget(QWidget):
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(10, 10, 10, 10)
-        layout.setSpacing(10)
+        layout.setContentsMargins(
+            get_relative_margin(0.9), get_relative_margin(0.9), 
+            get_relative_margin(0.9), get_relative_margin(0.9)
+        )
+        layout.setSpacing(get_relative_margin(0.9))
 
         # Photo save directory
         photo_dir_label = QLabel(
@@ -39,20 +44,19 @@ class FileSettingsWidget(QWidget):
         photo_dir_label.setWordWrap(True)
         layout.addWidget(photo_dir_label)
 
-        photo_dir_layout = QHBoxLayout()
-        photo_dir_layout.setSpacing(10)
         self.photo_dir_label = QLabel(
             self.interface_text.no_folder_selected() if self.interface_text else "No folder selected"
         )
         self.photo_dir_label.setWordWrap(True)
-        self.photo_dir_label.setMaximumWidth(250)
+        layout.addWidget(self.photo_dir_label)
+
+        photo_btn_row = QHBoxLayout()
         self.photo_dir_button = QPushButton(
             self.interface_text.select() if self.interface_text else "Select"
         )
-        self.photo_dir_button.setMaximumWidth(80)
-        photo_dir_layout.addWidget(self.photo_dir_label, 1)
-        photo_dir_layout.addWidget(self.photo_dir_button)
-        layout.addLayout(photo_dir_layout)
+        photo_btn_row.addWidget(self.photo_dir_button)
+        photo_btn_row.addStretch()
+        layout.addLayout(photo_btn_row)
 
         # Spectrum save directory
         spectrum_dir_label = QLabel(
@@ -62,20 +66,19 @@ class FileSettingsWidget(QWidget):
         spectrum_dir_label.setWordWrap(True)
         layout.addWidget(spectrum_dir_label)
 
-        spectrum_dir_layout = QHBoxLayout()
-        spectrum_dir_layout.setSpacing(10)
         self.spectrum_dir_label = QLabel(
             self.interface_text.no_folder_selected() if self.interface_text else "No folder selected"
         )
         self.spectrum_dir_label.setWordWrap(True)
-        self.spectrum_dir_label.setMaximumWidth(250)
+        layout.addWidget(self.spectrum_dir_label)
+
+        spectrum_btn_row = QHBoxLayout()
         self.spectrum_dir_button = QPushButton(
             self.interface_text.select() if self.interface_text else "Select"
         )
-        self.spectrum_dir_button.setMaximumWidth(80)
-        spectrum_dir_layout.addWidget(self.spectrum_dir_label, 1)
-        spectrum_dir_layout.addWidget(self.spectrum_dir_button)
-        layout.addLayout(spectrum_dir_layout)
+        spectrum_btn_row.addWidget(self.spectrum_dir_button)
+        spectrum_btn_row.addStretch()
+        layout.addLayout(spectrum_btn_row)
 
         # Progress bar
         self.progress_bar = QProgressBar()

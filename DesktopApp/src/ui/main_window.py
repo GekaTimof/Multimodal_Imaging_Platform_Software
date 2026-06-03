@@ -16,8 +16,10 @@ from PyQt5.QtWidgets import (
     QMainWindow, QTabWidget, QVBoxLayout, QWidget, QHBoxLayout,
     QPushButton, QApplication
 )
+
 from PyQt5.QtCore import QTimer, Qt, QThread, pyqtSignal, QProcess
 from PyQt5.QtGui import QFont
+from ui.ui_utils import get_relative_margin, get_scaled_size
 from ui.tabs.spectrometer_tab import SpectrometerTab
 from ui.tabs.camera_tab import CameraTab
 from ui.tabs.Acquisition_tab import AcquisitionTab
@@ -83,13 +85,13 @@ class MainWindow(QMainWindow):
         self.tabs = QTabWidget()
         main_layout.addWidget(self.tabs)
 
-        # Create status container with fixed height to prevent layout shifts
+        # Create status container with adaptive height to prevent layout shifts
         status_container = QWidget()
-        status_height = interface_config.get('ui_scaling.status_bar_height', 52)
+        status_height = get_scaled_size(interface_config.get('ui_scaling.status_bar_height', 52)) // 2  # Half height
         status_container.setMinimumHeight(status_height)
         status_container.setMaximumHeight(status_height)
         status_layout = QHBoxLayout(status_container)
-        status_layout.setContentsMargins(0, 2, 0, 2)
+        status_layout.setContentsMargins(0, get_relative_margin(0.2), 0, get_relative_margin(0.2))
         status_layout.setSpacing(0)
 
         # Create status widget for light switcher
@@ -163,15 +165,16 @@ class MainWindow(QMainWindow):
         """Create the top-right corner widget with theme, language and settings buttons."""
         corner = QWidget()
         row = QHBoxLayout(corner)
-        row.setContentsMargins(4, 2, 8, 2)
-        row.setSpacing(4)
+        row.setContentsMargins(get_relative_margin(0.3), get_relative_margin(0.2), 
+                             get_relative_margin(0.6), get_relative_margin(0.2))
+        row.setSpacing(get_relative_margin(0.3))
 
-        # Get button size from config
-        button_size = interface_config.get('ui_scaling.corner_button_size', 32)
+        pad = get_relative_margin(0.4)
+        btn_style = f"QPushButton {{ padding: {pad}px {pad * 2}px; }}"
 
         # Theme toggle button
         self._theme_btn = QPushButton("☽" if self.theme_manager.is_dark else "☀")
-        self._theme_btn.setFixedSize(button_size + 6, button_size)  # Theme button slightly wider
+        self._theme_btn.setStyleSheet(btn_style)
         self._theme_btn.setToolTip("Toggle dark/light theme")
         self._theme_btn.clicked.connect(self._on_theme_toggle)
         self.theme_manager.theme_changed.connect(self._on_theme_changed)
@@ -179,14 +182,14 @@ class MainWindow(QMainWindow):
 
         # Language switcher button (shows current abbreviation)
         self._lang_btn = QPushButton(self.interface_text.abbreviation())
-        self._lang_btn.setFixedSize(button_size + 12, button_size)  # Lang button wider for text
+        self._lang_btn.setStyleSheet(btn_style)
         self._lang_btn.setToolTip("Switch language")
         self._lang_btn.clicked.connect(self._on_language_toggle)
         row.addWidget(self._lang_btn)
 
         # Interface settings button
         self._settings_btn = QPushButton("⚙")
-        self._settings_btn.setFixedSize(button_size + 6, button_size)  # Settings button slightly wider
+        self._settings_btn.setStyleSheet(btn_style)
         self._settings_btn.setToolTip(
             self.interface_text.interface_settings()
             if hasattr(self.interface_text, 'interface_settings') else "Interface Settings"
@@ -263,15 +266,13 @@ class MainWindow(QMainWindow):
             logger.error(f"Error applying font: {e}")
 
     def _update_corner_button_sizes(self):
-        """Update corner button sizes from config."""
+        """Update corner button padding from config font size."""
         try:
-            button_size = interface_config.get('ui_scaling.corner_button_size', 32)
-            if hasattr(self, '_theme_btn'):
-                self._theme_btn.setFixedSize(button_size + 6, button_size)
-            if hasattr(self, '_lang_btn'):
-                self._lang_btn.setFixedSize(button_size + 12, button_size)
-            if hasattr(self, '_settings_btn'):
-                self._settings_btn.setFixedSize(button_size + 6, button_size)
+            pad = get_relative_margin(0.4)
+            btn_style = f"QPushButton {{ padding: {pad}px {pad * 2}px; }}"
+            for btn in ('_theme_btn', '_lang_btn', '_settings_btn'):
+                if hasattr(self, btn):
+                    getattr(self, btn).setStyleSheet(btn_style)
         except Exception as e:
             logger.error(f"Error updating button sizes: {e}")
 

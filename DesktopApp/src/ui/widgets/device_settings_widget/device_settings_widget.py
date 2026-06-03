@@ -9,6 +9,8 @@ from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import QComboBox, QHBoxLayout, QStackedWidget, QVBoxLayout, QWidget
 
 from config.theme_manager import ThemeManager
+from config import interface_config
+from ui.ui_utils import get_relative_margin
 
 from .camera_settings_widget import CameraSettingsWidget
 from .spectrometer_settings_widget import SpectrometerSettingsWidget
@@ -32,8 +34,11 @@ class DeviceSettingsWidget(QWidget):
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(10, 10, 10, 10)
-        layout.setSpacing(10)
+        layout.setContentsMargins(
+            get_relative_margin(0.9), get_relative_margin(0.9), 
+            get_relative_margin(0.9), get_relative_margin(0.9)
+        )
+        layout.setSpacing(get_relative_margin(0.9))
 
         # Dropdown for settings type + theme toggle button
         self.settings_type_combo = QComboBox()
@@ -49,7 +54,7 @@ class DeviceSettingsWidget(QWidget):
         self.settings_type_combo.currentTextChanged.connect(self._on_settings_type_changed)
 
         combo_row = QHBoxLayout()
-        combo_row.setContentsMargins(0, 0, 15, 0)
+        combo_row.setContentsMargins(0, 0, get_relative_margin(1.5), 0)
         combo_row.addWidget(self.settings_type_combo, 1)
         layout.addLayout(combo_row)
 
@@ -67,7 +72,7 @@ class DeviceSettingsWidget(QWidget):
         layout.addWidget(self.stacked_widget)
 
         font = QFont()
-        font.setPointSize(10)
+        font.setPointSize(interface_config.get('ui_scaling.font_point_size', 11))
         self.setFont(font)
 
         self.camera_tab.settings_updated.connect(self.settings_updated.emit)

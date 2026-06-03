@@ -20,6 +20,8 @@ from PyQt5.QtGui import QPixmap, QImage
 from PyQt5.QtWidgets import QHBoxLayout, QLabel, QMessageBox, QProgressBar, QPushButton, QScrollArea, QSizePolicy, QVBoxLayout, QWidget
 
 from config.api_config import CAMERA_STREAM_URL, API_BASE_URL
+from config import interface_config
+from ui.ui_utils import get_relative_margin
 from core.constants.camera_constants import (
     DEFAULT_CAMERA_SLOT,
     PHOTO_CAPTURE_PAUSE_OVERHEAD_S,
@@ -35,7 +37,6 @@ from core.constants.camera_constants import (
     PHOTO_EXPECTED_ADDITIONS,
 )
 from core.constants.ui_strings import CameraTabStrings
-from config import interface_config
 from config.theme_manager import ThemeManager
 from models.interface_text import Interface_text
 from services.save_photo import save_photo
@@ -99,7 +100,10 @@ class CameraTab(QWidget):
 
         # Upper control panel (basic camera controls) with scroll
         upper_control_layout = QVBoxLayout()
-        upper_control_layout.setContentsMargins(4, 4, 25, 4)  # Add large right margin to prevent scrollbar overlap
+        upper_control_layout.setContentsMargins(
+            get_relative_margin(0.4), get_relative_margin(0.4), 
+            get_relative_margin(2.5), get_relative_margin(0.4)
+        )  # Use relative margins to prevent scrollbar overlap
         upper_control_layout.addWidget(self.start_button)
         upper_control_layout.addWidget(self.stop_button)
         upper_control_layout.addWidget(QLabel(f"Stream URL: {self.camera_source}"))
@@ -130,7 +134,10 @@ class CameraTab(QWidget):
 
         # Right panel layout (split into upper and lower parts with 2:3 ratio)
         right_panel_layout = QVBoxLayout()
-        right_panel_layout.setContentsMargins(6, 6, 6, 6)  # Add margins to prevent cutoff
+        right_panel_layout.setContentsMargins(
+            get_relative_margin(0.6), get_relative_margin(0.6), 
+            get_relative_margin(0.6), get_relative_margin(0.6)
+        )  # Use relative margins to prevent cutoff
         right_panel_layout.addWidget(upper_scroll_area, 2)  # Upper part takes 2/5 space
         right_panel_layout.addWidget(lower_scroll_area, 3)  # Lower part takes 3/5 space
 
@@ -142,7 +149,7 @@ class CameraTab(QWidget):
 
         # Main horizontal layout (video expands, controls stay fixed)
         main_layout = QHBoxLayout(self)
-        main_layout.addWidget(self.video_label, 1)  # Video expands to fill remaining space
+        main_layout.addWidget(self.video_label, 1)  # Left column (can't use float in addWidget)
         main_layout.addWidget(right_panel_widget)    # Controls: fixed width
 
         # Connect settings updated signal

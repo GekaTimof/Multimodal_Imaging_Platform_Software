@@ -17,6 +17,7 @@ from PyQt5.QtWidgets import (
 from core.constants.ui_strings import SettingsWidgetStrings
 from .api_client_thread import APIClientThread
 from config.api_config import ENDPOINTS
+from ui.ui_utils import get_relative_margin
 
 logger = logging.getLogger(__name__)
 
@@ -44,13 +45,19 @@ class SpectrometerSettingsWidget(QWidget):
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(10, 10, 10, 10)
-        layout.setSpacing(10)
+        layout.setContentsMargins(
+            get_relative_margin(0.9), get_relative_margin(0.9), 
+            get_relative_margin(0.9), get_relative_margin(0.9)
+        )
+        layout.setSpacing(get_relative_margin(0.9))
 
         settings_layout = QGridLayout()
-        settings_layout.setContentsMargins(5, 5, 5, 5)
-        settings_layout.setHorizontalSpacing(10)
-        settings_layout.setVerticalSpacing(8)
+        settings_layout.setContentsMargins(
+            get_relative_margin(0.5), get_relative_margin(0.5), 
+            get_relative_margin(0.5), get_relative_margin(0.5)
+        )
+        settings_layout.setHorizontalSpacing(get_relative_margin(0.9))
+        settings_layout.setVerticalSpacing(get_relative_margin(0.7))
 
         # Settings Name
         settings_name_label = QLabel(
@@ -68,7 +75,7 @@ class SpectrometerSettingsWidget(QWidget):
             self.interface_text.integral_time() if self.interface_text else SettingsWidgetStrings.INTEGRAL_TIME
         )
         it_label.setStyleSheet("QLabel { font-weight: bold; }")
-        settings_layout.addWidget(it_label, 2, 0)
+        settings_layout.addWidget(it_label, 2, 0, 1, 2)
 
         self.integral_time_input = QSpinBox()
         self.integral_time_input.setRange(1, 99999)
@@ -90,40 +97,12 @@ class SpectrometerSettingsWidget(QWidget):
             self.interface_text.overillumination_threshold() if self.interface_text else SettingsWidgetStrings.OVERILLUMINATION_THRESHOLD
         )
         oi_label.setStyleSheet("QLabel { font-weight: bold; }")
-        settings_layout.addWidget(oi_label, 5, 0)
+        settings_layout.addWidget(oi_label, 5, 0, 1, 2)
 
         self.overillumination_input = QSpinBox()
         self.overillumination_input.setRange(0, 65535)
         self.overillumination_input.setValue(65535)
         settings_layout.addWidget(self.overillumination_input, 6, 0, 1, 2)
-
-        # Dark Spectrum section
-        dark_label = QLabel(
-            self.interface_text.dark_spectrum() if self.interface_text else SettingsWidgetStrings.DARK_SPECTRUM_STATUS
-        )
-        dark_label.setStyleSheet("QLabel { font-weight: bold; }")
-        settings_layout.addWidget(dark_label, 7, 0, 1, 2)
-
-        self.dark_status_label = QLabel(SettingsWidgetStrings.NO_DARK_SPECTRUM)
-        self.dark_status_label.setStyleSheet("color: gray;")
-        settings_layout.addWidget(self.dark_status_label, 8, 0, 1, 2)
-
-        # Dark spectrum buttons
-        dark_buttons_layout = QHBoxLayout()
-
-        self.set_dark_button = QPushButton(
-            self.interface_text.set_dark_spectrum() if self.interface_text else "Set Dark"
-        )
-        self.set_dark_button.clicked.connect(self._on_capture_dark)
-        dark_buttons_layout.addWidget(self.set_dark_button)
-
-        self.clear_dark_button = QPushButton(
-            self.interface_text.clear_dark_spectrum() if self.interface_text else "Clear"
-        )
-        self.clear_dark_button.clicked.connect(self._on_clear_dark)
-        dark_buttons_layout.addWidget(self.clear_dark_button)
-
-        settings_layout.addLayout(dark_buttons_layout, 9, 0, 1, 2)
 
         layout.addLayout(settings_layout)
 
@@ -335,17 +314,9 @@ class SpectrometerSettingsWidget(QWidget):
         if 'OverilluminationThreshold' in self.current_settings:
             self.overillumination_input.setValue(self.current_settings['OverilluminationThreshold'])
 
-        self._update_dark_status()
-
     def _update_dark_status(self):
-        """Update dark spectrum status label."""
-        use_dark = self.current_settings.get('UseDarkSpectrum', False)
-        if use_dark:
-            self.dark_status_label.setText(SettingsWidgetStrings.DARK_SPECTRUM_LOADED)
-            self.dark_status_label.setStyleSheet("color: green;")
-        else:
-            self.dark_status_label.setText(SettingsWidgetStrings.NO_DARK_SPECTRUM)
-            self.dark_status_label.setStyleSheet("color: gray;")
+        """No-op: dark spectrum status display moved to spectrometer tab."""
+        pass
 
     def closeEvent(self, event):
         """Clean up threads on close."""

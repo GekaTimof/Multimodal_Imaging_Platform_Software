@@ -23,6 +23,7 @@ from core.constants.camera_constants import (
 from core.constants.ui_strings import SettingsWidgetStrings
 from .api_client_thread import APIClientThread
 from .settings_slot_dialog import SettingsSlotDialog
+from ui.ui_utils import get_relative_margin
 
 logger = logging.getLogger(__name__)
 
@@ -46,13 +47,19 @@ class CameraSettingsWidget(QWidget):
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(10, 10, 10, 10)
-        layout.setSpacing(10)
+        layout.setContentsMargins(
+            get_relative_margin(0.9), get_relative_margin(0.9), 
+            get_relative_margin(0.9), get_relative_margin(0.9)
+        )
+        layout.setSpacing(get_relative_margin(0.9))
 
         settings_layout = QGridLayout()
-        settings_layout.setContentsMargins(5, 5, 5, 5)
-        settings_layout.setHorizontalSpacing(10)
-        settings_layout.setVerticalSpacing(8)
+        settings_layout.setContentsMargins(
+            get_relative_margin(0.5), get_relative_margin(0.5), 
+            get_relative_margin(0.5), get_relative_margin(0.5)
+        )
+        settings_layout.setHorizontalSpacing(get_relative_margin(0.9))
+        settings_layout.setVerticalSpacing(get_relative_margin(0.7))
 
         # Settings Name
         settings_name_label = QLabel(
@@ -118,7 +125,7 @@ class CameraSettingsWidget(QWidget):
         )
         self.exp_time_label.setStyleSheet("QLabel { font-weight: bold; }")
         self.exp_time_range_label = QLabel(f"({EXPOSURE_TIME_RANGE[0]} - {EXPOSURE_TIME_RANGE[1]} μs)")
-        self.exp_time_range_label.setStyleSheet("QLabel { font-size: 10px; color: gray; }")
+        self.exp_time_range_label.setStyleSheet("QLabel { font-size: 9pt; color: gray; }")
         settings_layout.addWidget(self.exp_time_label, 8, 0)
         settings_layout.addWidget(self.exp_time_range_label, 8, 1)
 
@@ -134,7 +141,7 @@ class CameraSettingsWidget(QWidget):
         )
         self.gain_label.setStyleSheet("QLabel { font-weight: bold; }")
         self.gain_range_label = QLabel(f"({ANALOGUE_GAIN_RANGE[0]} - {ANALOGUE_GAIN_RANGE[1]})")
-        self.gain_range_label.setStyleSheet("QLabel { font-size: 10px; color: gray; }")
+        self.gain_range_label.setStyleSheet("QLabel { font-size: 9pt; color: gray; }")
         settings_layout.addWidget(self.gain_label, 10, 0)
         settings_layout.addWidget(self.gain_range_label, 10, 1)
 
@@ -150,7 +157,7 @@ class CameraSettingsWidget(QWidget):
         )
         self.exp_value_label.setStyleSheet("QLabel { font-weight: bold; }")
         self.exp_value_range_label = QLabel(f"({EXPOSURE_VALUE_RANGE[0]} - {EXPOSURE_VALUE_RANGE[1]})")
-        self.exp_value_range_label.setStyleSheet("QLabel { font-size: 10px; color: gray; }")
+        self.exp_value_range_label.setStyleSheet("QLabel { font-size: 9pt; color: gray; }")
         settings_layout.addWidget(self.exp_value_label, 12, 0)
         settings_layout.addWidget(self.exp_value_range_label, 12, 1)
 
@@ -166,7 +173,7 @@ class CameraSettingsWidget(QWidget):
         )
         self.red_gain_label.setStyleSheet("QLabel { font-weight: bold; }")
         self.red_gain_range_label = QLabel(f"({RED_GAIN_RANGE[0]} - {RED_GAIN_RANGE[1]})")
-        self.red_gain_range_label.setStyleSheet("QLabel { font-size: 10px; color: gray; }")
+        self.red_gain_range_label.setStyleSheet("QLabel { font-size: 9pt; color: gray; }")
         settings_layout.addWidget(self.red_gain_label, 14, 0)
         settings_layout.addWidget(self.red_gain_range_label, 14, 1)
 
@@ -182,7 +189,7 @@ class CameraSettingsWidget(QWidget):
         )
         self.blue_gain_label.setStyleSheet("QLabel { font-weight: bold; }")
         self.blue_gain_range_label = QLabel(f"({BLUE_GAIN_RANGE[0]} - {BLUE_GAIN_RANGE[1]})")
-        self.blue_gain_range_label.setStyleSheet("QLabel { font-size: 10px; color: gray; }")
+        self.blue_gain_range_label.setStyleSheet("QLabel { font-size: 9pt; color: gray; }")
         settings_layout.addWidget(self.blue_gain_label, 16, 0)
         settings_layout.addWidget(self.blue_gain_range_label, 16, 1)
 
@@ -270,7 +277,7 @@ class CameraSettingsWidget(QWidget):
         if labels:
             labels[0].setStyleSheet(f"QLabel {{ color: {main_color}; font-weight: bold; }}")
         if len(labels) > 1:
-            labels[1].setStyleSheet(f"QLabel {{ font-size: 10px; color: {range_color}; }}")
+            labels[1].setStyleSheet(f"QLabel {{ font-size: 9pt; color: {range_color}; }}")
 
     def _clamp_value(self, value, min_val, max_val, default_val, value_type=float):
         """Clamp value to valid range."""

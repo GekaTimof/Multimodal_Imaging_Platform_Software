@@ -373,7 +373,10 @@ class Interface_text():
         return self.text_json.get("Side_Panel_Min_Width", "Side panel min width (px):")
 
     def corner_button_size(self) -> str:
-        return self.text_json.get("Corner_Button_Size", "Corner button size (px):")
+        return self.text_json.get("Corner_Button_Size", "Corner button size (em):")
+
+    def ui_scale(self) -> str:
+        return self.text_json.get("UI_Scale", "UI Scale (%):")
 
     def font_family(self) -> str:
         return self.text_json.get("Font_Family", "Font family:")

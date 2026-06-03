@@ -22,6 +22,7 @@ from config.api_config import SPECTRUM_STREAM_URL
 from config import interface_config
 from config.theme_manager import ThemeManager
 from models.interface_text import Interface_text
+from ui.ui_utils import get_relative_margin
 from ui.widgets.device_settings_widget import DeviceSettingsWidget
 from ui.widgets.spectrometer_widget import SpectrometerWidget
 
@@ -45,7 +46,10 @@ class SpectrometerTab(QWidget):
         # ---- Right upper: tools panel ----
         upper_tools_layout = QVBoxLayout()
         upper_tools_layout.setSpacing(6)
-        upper_tools_layout.setContentsMargins(4, 4, 25, 4)  # Add large right margin to prevent scrollbar overlap
+        upper_tools_layout.setContentsMargins(
+            get_relative_margin(0.4), get_relative_margin(0.4), 
+            get_relative_margin(2.5), get_relative_margin(0.4)
+        )  # Use relative margins to prevent scrollbar overlap
 
         # Start / Stop buttons (mirrors CameraTab)
         self.start_button = QPushButton(interface_text.start_spectrometer())
@@ -137,7 +141,10 @@ class SpectrometerTab(QWidget):
 
         # ---- Right panel (upper + lower, 2:3) ----
         right_layout = QVBoxLayout()
-        right_layout.setContentsMargins(6, 6, 6, 6)  # Add margins to prevent cutoff
+        right_layout.setContentsMargins(
+            get_relative_margin(0.6), get_relative_margin(0.6), 
+            get_relative_margin(0.6), get_relative_margin(0.6)
+        )  # Use relative margins to prevent cutoff
         right_layout.addWidget(upper_scroll, 2)
         right_layout.addWidget(lower_scroll, 3)
 
@@ -148,7 +155,7 @@ class SpectrometerTab(QWidget):
 
         # ---- Main horizontal layout ----
         main_layout = QHBoxLayout(self)
-        main_layout.addWidget(self.spectrometer_widget, 1)
+        main_layout.addWidget(self.spectrometer_widget, 1)  # Left column (can't use float in addWidget)
         main_layout.addWidget(right_panel)
 
         # ---- Wire spectrometer settings signals ----

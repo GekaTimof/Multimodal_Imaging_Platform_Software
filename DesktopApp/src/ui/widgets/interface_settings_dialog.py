@@ -96,29 +96,24 @@ class InterfaceSettingsDialog(QDialog):
         self.font_size_spin.setSuffix(" pt")
         form.addRow(self._t("font_size", "Font size (pt):"), self.font_size_spin)
 
+        # UI Scale factor (percentage)
+        self.ui_scale_spin = QSpinBox()
+        self.ui_scale_spin.setRange(80, 200)
+        self.ui_scale_spin.setSuffix(" %")
+        self.ui_scale_spin.setValue(100)
+        form.addRow(self._t("ui_scale", "UI Scale (%):"), self.ui_scale_spin)
+
         # Error/status font size
         self.error_font_spin = QSpinBox()
-        self.error_font_spin.setRange(8, 32)
-        self.error_font_spin.setSuffix(" px")
-        form.addRow(self._t("error_font_size", "Error font size (px):"), self.error_font_spin)
-
-        # Status bar height
-        self.status_bar_spin = QSpinBox()
-        self.status_bar_spin.setRange(24, 120)
-        self.status_bar_spin.setSuffix(" px")
-        form.addRow(self._t("status_bar_height", "Status bar height (px):"), self.status_bar_spin)
+        self.error_font_spin.setRange(7, 24)
+        self.error_font_spin.setSuffix(" pt")
+        form.addRow(self._t("error_font_size", "Status font size (pt):"), self.error_font_spin)
 
         # Side panel min width
         self.side_panel_spin = QSpinBox()
         self.side_panel_spin.setRange(160, 600)
         self.side_panel_spin.setSuffix(" px")
         form.addRow(self._t("side_panel_min_width", "Side panel min width (px):"), self.side_panel_spin)
-
-        # Corner button size
-        self.corner_button_spin = QSpinBox()
-        self.corner_button_spin.setRange(24, 64)
-        self.corner_button_spin.setSuffix(" px")
-        form.addRow(self._t("corner_button_size", "Corner button size (px):"), self.corner_button_spin)
 
         main_layout.addLayout(form)
 
@@ -151,14 +146,12 @@ class InterfaceSettingsDialog(QDialog):
 
         self.font_size_spin.setValue(
             interface_config.get('ui_scaling.font_point_size', 11))
+        self.ui_scale_spin.setValue(
+            interface_config.get('ui_scaling.ui_scale_factor', 100))
         self.error_font_spin.setValue(
             interface_config.get('ui_scaling.error_font_size', 12))
-        self.status_bar_spin.setValue(
-            interface_config.get('ui_scaling.status_bar_height', 52))
         self.side_panel_spin.setValue(
             interface_config.get('ui_scaling.side_panel_min_width', 320))
-        self.corner_button_spin.setValue(
-            interface_config.get('ui_scaling.corner_button_size', 32))
 
     def _apply_values(self):
         """Save current widget values to InterfaceConfig."""
@@ -166,14 +159,12 @@ class InterfaceSettingsDialog(QDialog):
                              self.font_family_combo.currentText())
         interface_config.set('ui_scaling.font_point_size',
                              self.font_size_spin.value())
+        interface_config.set('ui_scaling.ui_scale_factor',
+                             self.ui_scale_spin.value())
         interface_config.set('ui_scaling.error_font_size',
                              self.error_font_spin.value())
-        interface_config.set('ui_scaling.status_bar_height',
-                             self.status_bar_spin.value())
         interface_config.set('ui_scaling.side_panel_min_width',
                              self.side_panel_spin.value())
-        interface_config.set('ui_scaling.corner_button_size',
-                             self.corner_button_spin.value())
         self.settings_applied.emit()
         logger.debug("Interface settings saved")
 
@@ -185,7 +176,6 @@ class InterfaceSettingsDialog(QDialog):
         """Reset to built-in defaults."""
         self.font_family_combo.setCurrentText('DejaVu Sans')
         self.font_size_spin.setValue(11)
+        self.ui_scale_spin.setValue(100)
         self.error_font_spin.setValue(12)
-        self.status_bar_spin.setValue(52)
         self.side_panel_spin.setValue(320)
-        self.corner_button_spin.setValue(32)

@@ -11,17 +11,18 @@ This widget provides controls for:
 
 import logging
 
-from config.api_config import API_BASE_URL
-from core.constants.camera_constants import THREAD_TIMEOUT_MS
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, 
-    QLabel, QDoubleSpinBox, QPushButton, 
-    QGridLayout, QComboBox, QGroupBox
+    QWidget, QVBoxLayout, QHBoxLayout,
+    QLabel, QDoubleSpinBox, QPushButton,
+    QGridLayout, QComboBox
 )
 from PyQt5.QtCore import pyqtSignal
 
-logger = logging.getLogger(__name__)
+from config.api_config import API_BASE_URL
+from core.constants.camera_constants import THREAD_TIMEOUT_MS
+from ui.ui_utils import get_relative_margin
 
+logger = logging.getLogger(__name__)
 
 
 class PositionerSettingsWidget(QWidget):
@@ -42,101 +43,87 @@ class PositionerSettingsWidget(QWidget):
     
     def _build_ui(self):
         layout = QVBoxLayout(self)
-        
-        # Set margins and spacing for better layout - similar to camera_tab structure
-        layout.setContentsMargins(6, 6, 6, 6)  # Consistent with other tabs
-        layout.setSpacing(8)  # Reasonable spacing between elements
-        
-        # Position Settings Group
-        position_group = QGroupBox(self.interface_text.position_settings() if self.interface_text else "Position Settings")
-        position_layout = QGridLayout(position_group)
-        position_layout.setContentsMargins(8, 8, 8, 8)  # Better padding inside group
-        position_layout.setHorizontalSpacing(12)
-        position_layout.setVerticalSpacing(6)
-        
+        layout.setContentsMargins(
+            get_relative_margin(0.9), get_relative_margin(0.9),
+            get_relative_margin(0.9), get_relative_margin(0.9)
+        )
+        layout.setSpacing(get_relative_margin(0.9))
+
+        settings_layout = QGridLayout()
+        settings_layout.setContentsMargins(
+            get_relative_margin(0.5), get_relative_margin(0.5),
+            get_relative_margin(0.5), get_relative_margin(0.5)
+        )
+        settings_layout.setHorizontalSpacing(get_relative_margin(0.9))
+        settings_layout.setVerticalSpacing(get_relative_margin(0.7))
+
+        row = 0
+
         # X Position
         x_label = QLabel(self.interface_text.x_position() if self.interface_text else "X Position (mm):")
         x_label.setStyleSheet("QLabel { font-weight: bold; }")
-        position_layout.addWidget(x_label, 0, 0)
-        
+        settings_layout.addWidget(x_label, row, 0, 1, 2)
+        row += 1
         self.x_position = QDoubleSpinBox()
         self.x_position.setRange(-1000.0, 1000.0)
         self.x_position.setValue(0.0)
         self.x_position.setDecimals(2)
-        self.x_position.setMinimumWidth(80)  # Prevent text cutoff
-        position_layout.addWidget(self.x_position, 0, 1)
-        
+        settings_layout.addWidget(self.x_position, row, 0, 1, 2)
+        row += 1
+
         # Y Position
         y_label = QLabel(self.interface_text.y_position() if self.interface_text else "Y Position (mm):")
         y_label.setStyleSheet("QLabel { font-weight: bold; }")
-        position_layout.addWidget(y_label, 1, 0)
-        
+        settings_layout.addWidget(y_label, row, 0, 1, 2)
+        row += 1
         self.y_position = QDoubleSpinBox()
         self.y_position.setRange(-1000.0, 1000.0)
         self.y_position.setValue(0.0)
         self.y_position.setDecimals(2)
-        self.y_position.setMinimumWidth(80)  # Prevent text cutoff
-        position_layout.addWidget(self.y_position, 1, 1)
-        
+        settings_layout.addWidget(self.y_position, row, 0, 1, 2)
+        row += 1
+
         # Z Position
         z_label = QLabel(self.interface_text.z_position() if self.interface_text else "Z Position (mm):")
         z_label.setStyleSheet("QLabel { font-weight: bold; }")
-        position_layout.addWidget(z_label, 2, 0)
-        
+        settings_layout.addWidget(z_label, row, 0, 1, 2)
+        row += 1
         self.z_position = QDoubleSpinBox()
         self.z_position.setRange(-1000.0, 1000.0)
         self.z_position.setValue(0.0)
         self.z_position.setDecimals(2)
-        self.z_position.setMinimumWidth(80)  # Prevent text cutoff
-        position_layout.addWidget(self.z_position, 2, 1)
-        
-        layout.addWidget(position_group)
-        
-        # Movement Settings Group
-        movement_group = QGroupBox(self.interface_text.movement_settings() if self.interface_text else "Movement Settings")
-        movement_layout = QGridLayout(movement_group)
-        movement_layout.setContentsMargins(8, 8, 8, 8)  # Better padding inside group
-        movement_layout.setHorizontalSpacing(12)
-        movement_layout.setVerticalSpacing(6)
-        
+        settings_layout.addWidget(self.z_position, row, 0, 1, 2)
+        row += 1
+
         # Movement Speed
         speed_label = QLabel(self.interface_text.speed() if self.interface_text else "Speed (mm/s):")
         speed_label.setStyleSheet("QLabel { font-weight: bold; }")
-        movement_layout.addWidget(speed_label, 0, 0)
-        
+        settings_layout.addWidget(speed_label, row, 0, 1, 2)
+        row += 1
         self.movement_speed = QDoubleSpinBox()
         self.movement_speed.setRange(0.1, 100.0)
         self.movement_speed.setValue(10.0)
         self.movement_speed.setDecimals(1)
-        self.movement_speed.setMinimumWidth(80)  # Prevent text cutoff
-        movement_layout.addWidget(self.movement_speed, 0, 1)
-        
+        settings_layout.addWidget(self.movement_speed, row, 0, 1, 2)
+        row += 1
+
         # Acceleration
         accel_label = QLabel(self.interface_text.acceleration() if self.interface_text else "Acceleration (mm/s²):")
         accel_label.setStyleSheet("QLabel { font-weight: bold; }")
-        movement_layout.addWidget(accel_label, 1, 0)
-        
+        settings_layout.addWidget(accel_label, row, 0, 1, 2)
+        row += 1
         self.acceleration = QDoubleSpinBox()
         self.acceleration.setRange(0.1, 1000.0)
         self.acceleration.setValue(100.0)
         self.acceleration.setDecimals(1)
-        self.acceleration.setMinimumWidth(80)  # Prevent text cutoff
-        movement_layout.addWidget(self.acceleration, 1, 1)
-        
-        layout.addWidget(movement_group)
-        
-        # Position Presets
-        presets_group = QGroupBox(self.interface_text.position_presets() if self.interface_text else "Position Presets")
-        presets_layout = QGridLayout(presets_group)
-        presets_layout.setContentsMargins(8, 8, 8, 8)  # Better padding inside group
-        presets_layout.setHorizontalSpacing(12)
-        presets_layout.setVerticalSpacing(6)
-        
-        # Preset selection
+        settings_layout.addWidget(self.acceleration, row, 0, 1, 2)
+        row += 1
+
+        # Presets
         preset_label = QLabel(self.interface_text.presets() if self.interface_text else "Presets:")
         preset_label.setStyleSheet("QLabel { font-weight: bold; }")
-        presets_layout.addWidget(preset_label, 0, 0)
-        
+        settings_layout.addWidget(preset_label, row, 0, 1, 2)
+        row += 1
         self.preset_combo = QComboBox()
         self.preset_combo.addItems([
             'Home Position',
@@ -146,48 +133,42 @@ class PositionerSettingsWidget(QWidget):
             'Custom 1',
             'Custom 2'
         ])
-        self.preset_combo.setMinimumWidth(120)  # Prevent text cutoff
-        presets_layout.addWidget(self.preset_combo, 0, 1)
-        
-        layout.addWidget(presets_group)
-        
-        # Control Buttons - organize in rows with max 3 buttons per row
+        settings_layout.addWidget(self.preset_combo, row, 0, 1, 2)
+        row += 1
+
+        layout.addLayout(settings_layout)
+
+        # Buttons
         button_row1_layout = QHBoxLayout()
         button_row2_layout = QHBoxLayout()
-        
+
         self.btn_refresh = QPushButton(self.interface_text.refresh() if self.interface_text else "Refresh")
         self.btn_home = QPushButton(self.interface_text.go_home() if self.interface_text else "Go Home")
         self.btn_move_to = QPushButton(self.interface_text.move_to() if self.interface_text else "Move To")
         self.btn_save_preset = QPushButton(self.interface_text.save_preset() if self.interface_text else "Save Preset")
         self.btn_apply = QPushButton(self.interface_text.apply() if self.interface_text else "Apply")
-        
-        # Set minimum widths for buttons to prevent text cutoff
-        for btn in [self.btn_refresh, self.btn_home, self.btn_move_to, self.btn_save_preset, self.btn_apply]:
-            btn.setMinimumWidth(80)
-        
-        # First row: Refresh, Go Home, Move To (3 buttons)
+
         button_row1_layout.addWidget(self.btn_refresh)
         button_row1_layout.addWidget(self.btn_home)
         button_row1_layout.addWidget(self.btn_move_to)
-        button_row1_layout.addStretch()  # Push buttons to left
-        
-        # Second row: Save Preset, Apply (2 buttons)
+        button_row1_layout.addStretch()
+
         button_row2_layout.addWidget(self.btn_save_preset)
         button_row2_layout.addWidget(self.btn_apply)
-        button_row2_layout.addStretch()  # Push buttons to left
-        
+        button_row2_layout.addStretch()
+
         layout.addLayout(button_row1_layout)
         layout.addLayout(button_row2_layout)
-        
+
         # Status label
         self.status_label = QLabel(self.interface_text.ready() if self.interface_text else "Ready")
         self.status_label.setStyleSheet("QLabel { color: green; font-weight: bold; }")
         self.status_label.setWordWrap(True)
-        self.status_label.setMinimumWidth(200)  # Ensure minimum width for proper text wrapping like in camera_tab
+        self.status_label.setMaximumWidth(300)
         layout.addWidget(self.status_label)
-        
+
         layout.addStretch()
-        
+
         # Connect signals
         self.btn_refresh.clicked.connect(self.load_settings)
         self.btn_home.clicked.connect(self.go_home)
