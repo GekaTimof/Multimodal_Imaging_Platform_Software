@@ -22,6 +22,7 @@ class AcquisitionTab(QWidget):
         # ---- Right upper: tools panel (placeholder) ----
         upper_tools_layout = QVBoxLayout()
         upper_tools_layout.setSpacing(6)
+        upper_tools_layout.setContentsMargins(4, 4, 25, 4)  # Add large right margin to prevent scrollbar overlap
         upper_tools_layout.addWidget(QLabel(interface_text.Acquisition()))
         upper_tools_layout.addStretch()
 
@@ -44,12 +45,13 @@ class AcquisitionTab(QWidget):
 
         # ---- Right panel (upper + lower, 2:3 ratio) ----
         right_layout = QVBoxLayout()
+        right_layout.setContentsMargins(6, 6, 6, 6)  # Add margins to prevent cutoff
         right_layout.addWidget(upper_scroll, 2)
         right_layout.addWidget(lower_scroll, 3)
 
         right_panel = QWidget()
         right_panel.setLayout(right_layout)
-        right_panel.setMinimumWidth(interface_config.get('ui_scaling.side_panel_min_width', 320))
+        right_panel.setMinimumWidth(interface_config.get('ui_scaling.side_panel_min_width', 320) + 40)  # Add 40px for DeviceSettingsWidget internal margins
         right_panel.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
 
         # ---- Main horizontal layout ----

@@ -38,10 +38,11 @@
         "auto_save": true
     },
     "ui_scaling": {
-        "font_family": "Arial",
+        "font_family": "DejaVu Sans",
         "font_point_size": 11,
-        "error_font_size": 16,
+        "error_font_size": 22,
         "status_bar_height": 52,
-        "side_panel_min_width": 320
+        "side_panel_min_width": 320,
+        "corner_button_size": 48
     }
 }

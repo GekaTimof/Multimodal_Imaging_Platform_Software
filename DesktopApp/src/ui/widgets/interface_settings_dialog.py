@@ -10,8 +10,7 @@ from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QFont, QFontDatabase
 from PyQt5.QtWidgets import (
     QDialog, QDialogButtonBox, QFormLayout, QLabel,
-    QSpinBox, QComboBox, QVBoxLayout, QHBoxLayout,
-    QWidget, QPushButton, QFrame
+    QSpinBox, QComboBox, QVBoxLayout, QFrame
 )
 from config import interface_config
 
@@ -115,6 +114,12 @@ class InterfaceSettingsDialog(QDialog):
         self.side_panel_spin.setSuffix(" px")
         form.addRow(self._t("side_panel_min_width", "Side panel min width (px):"), self.side_panel_spin)
 
+        # Corner button size
+        self.corner_button_spin = QSpinBox()
+        self.corner_button_spin.setRange(24, 64)
+        self.corner_button_spin.setSuffix(" px")
+        form.addRow(self._t("corner_button_size", "Corner button size (px):"), self.corner_button_spin)
+
         main_layout.addLayout(form)
 
         # Note label
@@ -152,6 +157,8 @@ class InterfaceSettingsDialog(QDialog):
             interface_config.get('ui_scaling.status_bar_height', 52))
         self.side_panel_spin.setValue(
             interface_config.get('ui_scaling.side_panel_min_width', 320))
+        self.corner_button_spin.setValue(
+            interface_config.get('ui_scaling.corner_button_size', 32))
 
     def _apply_values(self):
         """Save current widget values to InterfaceConfig."""
@@ -165,6 +172,8 @@ class InterfaceSettingsDialog(QDialog):
                              self.status_bar_spin.value())
         interface_config.set('ui_scaling.side_panel_min_width',
                              self.side_panel_spin.value())
+        interface_config.set('ui_scaling.corner_button_size',
+                             self.corner_button_spin.value())
         self.settings_applied.emit()
         logger.debug("Interface settings saved")
 
@@ -179,3 +188,4 @@ class InterfaceSettingsDialog(QDialog):
         self.error_font_spin.setValue(12)
         self.status_bar_spin.setValue(52)
         self.side_panel_spin.setValue(320)
+        self.corner_button_spin.setValue(32)

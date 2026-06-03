@@ -11,13 +11,13 @@ import os
 import json
 import logging
 
-logger = logging.getLogger(__name__)
-
 # Add DesktopApp root (parent of 'src/') to path so that 'resources' package is importable
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from resources.language_variations.language_link import Languages
 from .errors import Wrong_argument_exception
+
+logger = logging.getLogger(__name__)
 
 
 class Interface_text():
@@ -371,6 +371,9 @@ class Interface_text():
 
     def side_panel_min_width(self) -> str:
         return self.text_json.get("Side_Panel_Min_Width", "Side panel min width (px):")
+
+    def corner_button_size(self) -> str:
+        return self.text_json.get("Corner_Button_Size", "Corner button size (px):")
 
     def font_family(self) -> str:
         return self.text_json.get("Font_Family", "Font family:")

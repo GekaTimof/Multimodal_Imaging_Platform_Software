@@ -91,6 +91,7 @@ class CameraTab(QWidget):
         self.save_image_button = QPushButton(interface_text.save_image())
         self.status_label = QLabel("")
         self.status_label.setWordWrap(True)
+        self.status_label.setMinimumWidth(200)  # Ensure minimum width for proper text wrapping
 
         # Progress bar for photo saving (hidden by default)
         self.progress_bar = QProgressBar()
@@ -98,6 +99,7 @@ class CameraTab(QWidget):
 
         # Upper control panel (basic camera controls) with scroll
         upper_control_layout = QVBoxLayout()
+        upper_control_layout.setContentsMargins(4, 4, 25, 4)  # Add large right margin to prevent scrollbar overlap
         upper_control_layout.addWidget(self.start_button)
         upper_control_layout.addWidget(self.stop_button)
         upper_control_layout.addWidget(QLabel(f"Stream URL: {self.camera_source}"))
@@ -128,6 +130,7 @@ class CameraTab(QWidget):
 
         # Right panel layout (split into upper and lower parts with 2:3 ratio)
         right_panel_layout = QVBoxLayout()
+        right_panel_layout.setContentsMargins(6, 6, 6, 6)  # Add margins to prevent cutoff
         right_panel_layout.addWidget(upper_scroll_area, 2)  # Upper part takes 2/5 space
         right_panel_layout.addWidget(lower_scroll_area, 3)  # Lower part takes 3/5 space
 

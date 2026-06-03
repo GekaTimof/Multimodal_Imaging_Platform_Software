@@ -14,7 +14,7 @@ import os
 
 from PyQt5.QtWidgets import (
     QMainWindow, QTabWidget, QVBoxLayout, QWidget, QHBoxLayout,
-    QPushButton, QApplication, QMessageBox
+    QPushButton, QApplication
 )
 from PyQt5.QtCore import QTimer, Qt, QThread, pyqtSignal, QProcess
 from PyQt5.QtGui import QFont
@@ -166,9 +166,12 @@ class MainWindow(QMainWindow):
         row.setContentsMargins(4, 2, 8, 2)
         row.setSpacing(4)
 
+        # Get button size from config
+        button_size = interface_config.get('ui_scaling.corner_button_size', 32)
+
         # Theme toggle button
         self._theme_btn = QPushButton("☽" if self.theme_manager.is_dark else "☀")
-        self._theme_btn.setFixedSize(38, 32)
+        self._theme_btn.setFixedSize(button_size + 6, button_size)  # Theme button slightly wider
         self._theme_btn.setToolTip("Toggle dark/light theme")
         self._theme_btn.clicked.connect(self._on_theme_toggle)
         self.theme_manager.theme_changed.connect(self._on_theme_changed)
@@ -176,14 +179,14 @@ class MainWindow(QMainWindow):
 
         # Language switcher button (shows current abbreviation)
         self._lang_btn = QPushButton(self.interface_text.abbreviation())
-        self._lang_btn.setFixedSize(44, 32)
+        self._lang_btn.setFixedSize(button_size + 12, button_size)  # Lang button wider for text
         self._lang_btn.setToolTip("Switch language")
         self._lang_btn.clicked.connect(self._on_language_toggle)
         row.addWidget(self._lang_btn)
 
         # Interface settings button
         self._settings_btn = QPushButton("⚙")
-        self._settings_btn.setFixedSize(38, 32)
+        self._settings_btn.setFixedSize(button_size + 6, button_size)  # Settings button slightly wider
         self._settings_btn.setToolTip(
             self.interface_text.interface_settings()
             if hasattr(self.interface_text, 'interface_settings') else "Interface Settings"
@@ -254,8 +257,23 @@ class MainWindow(QMainWindow):
             # Refresh error/status font size in the status widget
             if hasattr(self, 'light_switcher_status'):
                 self.light_switcher_status.refresh_style()
+            # Update corner button sizes
+            self._update_corner_button_sizes()
         except Exception as e:
             logger.error(f"Error applying font: {e}")
+
+    def _update_corner_button_sizes(self):
+        """Update corner button sizes from config."""
+        try:
+            button_size = interface_config.get('ui_scaling.corner_button_size', 32)
+            if hasattr(self, '_theme_btn'):
+                self._theme_btn.setFixedSize(button_size + 6, button_size)
+            if hasattr(self, '_lang_btn'):
+                self._lang_btn.setFixedSize(button_size + 12, button_size)
+            if hasattr(self, '_settings_btn'):
+                self._settings_btn.setFixedSize(button_size + 6, button_size)
+        except Exception as e:
+            logger.error(f"Error updating button sizes: {e}")
 
     # ------------------------------------------------------------------ #
     #  Startup background worker                                           #

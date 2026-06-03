@@ -45,6 +45,7 @@ class SpectrometerTab(QWidget):
         # ---- Right upper: tools panel ----
         upper_tools_layout = QVBoxLayout()
         upper_tools_layout.setSpacing(6)
+        upper_tools_layout.setContentsMargins(4, 4, 25, 4)  # Add large right margin to prevent scrollbar overlap
 
         # Start / Stop buttons (mirrors CameraTab)
         self.start_button = QPushButton(interface_text.start_spectrometer())
@@ -104,6 +105,7 @@ class SpectrometerTab(QWidget):
         # Status label
         self.status_label = QLabel("")
         self.status_label.setWordWrap(True)
+        self.status_label.setMinimumWidth(200)  # Ensure minimum width for proper text wrapping
         upper_tools_layout.addWidget(self.status_label)
 
         upper_tools_layout.addStretch()
@@ -135,6 +137,7 @@ class SpectrometerTab(QWidget):
 
         # ---- Right panel (upper + lower, 2:3) ----
         right_layout = QVBoxLayout()
+        right_layout.setContentsMargins(6, 6, 6, 6)  # Add margins to prevent cutoff
         right_layout.addWidget(upper_scroll, 2)
         right_layout.addWidget(lower_scroll, 3)
 

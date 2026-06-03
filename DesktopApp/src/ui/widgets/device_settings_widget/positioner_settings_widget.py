@@ -15,11 +15,10 @@ from config.api_config import API_BASE_URL
 from core.constants.camera_constants import THREAD_TIMEOUT_MS
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, 
-    QLabel, QSpinBox, QDoubleSpinBox, QPushButton, 
-    QGridLayout, QComboBox, QLineEdit, QGroupBox
+    QLabel, QDoubleSpinBox, QPushButton, 
+    QGridLayout, QComboBox, QGroupBox
 )
-from PyQt5.QtCore import QThread, pyqtSignal
-from PyQt5.QtGui import QFont
+from PyQt5.QtCore import pyqtSignal
 
 logger = logging.getLogger(__name__)
 
@@ -44,16 +43,16 @@ class PositionerSettingsWidget(QWidget):
     def _build_ui(self):
         layout = QVBoxLayout(self)
         
-        # Set margins and spacing for better layout
-        layout.setContentsMargins(10, 10, 10, 10)  # Add padding around the widget
-        layout.setSpacing(10)  # Add spacing between elements
+        # Set margins and spacing for better layout - similar to camera_tab structure
+        layout.setContentsMargins(6, 6, 6, 6)  # Consistent with other tabs
+        layout.setSpacing(8)  # Reasonable spacing between elements
         
         # Position Settings Group
         position_group = QGroupBox(self.interface_text.position_settings() if self.interface_text else "Position Settings")
         position_layout = QGridLayout(position_group)
-        position_layout.setContentsMargins(5, 5, 5, 5)  # Add padding inside group
-        position_layout.setHorizontalSpacing(10)
-        position_layout.setVerticalSpacing(8)
+        position_layout.setContentsMargins(8, 8, 8, 8)  # Better padding inside group
+        position_layout.setHorizontalSpacing(12)
+        position_layout.setVerticalSpacing(6)
         
         # X Position
         x_label = QLabel(self.interface_text.x_position() if self.interface_text else "X Position (mm):")
@@ -64,6 +63,7 @@ class PositionerSettingsWidget(QWidget):
         self.x_position.setRange(-1000.0, 1000.0)
         self.x_position.setValue(0.0)
         self.x_position.setDecimals(2)
+        self.x_position.setMinimumWidth(80)  # Prevent text cutoff
         position_layout.addWidget(self.x_position, 0, 1)
         
         # Y Position
@@ -75,6 +75,7 @@ class PositionerSettingsWidget(QWidget):
         self.y_position.setRange(-1000.0, 1000.0)
         self.y_position.setValue(0.0)
         self.y_position.setDecimals(2)
+        self.y_position.setMinimumWidth(80)  # Prevent text cutoff
         position_layout.addWidget(self.y_position, 1, 1)
         
         # Z Position
@@ -86,6 +87,7 @@ class PositionerSettingsWidget(QWidget):
         self.z_position.setRange(-1000.0, 1000.0)
         self.z_position.setValue(0.0)
         self.z_position.setDecimals(2)
+        self.z_position.setMinimumWidth(80)  # Prevent text cutoff
         position_layout.addWidget(self.z_position, 2, 1)
         
         layout.addWidget(position_group)
@@ -93,9 +95,9 @@ class PositionerSettingsWidget(QWidget):
         # Movement Settings Group
         movement_group = QGroupBox(self.interface_text.movement_settings() if self.interface_text else "Movement Settings")
         movement_layout = QGridLayout(movement_group)
-        movement_layout.setContentsMargins(5, 5, 5, 5)  # Add padding inside group
-        movement_layout.setHorizontalSpacing(10)
-        movement_layout.setVerticalSpacing(8)
+        movement_layout.setContentsMargins(8, 8, 8, 8)  # Better padding inside group
+        movement_layout.setHorizontalSpacing(12)
+        movement_layout.setVerticalSpacing(6)
         
         # Movement Speed
         speed_label = QLabel(self.interface_text.speed() if self.interface_text else "Speed (mm/s):")
@@ -106,6 +108,7 @@ class PositionerSettingsWidget(QWidget):
         self.movement_speed.setRange(0.1, 100.0)
         self.movement_speed.setValue(10.0)
         self.movement_speed.setDecimals(1)
+        self.movement_speed.setMinimumWidth(80)  # Prevent text cutoff
         movement_layout.addWidget(self.movement_speed, 0, 1)
         
         # Acceleration
@@ -117,6 +120,7 @@ class PositionerSettingsWidget(QWidget):
         self.acceleration.setRange(0.1, 1000.0)
         self.acceleration.setValue(100.0)
         self.acceleration.setDecimals(1)
+        self.acceleration.setMinimumWidth(80)  # Prevent text cutoff
         movement_layout.addWidget(self.acceleration, 1, 1)
         
         layout.addWidget(movement_group)
@@ -124,9 +128,9 @@ class PositionerSettingsWidget(QWidget):
         # Position Presets
         presets_group = QGroupBox(self.interface_text.position_presets() if self.interface_text else "Position Presets")
         presets_layout = QGridLayout(presets_group)
-        presets_layout.setContentsMargins(5, 5, 5, 5)  # Add padding inside group
-        presets_layout.setHorizontalSpacing(10)
-        presets_layout.setVerticalSpacing(8)
+        presets_layout.setContentsMargins(8, 8, 8, 8)  # Better padding inside group
+        presets_layout.setHorizontalSpacing(12)
+        presets_layout.setVerticalSpacing(6)
         
         # Preset selection
         preset_label = QLabel(self.interface_text.presets() if self.interface_text else "Presets:")
@@ -142,6 +146,7 @@ class PositionerSettingsWidget(QWidget):
             'Custom 1',
             'Custom 2'
         ])
+        self.preset_combo.setMinimumWidth(120)  # Prevent text cutoff
         presets_layout.addWidget(self.preset_combo, 0, 1)
         
         layout.addWidget(presets_group)
@@ -155,6 +160,10 @@ class PositionerSettingsWidget(QWidget):
         self.btn_move_to = QPushButton(self.interface_text.move_to() if self.interface_text else "Move To")
         self.btn_save_preset = QPushButton(self.interface_text.save_preset() if self.interface_text else "Save Preset")
         self.btn_apply = QPushButton(self.interface_text.apply() if self.interface_text else "Apply")
+        
+        # Set minimum widths for buttons to prevent text cutoff
+        for btn in [self.btn_refresh, self.btn_home, self.btn_move_to, self.btn_save_preset, self.btn_apply]:
+            btn.setMinimumWidth(80)
         
         # First row: Refresh, Go Home, Move To (3 buttons)
         button_row1_layout.addWidget(self.btn_refresh)
@@ -174,7 +183,7 @@ class PositionerSettingsWidget(QWidget):
         self.status_label = QLabel(self.interface_text.ready() if self.interface_text else "Ready")
         self.status_label.setStyleSheet("QLabel { color: green; font-weight: bold; }")
         self.status_label.setWordWrap(True)
-        self.status_label.setMaximumWidth(300)  # Prevent screen stretching
+        self.status_label.setMinimumWidth(200)  # Ensure minimum width for proper text wrapping like in camera_tab
         layout.addWidget(self.status_label)
         
         layout.addStretch()
