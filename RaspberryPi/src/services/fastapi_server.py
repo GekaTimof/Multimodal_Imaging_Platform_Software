@@ -861,6 +861,28 @@ async def load_dark_spectrum():
         raise HTTPException(status_code=500, detail=f"Error loading dark spectrum: {str(e)}")
 
 
+@app.post("/api/spectrometer/reconnect", response_model=APIResponse)
+async def reconnect_spectrometer():
+    """Reinitialize spectrometer connection (useful after hot-plug or startup failure)."""
+    try:
+        success = spectrometer_service.reinitialize()
+        info = spectrometer_service.get_spectrometer_info()
+        if success:
+            return APIResponse(
+                success=True,
+                message="Spectrometer reinitialized successfully",
+                data=info
+            )
+        else:
+            return APIResponse(
+                success=False,
+                message="Spectrometer not found or failed to initialize",
+                data=info
+            )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error reinitializing spectrometer: {str(e)}")
+
+
 @app.get("/api/spectrometer/dark-spectrum", response_model=DarkSpectrumResponse)
 async def get_dark_spectrum():
     """Get the current dark spectrum data.

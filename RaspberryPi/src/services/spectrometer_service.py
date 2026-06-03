@@ -188,9 +188,9 @@ class SpectrometerService:
                         self._close_spectrometer()
                         self._initialize_spectrometer()
             else:
-                # Generate test data
-                with self.spectrum_lock:
-                    self._generate_test_spectrum()
+                # Spectrometer not available — wait before retrying
+                time.sleep(1.0)
+                continue
             
             time.sleep(1 / self.fps)
     
@@ -379,6 +379,14 @@ class SpectrometerService:
 
         return info
     
+    def reinitialize(self) -> bool:
+        """Try to reinitialize the spectrometer connection (e.g. after hot-plug)."""
+        logger.info("Reinitializing spectrometer...")
+        self._close_spectrometer()
+        self.use_real_spectrometer = False
+        self._initialize_spectrometer()
+        return self.use_real_spectrometer
+
     def reload_settings(self):
         """Reload spectrometer settings from database."""
         old_integral_time = self.integral_time

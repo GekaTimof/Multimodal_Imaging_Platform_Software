@@ -123,7 +123,8 @@ ENDPOINTS = {
     "spectrometer_dark_capture": f"{API_BASE_URL}/spectrometer/dark-spectrum/capture",
     "spectrometer_dark_clear": f"{API_BASE_URL}/spectrometer/dark-spectrum/clear",
     "spectrometer_dark_load": f"{API_BASE_URL}/spectrometer/dark-spectrum/load",
-    "spectrometer_validation": f"{API_BASE_URL}/spectrometer/validation-rules"
+    "spectrometer_validation": f"{API_BASE_URL}/spectrometer/validation-rules",
+    "spectrometer_reconnect": f"{API_BASE_URL}/spectrometer/reconnect"
 }
 
 # Headers for API requests

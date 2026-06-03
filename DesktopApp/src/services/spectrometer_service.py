@@ -210,6 +210,16 @@ class SpectrometerService(QObject):
             self.error_occurred.emit(f"Failed to load dark spectrum file: {e}")
             return False
     
+    def reconnect_spectrometer(self) -> bool:
+        """Reinitialize spectrometer on Raspberry Pi (useful after hot-plug or startup failure)."""
+        try:
+            response = self._make_request("spectrometer_reconnect", method="POST")
+            return response is not None and response.get("success", False)
+        except Exception as e:
+            logger.error(f"Failed to reconnect spectrometer: {e}")
+            self.error_occurred.emit(f"Failed to reconnect spectrometer: {e}")
+            return False
+
     def get_validation_rules(self) -> Optional[Dict[str, Any]]:
         """Get validation rules for spectrometer parameters."""
         try:
