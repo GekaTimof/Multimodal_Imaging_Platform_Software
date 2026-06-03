@@ -227,6 +227,11 @@ class CameraTab(QWidget):
         self.start_button.setEnabled(True)
         self.stop_button.setEnabled(False)
 
+    def clear_display(self) -> None:
+        """Clear the video frame so stale image is not shown when returning to tab."""
+        self.video_label.clear()
+        self.video_label.setText(self.interface_text.no_video() if self.interface_text else "No video")
+
     # Константы накладных расходов, соответствующие поведению RaspberryPi camera_service.py:
     #   _pause_video_stream  → sleep(0.02) + terminate + wait(1s) + _wait_for_camera_release ≈ 2-3s
     #   _resume_video_stream → только сбрасывает флаг, цикл захвата перезапускает rpicam-vid  ≈ 0s

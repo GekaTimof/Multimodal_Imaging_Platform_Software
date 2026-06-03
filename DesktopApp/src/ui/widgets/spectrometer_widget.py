@@ -77,7 +77,7 @@ class SpectrometerWidget(QWidget):
         self.graph_widget.addItem(self.overillumination_label)
 
         self.coord_label = pg.TextItem("", anchor=(0, 1), color='k')
-        from core.constants.spectrometer_constants import COORD_FONT, COORD_FONT_SIZE, COORD_COLOR
+        from core.constants.spectrometer_constants import COORD_FONT, COORD_FONT_SIZE
         self.coord_label.setFont(QFont(COORD_FONT, COORD_FONT_SIZE))
         self.coord_label.setFlag(self.coord_label.GraphicsItemFlag.ItemIsMovable, False)
         self.graph_widget.addItem(self.coord_label)
@@ -107,6 +107,11 @@ class SpectrometerWidget(QWidget):
             return
         self.thread.stop()
         self.thread = None
+
+    def clear_display(self) -> None:
+        """Clear the live spectrum curve so stale data is not shown when returning to tab."""
+        self.curve.setData([], [])
+        self.overillumination_label.setVisible(False)
 
     def reset_graph_view(self):
         """Fit all visible data into the view."""

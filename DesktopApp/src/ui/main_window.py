@@ -87,7 +87,7 @@ class MainWindow(QMainWindow):
 
         # Create status container with adaptive height to prevent layout shifts
         status_container = QWidget()
-        status_height = get_scaled_size(interface_config.get('ui_scaling.status_bar_height', 52)) // 2  # Half height
+        status_height = int(get_scaled_size(interface_config.get('ui_scaling.status_bar_height', 52)) // 2 * 1.15)
         status_container.setMinimumHeight(status_height)
         status_container.setMaximumHeight(status_height)
         status_layout = QHBoxLayout(status_container)
@@ -361,10 +361,12 @@ class MainWindow(QMainWindow):
             # Stop spectrometer when leaving spectrometer tab (index 0)
             if self._previous_tab_index == 0 and index != 0:
                 self.spectrometer_tab.stop_spectrometer()
+                self.spectrometer_tab.spectrometer_widget.clear_display()
 
             # Stop camera when leaving camera tab (index 1)
             if self._previous_tab_index == 1 and index != 1:
                 self.camera_tab.stop_camera()
+                self.camera_tab.clear_display()
             
             if index == 0:
                 # Switch to spectrometer mode

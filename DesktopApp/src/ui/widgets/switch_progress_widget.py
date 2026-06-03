@@ -4,11 +4,12 @@ Switch Progress Widget
 Центрированная плашка для отображения прогресса переключения камеры
 """
 
-from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
-                             QFrame, QGraphicsOpacityEffect, QSizePolicy)
+from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
+                             QGraphicsOpacityEffect, QSizePolicy)
 from PyQt5.QtCore import Qt, pyqtSlot, QTimer, QPropertyAnimation, QEasingCurve
-from PyQt5.QtGui import QFont, QColor, QPalette
 import logging
+
+from ui.ui_utils import get_scaled_size, get_font_relative_size
 
 logger = logging.getLogger(__name__)
 
@@ -38,10 +39,13 @@ class SwitchProgressWidget(QWidget):
         
         # Создаем центрированный контейнер
         center_container = QWidget()
-        center_container.setFixedSize(400, 150)  # Фиксированный размер
+        _w = get_scaled_size(420)
+        _h = get_scaled_size(170)
+        center_container.setMinimumSize(_w, _h)
         center_layout = QVBoxLayout(center_container)
-        center_layout.setContentsMargins(20, 20, 20, 20)
-        center_layout.setSpacing(15)
+        _pad = get_scaled_size(20)
+        center_layout.setContentsMargins(_pad, _pad, _pad, _pad)
+        center_layout.setSpacing(get_scaled_size(15))
         
         # Стиль контейнера
         center_container.setStyleSheet("""
@@ -55,40 +59,43 @@ class SwitchProgressWidget(QWidget):
         # Иконка загрузки
         self.icon_label = QLabel("🔄")
         self.icon_label.setAlignment(Qt.AlignCenter)
-        self.icon_label.setStyleSheet("""
-            QLabel {
-                font-size: 48px;
+        _icon_pt = get_font_relative_size(3.8)
+        self.icon_label.setStyleSheet(f"""
+            QLabel {{
+                font-size: {_icon_pt}pt;
                 color: #2196f3;
                 background-color: transparent;
                 border: none;
-            }
+            }}
         """)
         center_layout.addWidget(self.icon_label)
         
         # Текст "Switch camera"
         self.text_label = QLabel("Switch camera")
         self.text_label.setAlignment(Qt.AlignCenter)
-        self.text_label.setStyleSheet("""
-            QLabel {
-                font-size: 18px;
+        _title_pt = get_font_relative_size(1.5)
+        self.text_label.setStyleSheet(f"""
+            QLabel {{
+                font-size: {_title_pt}pt;
                 font-weight: bold;
                 color: white;
                 background-color: transparent;
                 border: none;
-            }
+            }}
         """)
         center_layout.addWidget(self.text_label)
         
         # Описание
         self.desc_label = QLabel("Please wait while switching...")
         self.desc_label.setAlignment(Qt.AlignCenter)
-        self.desc_label.setStyleSheet("""
-            QLabel {
-                font-size: 14px;
+        _desc_pt = get_font_relative_size(1.1)
+        self.desc_label.setStyleSheet(f"""
+            QLabel {{
+                font-size: {_desc_pt}pt;
                 color: #b0b0b0;
                 background-color: transparent;
                 border: none;
-            }
+            }}
         """)
         center_layout.addWidget(self.desc_label)
         
