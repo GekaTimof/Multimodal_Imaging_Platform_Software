@@ -97,6 +97,12 @@ class InterfaceSettingsDialog(QDialog):
         self.font_size_spin.setSuffix(" pt")
         form.addRow(self._t("font_size", "Font size (pt):"), self.font_size_spin)
 
+        # Error/status font size
+        self.error_font_spin = QSpinBox()
+        self.error_font_spin.setRange(8, 32)
+        self.error_font_spin.setSuffix(" px")
+        form.addRow(self._t("error_font_size", "Error font size (px):"), self.error_font_spin)
+
         # Status bar height
         self.status_bar_spin = QSpinBox()
         self.status_bar_spin.setRange(24, 120)
@@ -140,6 +146,8 @@ class InterfaceSettingsDialog(QDialog):
 
         self.font_size_spin.setValue(
             interface_config.get('ui_scaling.font_point_size', 11))
+        self.error_font_spin.setValue(
+            interface_config.get('ui_scaling.error_font_size', 12))
         self.status_bar_spin.setValue(
             interface_config.get('ui_scaling.status_bar_height', 52))
         self.side_panel_spin.setValue(
@@ -151,6 +159,8 @@ class InterfaceSettingsDialog(QDialog):
                              self.font_family_combo.currentText())
         interface_config.set('ui_scaling.font_point_size',
                              self.font_size_spin.value())
+        interface_config.set('ui_scaling.error_font_size',
+                             self.error_font_spin.value())
         interface_config.set('ui_scaling.status_bar_height',
                              self.status_bar_spin.value())
         interface_config.set('ui_scaling.side_panel_min_width',
@@ -166,5 +176,6 @@ class InterfaceSettingsDialog(QDialog):
         """Reset to built-in defaults."""
         self.font_family_combo.setCurrentText('DejaVu Sans')
         self.font_size_spin.setValue(11)
+        self.error_font_spin.setValue(12)
         self.status_bar_spin.setValue(52)
         self.side_panel_spin.setValue(320)

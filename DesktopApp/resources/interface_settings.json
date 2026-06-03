@@ -15,7 +15,7 @@
         "auto_switch": false
     },
     "language": {
-        "default": "Russian",
+        "default": "English",
         "available_languages": [
             "English",
             "Russian"
@@ -40,6 +40,7 @@
     "ui_scaling": {
         "font_family": "Arial",
         "font_point_size": 11,
+        "error_font_size": 16,
         "status_bar_height": 52,
         "side_panel_min_width": 320
     }

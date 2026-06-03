@@ -92,6 +92,7 @@
     "Interface_Settings": "Настройки интерфейса",
     "Interface_Settings_Title": "Настройки интерфейса",
     "Font_Size": "Размер шрифта (пт):",
+    "Error_Font_Size": "Шрифт сообщений (пкс):",
     "Status_Bar_Height": "Высота статус-бара (пкс):",
     "Side_Panel_Min_Width": "Мин. ширина боковой панели (пкс):",
     "Font_Family": "Шрифт:",
@@ -99,5 +100,15 @@
     "Interface_Settings_Saved": "Настройки сохранены",
 
     "Connecting_Title": "Подключение...",
-    "Connecting_Desc": "Пожалуйста, подождите"
+    "Connecting_Desc": "Пожалуйста, подождите",
+
+    "Capturing_Dark": "Снятие тёмного спектра...",
+    "Dark_Spectrum_Cleared": "Тёмный спектр сброшен",
+    "No_Save_Directory": "Укажите директорию сохранения в настройках файлов",
+    "Success_Title": "Успех",
+    "Error_Title": "Ошибка",
+    "Spectrum_Saved": "Спектр сохранён",
+    "Spectrum_Save_Failed": "Не удалось сохранить спектр",
+    "Invalid_Spectrum_Format": "Неверный формат файла спектра: {}",
+    "File_Load_Failed": "Не удалось загрузить файл: {}"
 }

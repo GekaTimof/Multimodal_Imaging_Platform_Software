@@ -363,6 +363,9 @@ class Interface_text():
     def font_size(self) -> str:
         return self.text_json.get("Font_Size", "Font size (pt):")
 
+    def error_font_size(self) -> str:
+        return self.text_json.get("Error_Font_Size", "Error font size (px):")
+
     def status_bar_height(self) -> str:
         return self.text_json.get("Status_Bar_Height", "Status bar height (px):")
 
@@ -382,6 +385,32 @@ class Interface_text():
         return self.text_json.get("Connecting_Title", "Connecting...")
 
     def connecting_desc(self) -> str:
-        return self.text_json.get("Connecting_Desc",
-                                  "Attempting to connect to Raspberry Pi and devices, please wait...")
+        return self.text_json.get("Connecting_Desc", "Please wait")
+
+    def capturing_dark(self) -> str:
+        return self.text_json.get("Capturing_Dark", "Capturing dark spectrum...")
+
+    def dark_spectrum_cleared(self) -> str:
+        return self.text_json.get("Dark_Spectrum_Cleared", "Dark spectrum cleared")
+
+    def no_save_directory(self) -> str:
+        return self.text_json.get("No_Save_Directory", "Please set a save directory in File Settings")
+
+    def success_title(self) -> str:
+        return self.text_json.get("Success_Title", "Success")
+
+    def error_title(self) -> str:
+        return self.text_json.get("Error_Title", "Error")
+
+    def spectrum_saved(self) -> str:
+        return self.text_json.get("Spectrum_Saved", "Spectrum saved successfully")
+
+    def spectrum_save_failed(self) -> str:
+        return self.text_json.get("Spectrum_Save_Failed", "Failed to save spectrum")
+
+    def invalid_spectrum_format(self) -> str:
+        return self.text_json.get("Invalid_Spectrum_Format", "Invalid spectrum file format: {}")
+
+    def file_load_failed(self) -> str:
+        return self.text_json.get("File_Load_Failed", "Failed to load file: {}")
 

@@ -92,6 +92,7 @@
     "Interface_Settings": "Interface Settings",
     "Interface_Settings_Title": "Interface Settings",
     "Font_Size": "Font size (pt):",
+    "Error_Font_Size": "Error font size (px):",
     "Status_Bar_Height": "Status bar height (px):",
     "Side_Panel_Min_Width": "Side panel min width (px):",
     "Font_Family": "Font family:",
@@ -99,5 +100,15 @@
     "Interface_Settings_Saved": "Settings saved",
 
     "Connecting_Title": "Connecting...",
-    "Connecting_Desc": "Please wait"
+    "Connecting_Desc": "Please wait",
+
+    "Capturing_Dark": "Capturing dark spectrum...",
+    "Dark_Spectrum_Cleared": "Dark spectrum cleared",
+    "No_Save_Directory": "Please set a save directory in File Settings",
+    "Success_Title": "Success",
+    "Error_Title": "Error",
+    "Spectrum_Saved": "Spectrum saved successfully",
+    "Spectrum_Save_Failed": "Failed to save spectrum",
+    "Invalid_Spectrum_Format": "Invalid spectrum file format: {}",
+    "File_Load_Failed": "Failed to load file: {}"
 }

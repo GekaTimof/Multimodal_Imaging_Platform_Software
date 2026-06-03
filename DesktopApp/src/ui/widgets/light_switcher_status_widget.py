@@ -9,6 +9,7 @@ from PyQt5.QtWidgets import (QFrame, QHBoxLayout, QLabel, QPushButton,
 from PyQt5.QtCore import Qt, pyqtSlot, QTimer
 from PyQt5.QtGui import QFont, QColor, QPalette
 import logging
+from config import interface_config
 from models.interface_text import Interface_text
 
 logger = logging.getLogger(__name__)
@@ -23,6 +24,14 @@ class LightSwitcherStatusWidget(QFrame):
         self.setup_ui()
         self.setup_timer()
         
+    def _error_font_size(self) -> int:
+        """Return error/status font size from config."""
+        return interface_config.get('ui_scaling.error_font_size', 12)
+
+    def _btn_font_size(self) -> int:
+        """Return button font size (1px less than error font)."""
+        return max(8, self._error_font_size() - 1)
+
     def setup_ui(self):
         """Настроить интерфейс виджета"""
         # Основной layout
@@ -30,24 +39,26 @@ class LightSwitcherStatusWidget(QFrame):
         layout.setContentsMargins(10, 5, 10, 5)
         layout.setSpacing(10)
         
+        fs = self._error_font_size()
+        bfs = self._btn_font_size()
         # Стиль виджета
         self.setFrameStyle(QFrame.StyledPanel)
-        self.setStyleSheet("""
-            QFrame {
+        self.setStyleSheet(f"""
+            QFrame {{
                 background-color: #f0f0f0;
                 border: 1px solid #cccccc;
                 border-radius: 5px;
                 margin: 2px;
-            }
-            QLabel {
-                font-size: 12px;
+            }}
+            QLabel {{
+                font-size: {fs}px;
                 font-weight: bold;
-            }
-            QPushButton {
-                font-size: 11px;
+            }}
+            QPushButton {{
+                font-size: {bfs}px;
                 padding: 4px 8px;
                 border-radius: 3px;
-            }
+            }}
         """)
         
         # Иконка статуса
@@ -104,23 +115,25 @@ class LightSwitcherStatusWidget(QFrame):
             self.reset_button.setVisible(False)
             
             # Зеленый фон для успеха
-            self.setStyleSheet("""
-                QFrame {
+            fs = self._error_font_size()
+            bfs = self._btn_font_size()
+            self.setStyleSheet(f"""
+                QFrame {{
                     background-color: #e8f5e8;
                     border: 1px solid #4caf50;
                     border-radius: 5px;
                     margin: 2px;
-                }
-                QLabel {
-                    font-size: 12px;
+                }}
+                QLabel {{
+                    font-size: {fs}px;
                     font-weight: bold;
                     color: #2e7d32;
-                }
-                QPushButton {
-                    font-size: 11px;
+                }}
+                QPushButton {{
+                    font-size: {bfs}px;
                     padding: 4px 8px;
                     border-radius: 3px;
-                }
+                }}
             """)
             
             # Автоматически скрыть через 5 секунд
@@ -134,29 +147,31 @@ class LightSwitcherStatusWidget(QFrame):
             self.reset_button.setVisible(False)
             
             # Красный фон для ошибки
-            self.setStyleSheet("""
-                QFrame {
+            fs = self._error_font_size()
+            bfs = self._btn_font_size()
+            self.setStyleSheet(f"""
+                QFrame {{
                     background-color: #ffebee;
                     border: 1px solid #f44336;
                     border-radius: 5px;
                     margin: 2px;
-                }
-                QLabel {
-                    font-size: 12px;
+                }}
+                QLabel {{
+                    font-size: {fs}px;
                     font-weight: bold;
                     color: #c62828;
-                }
-                QPushButton {
-                    font-size: 11px;
+                }}
+                QPushButton {{
+                    font-size: {bfs}px;
                     padding: 4px 8px;
                     border-radius: 3px;
                     background-color: #f44336;
                     color: white;
                     border: none;
-                }
-                QPushButton:hover {
+                }}
+                QPushButton:hover {{
                     background-color: #d32f2f;
-                }
+                }}
             """)
             
             # Не скрывать автоматически - нужно действие от пользователя
@@ -180,23 +195,25 @@ class LightSwitcherStatusWidget(QFrame):
         self.reset_button.setVisible(False)
         
         # Синий фон для ожидания
-        self.setStyleSheet("""
-            QFrame {
+        fs = self._error_font_size()
+        bfs = self._btn_font_size()
+        self.setStyleSheet(f"""
+            QFrame {{
                 background-color: #e3f2fd;
                 border: 1px solid #2196f3;
                 border-radius: 5px;
                 margin: 2px;
-            }
-            QLabel {
-                font-size: 12px;
+            }}
+            QLabel {{
+                font-size: {fs}px;
                 font-weight: bold;
                 color: #1976d2;
-            }
-            QPushButton {
-                font-size: 11px;
+            }}
+            QPushButton {{
+                font-size: {bfs}px;
                 padding: 4px 8px;
                 border-radius: 3px;
-            }
+            }}
         """)
         
         # Отменяем таймер скрытия - показываем пока идет переключение
@@ -222,23 +239,25 @@ class LightSwitcherStatusWidget(QFrame):
             self.reset_button.setVisible(False)
             
             # Зеленый фон
-            self.setStyleSheet("""
-                QFrame {
+            fs = self._error_font_size()
+            bfs = self._btn_font_size()
+            self.setStyleSheet(f"""
+                QFrame {{
                     background-color: #e8f5e8;
                     border: 1px solid #4caf50;
                     border-radius: 5px;
                     margin: 2px;
-                }
-                QLabel {
-                    font-size: 12px;
+                }}
+                QLabel {{
+                    font-size: {fs}px;
                     font-weight: bold;
                     color: #2e7d32;
-                }
-                QPushButton {
-                    font-size: 11px;
+                }}
+                QPushButton {{
+                    font-size: {bfs}px;
                     padding: 4px 8px;
                     border-radius: 3px;
-                }
+                }}
             """)
             
             # Автоматически скрыть через 3 секунды
@@ -252,29 +271,31 @@ class LightSwitcherStatusWidget(QFrame):
             self.reset_button.setVisible(True)
             
             # Желтый фон для предупреждения
-            self.setStyleSheet("""
-                QFrame {
+            fs = self._error_font_size()
+            bfs = self._btn_font_size()
+            self.setStyleSheet(f"""
+                QFrame {{
                     background-color: #fff8e1;
                     border: 1px solid #ff9800;
                     border-radius: 5px;
                     margin: 2px;
-                }
-                QLabel {
-                    font-size: 12px;
+                }}
+                QLabel {{
+                    font-size: {fs}px;
                     font-weight: bold;
                     color: #f57c00;
-                }
-                QPushButton {
-                    font-size: 11px;
+                }}
+                QPushButton {{
+                    font-size: {bfs}px;
                     padding: 4px 8px;
                     border-radius: 3px;
                     background-color: #ff9800;
                     color: white;
                     border: none;
-                }
-                QPushButton:hover {
+                }}
+                QPushButton:hover {{
                     background-color: #f57c00;
-                }
+                }}
             """)
             
             # Не скрывать автоматически - нужно действие от пользователя
@@ -294,29 +315,31 @@ class LightSwitcherStatusWidget(QFrame):
         self.reset_button.setVisible(False)
         
         # Красный фон
-        self.setStyleSheet("""
-            QFrame {
+        fs = self._error_font_size()
+        bfs = self._btn_font_size()
+        self.setStyleSheet(f"""
+            QFrame {{
                 background-color: #ffebee;
                 border: 1px solid #f44336;
                 border-radius: 5px;
                 margin: 2px;
-            }
-            QLabel {
-                font-size: 12px;
+            }}
+            QLabel {{
+                font-size: {fs}px;
                 font-weight: bold;
                 color: #c62828;
-            }
-            QPushButton {
-                font-size: 11px;
+            }}
+            QPushButton {{
+                font-size: {bfs}px;
                 padding: 4px 8px;
                 border-radius: 3px;
                 background-color: #f44336;
                 color: white;
                 border: none;
-            }
-            QPushButton:hover {
+            }}
+            QPushButton:hover {{
                 background-color: #d32f2f;
-            }
+            }}
         """)
         
     def retry_connection(self):
@@ -349,6 +372,18 @@ class LightSwitcherStatusWidget(QFrame):
             logger.error(f"Error resetting error: {e}")
             self.show_error(self.interface_text.light_switcher_error().format(error_message=f"Reset error: {str(e)}"))
             
+    def refresh_style(self):
+        """Re-apply the current stylesheet with updated font sizes from config."""
+        css = self.styleSheet()
+        if not css:
+            return
+        import re
+        fs = self._error_font_size()
+        bfs = self._btn_font_size()
+        css = re.sub(r'(QLabel\s*\{[^}]*font-size:\s*)\d+(px)', rf'\g<1>{fs}\2', css)
+        css = re.sub(r'(QPushButton\s*\{[^}]*font-size:\s*)\d+(px)', rf'\g<1>{bfs}\2', css)
+        self.setStyleSheet(css)
+
     def hide_widget(self):
         """Скрыть виджет"""
         self.setVisible(False)
@@ -362,21 +397,23 @@ class LightSwitcherStatusWidget(QFrame):
         self.reset_button.setVisible(False)
         
         # Нейтральный фон
-        self.setStyleSheet("""
-            QFrame {
+        fs = self._error_font_size()
+        bfs = self._btn_font_size()
+        self.setStyleSheet(f"""
+            QFrame {{
                 background-color: #f0f0f0;
                 border: 1px solid #cccccc;
                 border-radius: 5px;
                 margin: 2px;
-            }
-            QLabel {
-                font-size: 12px;
+            }}
+            QLabel {{
+                font-size: {fs}px;
                 font-weight: bold;
                 color: #666666;
-            }
-            QPushButton {
-                font-size: 11px;
+            }}
+            QPushButton {{
+                font-size: {bfs}px;
                 padding: 4px 8px;
                 border-radius: 3px;
-            }
+            }}
         """)

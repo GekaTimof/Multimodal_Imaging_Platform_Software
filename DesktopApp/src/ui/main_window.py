@@ -251,6 +251,9 @@ class MainWindow(QMainWindow):
             # Force all existing widgets to pick up the new font
             for widget in app.allWidgets():
                 widget.setFont(font)
+            # Refresh error/status font size in the status widget
+            if hasattr(self, 'light_switcher_status'):
+                self.light_switcher_status.refresh_style()
         except Exception as e:
             logger.error(f"Error applying font: {e}")
 
@@ -278,7 +281,7 @@ class MainWindow(QMainWindow):
     def _on_startup_mode_result(self, success: bool, message: str):
         """Called from the main thread with the initial mode-switch result."""
         if not success:
-            self.light_switcher_status.show_error(f"Ошибка при начальном переключении: {message}")
+            self.light_switcher_status.show_error(f"{self.interface_text.error_title()}: {message}")
 
     def _on_startup_finished(self):
         """Hide the startup overlay once all background work is done."""
@@ -321,10 +324,6 @@ class MainWindow(QMainWindow):
         except Exception as e:
             logger.error(f"Error setting up light switcher connections: {e}")
     
-    def check_initial_connection(self):
-        """Проверить начальное подключение переключателя (deprecated — use _start_startup_worker)"""
-        pass
-
     def handle_tab_change(self, index):
         """
         Handle tab switching by activating appropriate device mode
@@ -353,7 +352,7 @@ class MainWindow(QMainWindow):
                 success, message = switch_to_spectrometer_mode()
                 if not success:
                     # Показать ошибку, но продолжить переключение вкладки
-                    self.light_switcher_status.show_error(f"Ошибка запуска переключения: {message}")
+                    self.light_switcher_status.show_error(f"{self.interface_text.error_title()}: {message}")
                 
                 # Switch device settings to Spectrometer
                 self.spectrometer_tab.device_settings_widget.switch_to_settings(self.interface_text.spectrometer())
@@ -362,8 +361,7 @@ class MainWindow(QMainWindow):
                 # Switch to camera mode
                 success, message = switch_to_camera_mode()
                 if not success:
-                    # Показать ошибку, но продолжить переключение вкладки
-                    self.light_switcher_status.show_error(f"Ошибка запуска переключения: {message}")
+                    self.light_switcher_status.show_error(f"{self.interface_text.error_title()}: {message}")
                 
                 self.camera_tab.device_settings_widget.switch_to_settings(self.interface_text.camera())
                 
@@ -372,7 +370,7 @@ class MainWindow(QMainWindow):
                 success, message = switch_to_Acquisition_mode()
                 if not success:
                     # Показать ошибку, но продолжить переключение вкладки
-                    self.light_switcher_status.show_error(f"Ошибка запуска переключения: {message}")
+                    self.light_switcher_status.show_error(f"{self.interface_text.error_title()}: {message}")
                 
                 # Switch device settings to Positioner for Acquisition
                 self.Acquisition_tab.device_settings_widget.switch_to_settings(self.interface_text.positioner())
@@ -382,13 +380,9 @@ class MainWindow(QMainWindow):
             
         except Exception as e:
             logger.error(f"Error handling tab change: {e}")
-            self.light_switcher_status.show_error(f"Ошибка при смене вкладки: {str(e)}")
+            self.light_switcher_status.show_error(f"{self.interface_text.error_title()}: {str(e)}")
             # Still update the index even on error
             self._previous_tab_index = index
-    
-    def switch_to_initial_mode(self):
-        """Переключиться в режим соответствующий начальной вкладке (deprecated — done by _StartupWorker)"""
-        pass
     
     def resizeEvent(self, event):
         """Обработка изменения размера окна для обновления позиции центрированной плашки"""

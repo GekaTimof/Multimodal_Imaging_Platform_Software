@@ -199,7 +199,7 @@ class SpectrometerSettingsWidget(QWidget):
     def _on_capture_dark(self):
         """Handle capture dark spectrum button."""
         self.set_dark_requested.emit()
-        self.status_label.setText("Capturing dark spectrum...")
+        self.status_label.setText(self.interface_text.capturing_dark() if self.interface_text else "Capturing dark spectrum...")
         self.status_label.setStyleSheet("QLabel { color: blue; font-weight: bold; }")
 
     def _on_clear_dark(self):
@@ -207,7 +207,7 @@ class SpectrometerSettingsWidget(QWidget):
         self.clear_dark_requested.emit()
         self.current_settings['UseDarkSpectrum'] = False
         self._update_dark_status()
-        self.status_label.setText("Dark spectrum cleared")
+        self.status_label.setText(self.interface_text.dark_spectrum_cleared() if self.interface_text else "Dark spectrum cleared")
         self.status_label.setStyleSheet("QLabel { color: green; font-weight: bold; }")
 
     def _apply_settings(self):

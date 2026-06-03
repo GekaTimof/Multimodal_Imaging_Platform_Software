@@ -48,6 +48,7 @@ class InterfaceConfig:
         "ui_scaling": {
             "font_family": "DejaVu Sans",
             "font_point_size": 11,
+            "error_font_size": 12,
             "status_bar_height": 52,
             "side_panel_min_width": 320
         }

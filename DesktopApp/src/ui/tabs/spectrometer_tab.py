@@ -153,8 +153,6 @@ class SpectrometerTab(QWidget):
         spec_settings.integral_time_changed.connect(
             self.spectrometer_widget.spectrometer_service.set_integral_time
         )
-        spec_settings.set_dark_requested.connect(self._set_dark_spectrum)
-        spec_settings.clear_dark_requested.connect(self._clear_dark_spectrum)
         spec_settings.settings_changed.connect(self._on_settings_changed)
 
         # Forward errors from service
@@ -183,9 +181,8 @@ class SpectrometerTab(QWidget):
 
     def stop_spectrometer(self):
         """Stop spectrum streaming."""
-        self.status_label.setText("Stopping spectrometer...")
         self.spectrometer_widget.stop_spectrometer()
-        self.status_label.setText("Spectrometer stopped")
+        self.status_label.setText(self.interface_text.stop_spectrometer())
 
         self.start_button.setEnabled(True)
         self.stop_button.setEnabled(False)
@@ -198,10 +195,10 @@ class SpectrometerTab(QWidget):
         # Update connection status in settings widget
         spec_settings = self.device_settings_widget.spectrometer_tab
         if "started" in message.lower():
-            spec_settings.status_label.setText("Connected")
+            spec_settings.status_label.setText(self.interface_text.status_connected())
             spec_settings.status_label.setStyleSheet("color: green; font-weight: bold;")
         elif "stopped" in message.lower() or "failed" in message.lower() or "error" in message.lower():
-            spec_settings.status_label.setText("Disconnected")
+            spec_settings.status_label.setText(self.interface_text.status_disconnected())
             spec_settings.status_label.setStyleSheet("color: red; font-weight: bold;")
 
     # ------------------------------------------------------------------
@@ -212,16 +209,16 @@ class SpectrometerTab(QWidget):
         directory = self.device_settings_widget.file_tab.get_spectrum_save_directory()
         if not directory:
             QMessageBox.warning(self, self.interface_text.warning_title(),
-                                "Please set a spectrum save directory in File Settings")
+                                self.interface_text.no_save_directory())
             return
         self.progress_bar.setVisible(True)
         self.progress_bar.setValue(0)
         svc = self.spectrometer_widget.spectrometer_service
         if svc.save_spectrum(directory):
             self.progress_bar.setValue(100)
-            QMessageBox.information(self, "Success", "Spectrum saved successfully")
+            QMessageBox.information(self, self.interface_text.success_title(), self.interface_text.spectrum_saved())
         else:
-            QMessageBox.warning(self, "Error", "Failed to save spectrum")
+            QMessageBox.warning(self, self.interface_text.error_title(), self.interface_text.spectrum_save_failed())
         self.progress_bar.setVisible(False)
 
     def _load_spectrum_file(self):
@@ -246,33 +243,15 @@ class SpectrometerTab(QWidget):
                     item.setForeground(pg.mkColor(color))
                     self.spectrum_list.addItem(item)
                 else:
-                    QMessageBox.warning(self, "Error", f"Invalid spectrum file format: {file_path}")
+                    QMessageBox.warning(self, self.interface_text.error_title(), self.interface_text.invalid_spectrum_format().format(file_path))
             except Exception as e:
-                QMessageBox.warning(self, "Error", f"Failed to load file {file_path}: {e}")
+                QMessageBox.warning(self, self.interface_text.error_title(), self.interface_text.file_load_failed().format(e))
 
     def _remove_selected_spectrum(self):
         for item in self.spectrum_list.selectedItems():
             file_path = item.data(Qt.UserRole)
             self.spectrometer_widget.remove_spectrum_curve(file_path)
             self.spectrum_list.takeItem(self.spectrum_list.row(item))
-
-    # ------------------------------------------------------------------
-    # Spectrometer device controls
-    # ------------------------------------------------------------------
-
-    def _set_dark_spectrum(self):
-        svc = self.spectrometer_widget.spectrometer_service
-        if svc.set_dark_spectrum():
-            QMessageBox.information(self, "Success", "Dark spectrum set successfully")
-        else:
-            QMessageBox.warning(self, "Error", "Failed to set dark spectrum")
-
-    def _clear_dark_spectrum(self):
-        svc = self.spectrometer_widget.spectrometer_service
-        if svc.clear_dark_spectrum():
-            QMessageBox.information(self, "Success", "Dark spectrum cleared successfully")
-        else:
-            QMessageBox.warning(self, "Error", "Failed to clear dark spectrum")
 
     def _on_settings_changed(self, settings: dict):
         """Handle settings changes from spectrometer settings widget."""
@@ -316,7 +295,7 @@ class SpectrometerTab(QWidget):
         """Capture dark spectrum and show status in the upper panel."""
         spec_settings = self.device_settings_widget.spectrometer_tab
         spec_settings.set_dark_requested.emit()
-        self.status_label.setText("Capturing dark spectrum...")
+        self.status_label.setText(self.interface_text.capturing_dark())
         self.status_label.setStyleSheet("QLabel { color: blue; font-weight: bold; }")
 
     def _clear_dark_spectrum(self):
@@ -325,7 +304,7 @@ class SpectrometerTab(QWidget):
         spec_settings.clear_dark_requested.emit()
         spec_settings.current_settings['UseDarkSpectrum'] = False
         spec_settings._update_dark_status()
-        self.status_label.setText("Dark spectrum cleared")
+        self.status_label.setText(self.interface_text.dark_spectrum_cleared())
         self.status_label.setStyleSheet("QLabel { color: green; font-weight: bold; }")
 
     # ------------------------------------------------------------------
