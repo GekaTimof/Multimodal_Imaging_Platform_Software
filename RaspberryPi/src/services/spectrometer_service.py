@@ -101,14 +101,14 @@ class SpectrometerService:
                 }
             except Exception as e:
                 logger.warning(f"Could not read device info: {e}")
-            # Atomically swap in the new connection
-            with self._spectrometer_lock:
-                self.spectrometer = new_spec
-                self._device_info = device_info
-                self._capture_error_count = 0
-                with self.spectrum_lock:
-                    self.current_wavelength = new_spec.return_wavelength_range().copy()
-                self.use_real_spectrometer = True
+            # Swap in the new connection (no _spectrometer_lock here to avoid
+            # deadlock with _capture_loop which holds _spectrometer_lock during I/O)
+            self._device_info = device_info
+            self._capture_error_count = 0
+            with self.spectrum_lock:
+                self.current_wavelength = new_spec.return_wavelength_range().copy()
+            self.spectrometer = new_spec
+            self.use_real_spectrometer = True
             logger.info("Spectrometer initialized successfully")
         except Exception as e:
             logger.error(f"Failed to initialize spectrometer: {e}")
@@ -176,24 +176,26 @@ class SpectrometerService:
         while self.running:
             if self.use_real_spectrometer and self.spectrometer:
                 try:
-                    with self._spectrometer_lock:
-                        spec = self.spectrometer
+                    spec = self.spectrometer
                     if spec is None:
                         raise RuntimeError("Spectrometer handle is None")
-                    # Update integral time if changed
-                    if spec.get_integral_time() != self.integral_time:
-                        spec.set_integral_time(self.integral_time)
-                    
-                    # Get new spectrum data
-                    spec.retrieve_and_set_current_spectrum()
-                    
-                    with self.spectrum_lock:
-                        self.current_spectrum = spec.return_current_spectrum().copy()
-                        self.current_real_spectrum = spec.return_real_current_spectrum().copy()
-                        
-                        # Check for overillumination
+                    # Protect pexpect I/O with _spectrometer_lock so dark capture
+                    # and capture loop never interleave on the same process
+                    with self._spectrometer_lock:
+                        # Update integral time if changed
+                        if spec.get_integral_time() != self.integral_time:
+                            spec.set_integral_time(self.integral_time)
+                        # Get new spectrum data
+                        spec.retrieve_and_set_current_spectrum()
+                        raw_spectrum = spec.return_current_spectrum().copy()
+                        real_spectrum = spec.return_real_current_spectrum().copy()
                         spec.check_overillumination()
-                        self.overillumination = spec.return_overillumination()
+                        overillumination = spec.return_overillumination()
+
+                    with self.spectrum_lock:
+                        self.current_spectrum = raw_spectrum
+                        self.current_real_spectrum = real_spectrum
+                        self.overillumination = overillumination
                         
                 except Exception as e:
                     self._capture_error_count += 1
@@ -257,26 +259,30 @@ class SpectrometerService:
             )
     
     def set_dark_spectrum(self) -> bool:
-        """Capture and set dark spectrum. Saves to standard location."""
-        if not self.use_real_spectrometer or not self.spectrometer:
-            logger.warning("Cannot set dark spectrum: spectrometer not available")
-            return False
+        """Capture dark spectrum by snapshotting the current spectrum in memory.
+        The user should block all light before pressing the button.
+        No additional OptoskyDemo command is needed — we reuse the last captured frame."""
+        with self.spectrum_lock:
+            if self.current_spectrum is None or len(self.current_spectrum) == 0:
+                logger.warning("Cannot set dark spectrum: no spectrum data available yet")
+                return False
+            self.dark_spectrum = self.current_spectrum.copy()
 
-        try:
-            with self.spectrum_lock:
-                self.spectrometer.retrieve_and_set_dark_spectrum()
-                self.dark_spectrum = self.spectrometer.return_dark_spectrum().copy()
+        # Propagate dark into the SpectrometerConnection object so its
+        # internal real_current_spectrum is computed correctly on next capture
+        if self.use_real_spectrometer and self.spectrometer:
+            try:
+                with self._spectrometer_lock:
+                    self.spectrometer.dark_spectrum = self.dark_spectrum.copy()
+                    self.spectrometer.sub = True
+            except Exception as e:
+                logger.warning(f"Could not sync dark spectrum to spectrometer object: {e}")
 
-            # Save dark spectrum to standard file location
-            self._save_dark_spectrum_file()
-            # Enable dark spectrum usage
-            self.use_dark_spectrum = True
-            self._save_settings()
-            logger.info("Dark spectrum captured and saved")
-            return True
-        except Exception as e:
-            logger.error(f"Failed to capture dark spectrum: {e}")
-            return False
+        self._save_dark_spectrum_file()
+        self.use_dark_spectrum = True
+        self._save_settings()
+        logger.info(f"Dark spectrum set from current frame (max={self.dark_spectrum.max():.0f})")
+        return True
     
     def clear_dark_spectrum(self):
         """Clear the dark spectrum."""
