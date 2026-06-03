@@ -5,8 +5,6 @@ import tempfile
 import numpy as np
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
-import threading
-
 from src.core.http_utils import ThreadedHTTPServer
 from src.services.spectrometer_service import SpectrometerService
 
@@ -49,6 +47,9 @@ class SpectrumStreamHandler(BaseHTTPRequestHandler):
         """Send spectrometer information as JSON"""
         try:
             info = self.server.spectrometer_service.get_spectrometer_info()
+            # Convert numpy booleans/types to plain Python types for JSON serialization
+            info = {k: bool(v) if isinstance(v, (bool, np.bool_)) else v
+                    for k, v in info.items()}
             response_data = json.dumps(info, indent=2).encode('utf-8')
             
             self.send_response(200)
@@ -243,7 +244,7 @@ class SpectrumStreamServer:
         print(f'Raspberry Pi spectrometer stream available at http://{self.host}:{self.port}/spectrum')
         print(f'Spectrometer info available at http://{self.host}:{self.port}/info')
         print(f'Single spectrum snapshot at http://{self.host}:{self.port}/spectrum/single')
-        print(f'Control endpoints:')
+        print('Control endpoints:')
         print(f'  Set integral time: http://{self.host}:{self.port}/control/set_integral_time?time=100')
         print(f'  Set dark spectrum: http://{self.host}:{self.port}/control/set_dark_spectrum')
         print(f'  Clear dark spectrum: http://{self.host}:{self.port}/control/clear_dark_spectrum')

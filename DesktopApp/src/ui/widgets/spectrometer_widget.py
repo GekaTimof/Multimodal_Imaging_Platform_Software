@@ -33,6 +33,7 @@ class SpectrometerWidget(QWidget):
         self.loaded_spectra = {}
         self.color_counter = 0
         self.start_graph_reset = True
+        self.show_real_spectrum = True  # show dark-corrected spectrum when available
 
         self._init_graph()
 
@@ -97,7 +98,7 @@ class SpectrometerWidget(QWidget):
             return
 
         self.thread = SpectrumThread()
-        self.thread.spectrum_ready.connect(self._update_graph)
+        self.thread.spectrum_ready.connect(self._on_spectrum_ready)
         self.thread.status_ready.connect(self._on_status)
         self.thread.start()
 
@@ -165,15 +166,21 @@ class SpectrometerWidget(QWidget):
     # Internal slots
     # ------------------------------------------------------------------
 
-    def _update_graph(self, x_data, y_data):
+    def _on_spectrum_ready(self, wavelengths: np.ndarray, raw_spectrum: np.ndarray,
+                           real_spectrum: np.ndarray, overillumination: bool):
+        """Handle new spectrum data from SpectrumThread."""
+        y_data = real_spectrum if self.show_real_spectrum else raw_spectrum
+        self._update_graph(wavelengths, y_data, overillumination)
+
+    def _update_graph(self, x_data, y_data, overillumination: bool = False):
         self.curve.setData(x_data, y_data)
-        self._update_overillumination(x_data, y_data)
+        self._update_overillumination(x_data, y_data, overillumination)
         if self.start_graph_reset:
             self.reset_graph_view()
             self.start_graph_reset = False
 
-    def _update_overillumination(self, x_data, y_data):
-        if len(y_data) > 0 and np.max(y_data) > 0.95 * np.iinfo(np.uint16).max:
+    def _update_overillumination(self, x_data, y_data, overillumination: bool = False):
+        if overillumination or (len(y_data) > 0 and np.max(y_data) > 0.95 * np.iinfo(np.uint16).max):
             x_center = np.mean(x_data)
             y_center = (np.min(y_data) + np.max(y_data)) / 2
             self.overillumination_label.setPos(x_center, y_center)

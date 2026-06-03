@@ -420,3 +420,33 @@ class Interface_text():
     def file_load_failed(self) -> str:
         return self.text_json.get("File_Load_Failed", "Failed to load file: {}")
 
+    def reconnect_spectrometer(self) -> str:
+        return self.text_json.get("Reconnect_Spectrometer", "Reconnect Spectrometer")
+
+    def show_real_spectrum(self) -> str:
+        return self.text_json.get("Show_Real_Spectrum", "Show corrected spectrum")
+
+    def applying_settings(self) -> str:
+        return self.text_json.get("Applying_Settings", "Applying settings...")
+
+    def settings_applied(self) -> str:
+        return self.text_json.get("Settings_Applied", "Settings applied")
+
+    def apply_failed(self) -> str:
+        return self.text_json.get("Apply_Failed", "Apply failed: {}")
+
+    def reconnecting(self) -> str:
+        return self.text_json.get("Reconnecting", "Reconnecting...")
+
+    def spectrometer_connected(self) -> str:
+        return self.text_json.get("Spectrometer_Connected", "Spectrometer connected")
+
+    def spectrometer_not_found(self) -> str:
+        return self.text_json.get("Spectrometer_Not_Found", "Spectrometer not found")
+
+    def reconnect_failed(self) -> str:
+        return self.text_json.get("Reconnect_Failed", "Reconnect failed: {}")
+
+    def error_label(self) -> str:
+        return self.text_json.get("Error_Label", "Error: {}")
+

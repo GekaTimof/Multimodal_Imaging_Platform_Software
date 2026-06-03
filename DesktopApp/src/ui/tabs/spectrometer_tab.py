@@ -18,12 +18,13 @@ from PyQt5.QtWidgets import (
 )
 import pyqtgraph as pg
 
-from config.api_config import SPECTRUM_STREAM_URL
+from config.api_config import SPECTRUM_STREAM_URL, ENDPOINTS
 from config import interface_config
 from config.theme_manager import ThemeManager
 from models.interface_text import Interface_text
 from ui.ui_utils import get_relative_margin
 from ui.widgets.device_settings_widget import DeviceSettingsWidget
+from ui.widgets.device_settings_widget.api_client_thread import APIClientThread
 from ui.widgets.spectrometer_widget import SpectrometerWidget
 
 logger = logging.getLogger(__name__)
@@ -38,6 +39,7 @@ class SpectrometerTab(QWidget):
         super().__init__()
         self.interface_text = interface_text
         self._theme_manager = theme_manager
+        self._active_threads = []
 
         # ---- Left: graph widget ----
         self.spectrometer_widget = SpectrometerWidget(interface_text)
@@ -164,6 +166,7 @@ class SpectrometerTab(QWidget):
             self.spectrometer_widget.spectrometer_service.set_integral_time
         )
         spec_settings.settings_changed.connect(self._on_settings_changed)
+        spec_settings.show_real_spectrum_changed.connect(self._on_show_real_spectrum_changed)
 
         # Forward errors from service
         self.spectrometer_widget.spectrometer_service.error_occurred.connect(self._on_error)
@@ -266,7 +269,10 @@ class SpectrometerTab(QWidget):
     def _on_settings_changed(self, settings: dict):
         """Handle settings changes from spectrometer settings widget."""
         logger.info(f"Spectrometer settings changed: {settings}")
-        # Could update status or other UI elements here if needed
+
+    def _on_show_real_spectrum_changed(self, enabled: bool):
+        """Toggle between dark-corrected and raw spectrum display."""
+        self.spectrometer_widget.show_real_spectrum = enabled
 
     # ------------------------------------------------------------------
     # Theme
@@ -302,20 +308,49 @@ class SpectrometerTab(QWidget):
     # ------------------------------------------------------------------
 
     def _set_dark_spectrum(self):
-        """Capture dark spectrum and show status in the upper panel."""
-        spec_settings = self.device_settings_widget.spectrometer_tab
-        spec_settings.set_dark_requested.emit()
+        """Capture dark spectrum asynchronously and show status in the upper panel."""
         self.status_label.setText(self.interface_text.capturing_dark())
         self.status_label.setStyleSheet("QLabel { color: blue; font-weight: bold; }")
+        self.set_dark_button.setEnabled(False)
+        thread = APIClientThread('POST', ENDPOINTS["spectrometer_dark_capture"])
+        thread.response_received.connect(self._on_dark_captured)
+        thread.finished.connect(lambda: self._cleanup_thread(thread))
+        self._active_threads.append(thread)
+        thread.start()
+
+    def _on_dark_captured(self, success: bool, message: str, data: dict):
+        """Handle dark spectrum capture response."""
+        spec_settings = self.device_settings_widget.spectrometer_tab
+        self.set_dark_button.setEnabled(True)
+        if success:
+            self.status_label.setText(self.interface_text.capturing_dark() + " — OK")
+            self.status_label.setStyleSheet("QLabel { color: green; font-weight: bold; }")
+            spec_settings.current_settings['UseDarkSpectrum'] = True
+        else:
+            self.status_label.setText(f"Failed to capture dark spectrum: {message}")
+            self.status_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
+        spec_settings._update_dark_status()
 
     def _clear_dark_spectrum(self):
-        """Clear dark spectrum and show status in the upper panel."""
+        """Clear dark spectrum asynchronously and show status in the upper panel."""
+        thread = APIClientThread('POST', ENDPOINTS["spectrometer_dark_clear"])
+        thread.response_received.connect(self._on_dark_cleared)
+        thread.finished.connect(lambda: self._cleanup_thread(thread))
+        self._active_threads.append(thread)
+        thread.start()
+
+    def _on_dark_cleared(self, success: bool, message: str, data: dict):
+        """Handle dark spectrum clear response."""
         spec_settings = self.device_settings_widget.spectrometer_tab
-        spec_settings.clear_dark_requested.emit()
         spec_settings.current_settings['UseDarkSpectrum'] = False
         spec_settings._update_dark_status()
         self.status_label.setText(self.interface_text.dark_spectrum_cleared())
         self.status_label.setStyleSheet("QLabel { color: green; font-weight: bold; }")
+
+    def _cleanup_thread(self, thread):
+        """Remove finished thread from tracking list."""
+        if thread in self._active_threads:
+            self._active_threads.remove(thread)
 
     # ------------------------------------------------------------------
     # Language
@@ -336,6 +371,11 @@ class SpectrometerTab(QWidget):
 
     def closeEvent(self, event):
         """Handle tab close event."""
+        for thread in self._active_threads:
+            if thread.isRunning():
+                thread.terminate()
+                thread.wait(1000)
+        self._active_threads.clear()
         if hasattr(self, 'spectrometer_widget'):
             self.spectrometer_widget.closeEvent(event)
         super().closeEvent(event)

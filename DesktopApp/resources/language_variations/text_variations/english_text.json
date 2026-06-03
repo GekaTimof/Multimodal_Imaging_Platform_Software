@@ -112,5 +112,15 @@
     "Spectrum_Saved": "Spectrum saved successfully",
     "Spectrum_Save_Failed": "Failed to save spectrum",
     "Invalid_Spectrum_Format": "Invalid spectrum file format: {}",
-    "File_Load_Failed": "Failed to load file: {}"
+    "File_Load_Failed": "Failed to load file: {}",
+    "Reconnect_Spectrometer": "Reconnect Spectrometer",
+    "Show_Real_Spectrum": "Show corrected spectrum",
+    "Applying_Settings": "Applying settings...",
+    "Settings_Applied": "Settings applied",
+    "Apply_Failed": "Apply failed: {}",
+    "Reconnecting": "Reconnecting...",
+    "Spectrometer_Connected": "Spectrometer connected",
+    "Spectrometer_Not_Found": "Spectrometer not found",
+    "Reconnect_Failed": "Reconnect failed: {}",
+    "Error_Label": "Error: {}"
 }

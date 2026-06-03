@@ -29,6 +29,8 @@ class SpectrometerSettingsWidget(QWidget):
     set_dark_requested = pyqtSignal()
     clear_dark_requested = pyqtSignal()
     settings_changed = pyqtSignal(dict)  # settings dict
+    reconnect_requested = pyqtSignal()
+    show_real_spectrum_changed = pyqtSignal(bool)
 
     def __init__(self, interface_text=None, spectrometer_service=None):
         super().__init__()
@@ -131,6 +133,30 @@ class SpectrometerSettingsWidget(QWidget):
 
         layout.addLayout(button_row_layout)
 
+        # Dark spectrum status row
+        dark_status_row = QHBoxLayout()
+        self.dark_status_label = QLabel(SettingsWidgetStrings.NO_DARK_SPECTRUM)
+        self.dark_status_label.setStyleSheet("QLabel { color: gray; }")
+        dark_status_row.addWidget(self.dark_status_label)
+        dark_status_row.addStretch()
+        layout.addLayout(dark_status_row)
+
+        # Show real spectrum toggle
+        self.show_real_spectrum_checkbox = QCheckBox(
+            self.interface_text.show_real_spectrum() if self.interface_text else "Show corrected spectrum"
+        )
+        self.show_real_spectrum_checkbox.setChecked(True)
+        self.show_real_spectrum_checkbox.stateChanged.connect(self._on_show_real_spectrum_changed)
+        layout.addWidget(self.show_real_spectrum_checkbox)
+
+        # Reconnect button
+        self.btn_reconnect = QPushButton(
+            self.interface_text.reconnect_spectrometer() if self.interface_text else "Reconnect Spectrometer"
+        )
+        self.btn_reconnect.setToolTip("Reinitialize spectrometer connection (hot-plug)")
+        self.btn_reconnect.clicked.connect(self._on_reconnect)
+        layout.addWidget(self.btn_reconnect)
+
         # Status label (same style as camera)
         self.status_label = QLabel(SettingsWidgetStrings.READY)
         self.status_label.setStyleSheet("QLabel { color: green; font-weight: bold; }")
@@ -172,7 +198,8 @@ class SpectrometerSettingsWidget(QWidget):
 
     def _on_error(self, error_msg):
         """Handle error from service."""
-        self.status_label.setText(f"Error: {error_msg}")
+        tmpl = self.interface_text.error_label() if self.interface_text else "Error: {}"
+        self.status_label.setText(tmpl.format(error_msg))
         self.status_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
 
     def _on_capture_dark(self):
@@ -191,7 +218,7 @@ class SpectrometerSettingsWidget(QWidget):
 
     def _apply_settings(self):
         """Apply all settings to spectrometer immediately via API."""
-        self.status_label.setText("Applying settings...")
+        self.status_label.setText(self.interface_text.applying_settings() if self.interface_text else "Applying settings...")
         self.status_label.setStyleSheet("QLabel { color: blue; font-weight: bold; }")
         self._on_settings_changed()
 
@@ -220,12 +247,13 @@ class SpectrometerSettingsWidget(QWidget):
     def _on_settings_applied(self, success: bool, message: str, data: dict):
         """Handle apply settings response."""
         if success:
-            self.status_label.setText("Settings applied")
+            self.status_label.setText(self.interface_text.settings_applied() if self.interface_text else "Settings applied")
             self.status_label.setStyleSheet("QLabel { color: green; font-weight: bold; }")
             if self.spectrometer_service:
                 self.spectrometer_service.settings_updated.emit(self.current_settings)
         else:
-            self.status_label.setText(f"Apply failed: {message}")
+            tmpl = self.interface_text.apply_failed() if self.interface_text else "Apply failed: {}"
+            self.status_label.setText(tmpl.format(message))
             self.status_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
 
     def _cleanup_thread(self, thread: QThread) -> None:
@@ -314,9 +342,61 @@ class SpectrometerSettingsWidget(QWidget):
         if 'OverilluminationThreshold' in self.current_settings:
             self.overillumination_input.setValue(self.current_settings['OverilluminationThreshold'])
 
+    def _on_show_real_spectrum_changed(self, state):
+        """Handle show real spectrum checkbox toggle."""
+        enabled = bool(state)
+        self.show_real_spectrum_changed.emit(enabled)
+
+    def _on_reconnect(self):
+        """Request spectrometer reconnect via API."""
+        self.status_label.setText(self.interface_text.reconnecting() if self.interface_text else "Reconnecting...")
+        self.status_label.setStyleSheet("QLabel { color: blue; font-weight: bold; }")
+        self.reconnect_requested.emit()
+        thread = APIClientThread('POST', ENDPOINTS["spectrometer_reconnect"])
+        thread.response_received.connect(self._on_reconnect_response)
+        thread.finished.connect(lambda: self._cleanup_thread(thread))
+        self.active_threads.append(thread)
+        thread.start()
+
+    def _on_reconnect_response(self, success: bool, message: str, data: dict):
+        """Handle reconnect response."""
+        connected = data.get('data', {}).get('connected', False) if data else False
+        if connected:
+            self.status_label.setText(self.interface_text.spectrometer_connected() if self.interface_text else "Spectrometer connected")
+            self.status_label.setStyleSheet("QLabel { color: green; font-weight: bold; }")
+        else:
+            if success:
+                txt = self.interface_text.spectrometer_not_found() if self.interface_text else "Spectrometer not found"
+            else:
+                tmpl = self.interface_text.reconnect_failed() if self.interface_text else "Reconnect failed: {}"
+                txt = tmpl.format(message)
+            self.status_label.setText(txt)
+            self.status_label.setStyleSheet("QLabel { color: orange; font-weight: bold; }")
+        self._reload_dark_status()
+
+    def _reload_dark_status(self):
+        """Reload dark spectrum status from server."""
+        thread = APIClientThread('GET', ENDPOINTS["spectrometer_info"])
+        thread.response_received.connect(self._on_info_loaded)
+        thread.finished.connect(lambda: self._cleanup_thread(thread))
+        self.active_threads.append(thread)
+        thread.start()
+
+    def _on_info_loaded(self, success: bool, message: str, data: dict):
+        """Update dark spectrum status label from spectrometer info."""
+        if success and data:
+            dark_loaded = data.get('dark_spectrum_loaded', False)
+            use_dark = data.get('use_dark_spectrum', False)
+            if dark_loaded and use_dark:
+                self.dark_status_label.setText(SettingsWidgetStrings.DARK_SPECTRUM_LOADED)
+                self.dark_status_label.setStyleSheet("QLabel { color: green; }")
+            else:
+                self.dark_status_label.setText(SettingsWidgetStrings.NO_DARK_SPECTRUM)
+                self.dark_status_label.setStyleSheet("QLabel { color: gray; }")
+
     def _update_dark_status(self):
-        """No-op: dark spectrum status display moved to spectrometer tab."""
-        pass
+        """Refresh dark spectrum status from server."""
+        self._reload_dark_status()
 
     def closeEvent(self, event):
         """Clean up threads on close."""

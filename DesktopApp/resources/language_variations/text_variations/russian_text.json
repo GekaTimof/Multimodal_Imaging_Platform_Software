@@ -112,5 +112,15 @@
     "Spectrum_Saved": "Спектр сохранён",
     "Spectrum_Save_Failed": "Не удалось сохранить спектр",
     "Invalid_Spectrum_Format": "Неверный формат файла спектра: {}",
-    "File_Load_Failed": "Не удалось загрузить файл: {}"
+    "File_Load_Failed": "Не удалось загрузить файл: {}",
+    "Reconnect_Spectrometer": "Переподключить спектрометр",
+    "Show_Real_Spectrum": "Показывать скорректированный спектр",
+    "Applying_Settings": "Применение настроек...",
+    "Settings_Applied": "Настройки применены",
+    "Apply_Failed": "Ошибка применения: {}",
+    "Reconnecting": "Переподключение...",
+    "Spectrometer_Connected": "Спектрометр подключён",
+    "Spectrometer_Not_Found": "Спектрометр не найден",
+    "Reconnect_Failed": "Ошибка переподключения: {}",
+    "Error_Label": "Ошибка: {}"
 }

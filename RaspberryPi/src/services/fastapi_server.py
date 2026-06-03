@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import json as _json
 import subprocess as _sp
@@ -865,7 +866,8 @@ async def load_dark_spectrum():
 async def reconnect_spectrometer():
     """Reinitialize spectrometer connection (useful after hot-plug or startup failure)."""
     try:
-        success = spectrometer_service.reinitialize()
+        loop = asyncio.get_event_loop()
+        success = await loop.run_in_executor(None, spectrometer_service.reinitialize)
         info = spectrometer_service.get_spectrometer_info()
         if success:
             return APIResponse(

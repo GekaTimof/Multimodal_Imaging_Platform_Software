@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 class SpectrumThread(QThread):
     """Thread that reads an SSE spectrum stream and emits parsed data."""
 
-    spectrum_ready = pyqtSignal(np.ndarray, np.ndarray)  # wavelengths, intensities
+    spectrum_ready = pyqtSignal(np.ndarray, np.ndarray, np.ndarray, bool)  # wavelengths, raw_spectrum, real_spectrum, overillumination
     status_ready = pyqtSignal(str)
 
     def __init__(self, stream_url: str = SPECTRUM_STREAM_URL):
@@ -69,9 +69,12 @@ class SpectrumThread(QThread):
                 try:
                     data = json.loads(json_str)
                     wavelengths = np.array(data.get("wavelength", []))
-                    intensities = np.array(data.get("spectrum", []))
-                    if len(wavelengths) > 0 and len(intensities) > 0:
-                        self.spectrum_ready.emit(wavelengths, intensities)
+                    raw_spectrum = np.array(data.get("spectrum", []))
+                    real_spectrum_raw = data.get("real_spectrum", [])
+                    real_spectrum = np.array(real_spectrum_raw) if real_spectrum_raw else raw_spectrum.copy()
+                    overillumination = bool(data.get("overillumination", False))
+                    if len(wavelengths) > 0 and len(raw_spectrum) > 0:
+                        self.spectrum_ready.emit(wavelengths, raw_spectrum, real_spectrum, overillumination)
                 except (json.JSONDecodeError, ValueError) as e:
                     logger.warning(f"Failed to parse spectrum event: {e}")
 

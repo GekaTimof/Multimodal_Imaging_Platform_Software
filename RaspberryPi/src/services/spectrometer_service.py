@@ -4,7 +4,6 @@ import numpy as np
 import os
 import sys
 import logging
-import json
 from typing import Optional, Dict, Any, Tuple
 from datetime import datetime
 
@@ -82,6 +81,9 @@ class SpectrometerService:
             self.spectrometer = SpectrometerConnection()
             self.spectrometer.open_spectrometer()
             self.spectrometer.retrieve_and_set_wavelength_range()
+            # Cache wavelength range immediately after retrieval
+            with self.spectrum_lock:
+                self.current_wavelength = self.spectrometer.return_wavelength_range().copy()
             self._capture_error_count = 0
             self.use_real_spectrometer = True
             logger.info("Spectrometer initialized successfully")
@@ -170,7 +172,6 @@ class SpectrometerService:
                     self.spectrometer.retrieve_and_set_current_spectrum()
                     
                     with self.spectrum_lock:
-                        self.current_wavelength = self.spectrometer.return_wavelength_range().copy()
                         self.current_spectrum = self.spectrometer.return_current_spectrum().copy()
                         self.current_real_spectrum = self.spectrometer.return_real_current_spectrum().copy()
                         
