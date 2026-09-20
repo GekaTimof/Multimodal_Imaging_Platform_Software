@@ -30,7 +30,7 @@ def _load_settings() -> dict:
     try:
         with open(_SETTINGS_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
-    except Exception as e:
+    except (OSError, json.JSONDecodeError) as e:
         logger.warning(f"Could not load settings.json: {e}")
         return {}
 
@@ -124,7 +124,12 @@ ENDPOINTS = {
     "spectrometer_dark_clear": f"{API_BASE_URL}/spectrometer/dark-spectrum/clear",
     "spectrometer_dark_load": f"{API_BASE_URL}/spectrometer/dark-spectrum/load",
     "spectrometer_validation": f"{API_BASE_URL}/spectrometer/validation-rules",
-    "spectrometer_reconnect": f"{API_BASE_URL}/spectrometer/reconnect"
+    "spectrometer_reconnect": f"{API_BASE_URL}/spectrometer/reconnect",
+    "positioner_status": f"{API_BASE_URL}/positioner/status",
+    "positioner_connect": f"{API_BASE_URL}/positioner/connect",
+    "positioner_calibrate": f"{API_BASE_URL}/positioner/calibrate",
+    "positioner_move": f"{API_BASE_URL}/positioner/move",
+    "positioner_step": f"{API_BASE_URL}/positioner/step"
 }
 
 # Headers for API requests

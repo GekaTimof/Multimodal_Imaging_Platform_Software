@@ -23,9 +23,11 @@ Hardware control server running on Raspberry Pi 5. Manages camera, spectrometer,
 RaspberryPi/
 ├── main.py                         # Entry point - starts all services
 ├── requirements.txt                # Dependencies
-├── raspberrypi-settings.service    # Systemd service file
-├── raspberrypi-settings            # Service helper script
-├── light_switcher_daemon.sh        # Light switcher daemon script
+├── deploy/systemd/
+│   └── multimodal-imaging-platform.service # Systemd template
+├── scripts/
+│   ├── install-service.sh          # Install the systemd service
+│   └── service-control.sh          # Manage the systemd service
 ├── src/
 │   ├── config/
 │   │   └── settings.py            # Server configuration
@@ -37,7 +39,7 @@ RaspberryPi/
 │   │   ├── camera_service.py      # Picamera2 integration
 │   │   ├── spectrometer_service.py # Spectrometer control
 │   │   ├── light_switcher_service.py # Arduino light control
-│   │   ├── light_switcher_daemon.py  # Light switcher daemon
+│   │   ├── positioner_service.py   # GRBL positioner control
 │   │   ├── database_service.py     # SQLite operations
 │   │   └── database_ini.py        # Database initialization
 │   └── utils/
@@ -81,10 +83,10 @@ python3 main.py
 
 **Systemd service:**
 ```bash
-sudo cp raspberrypi-settings.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable raspberrypi-settings.service
-sudo systemctl start raspberrypi-settings.service
+./scripts/install-service.sh
+./scripts/service-control.sh start
+./scripts/service-control.sh status
+./scripts/service-control.sh logs
 ```
 
 ### Database
@@ -127,9 +129,11 @@ Base URL: `http://<raspberry-pi-ip>:8000/api`
 RaspberryPi/
 ├── main.py                         # Точка входа - запускает все сервисы
 ├── requirements.txt                # Зависимости
-├── raspberrypi-settings.service    # Файл systemd сервиса
-├── raspberrypi-settings            # Вспомогательный скрипт сервиса
-├── light_switcher_daemon.sh        # Скрипт демона подсветки
+├── deploy/systemd/
+│   └── multimodal-imaging-platform.service # Шаблон systemd
+├── scripts/
+│   ├── install-service.sh          # Установка systemd-сервиса
+│   └── service-control.sh          # Управление systemd-сервисом
 ├── src/
 │   ├── config/
 │   │   └── settings.py            # Конфигурация сервера
@@ -141,7 +145,7 @@ RaspberryPi/
 │   │   ├── camera_service.py      # Интеграция Picamera2
 │   │   ├── spectrometer_service.py # Управление спектрометром
 │   │   ├── light_switcher_service.py # Управление подсветкой Arduino
-│   │   ├── light_switcher_daemon.py  # Демон подсветки
+│   │   ├── positioner_service.py   # Управление GRBL-позиционером
 │   │   ├── database_service.py     # Операции с SQLite
 │   │   └── database_ini.py        # Инициализация БД
 │   └── utils/
@@ -183,12 +187,12 @@ pip3 install -r requirements.txt
 python3 main.py
 ```
 
-**Сервис Systemd:**
+**Сервис systemd:**
 ```bash
-sudo cp raspberrypi-settings.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable raspberrypi-settings.service
-sudo systemctl start raspberrypi-settings.service
+./scripts/install-service.sh
+./scripts/service-control.sh start
+./scripts/service-control.sh status
+./scripts/service-control.sh logs
 ```
 
 ### База данных

@@ -1,27 +1,29 @@
 import asyncio
 import base64
 import json as _json
+import logging
+import os
 import subprocess as _sp
 import tempfile
 import time
 from datetime import datetime
+from typing import Any
+
+import cv2
+import numpy as np
 import uvicorn
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field, field_validator, ConfigDict
-from typing import Optional, Dict, Any, Union
-import os
-import logging
-import numpy as np
-import cv2
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 # Import config and services
 from src.config.settings import config
-from .database_service import db_service
-from .camera_service import CameraService
-from .light_switcher_service import light_switcher_service, SwitchState
-from .spectrometer_service import SpectrometerService
 
+from .camera_service import CameraService
+from .database_service import db_service
+from .light_switcher_service import light_switcher_service
+from .positioner_service import positioner_service
+from .spectrometer_service import SpectrometerService
 
 # Setup logging
 logging.basicConfig(level=config.LOG_LEVEL, format=config.LOG_FORMAT)
@@ -40,17 +42,17 @@ spectrometer_service = SpectrometerService()
 
 # Pydantic Models for Request/Response
 class CameraSettingsResponse(BaseModel):
-    id: Optional[int] = None
-    SettingsName: Optional[Union[str, bool]] = Field(default="Basic", description="Settings profile name")
-    PhotoResolution: Union[str, bool] = Field(default="3280x2464", description="Photo resolution")
-    VideoResolution: Union[str, bool] = Field(default="1920x1080", description="Video resolution")
-    AeEnable: Union[bool, str, int] = Field(default=True, description="Auto Exposure enabled")
-    AwbEnable: Union[bool, str, int] = Field(default=True, description="Auto White Balance enabled")
-    ExposureTime: Union[int, str] = Field(default=10000, description="Exposure time in microseconds")
-    AnalogueGain: Union[float, str, int] = Field(default=1.0, description="Camera analog gain")
-    ExposureValue: Union[float, str, int] = Field(default=0.0, description="Exposure compensation")
-    RedGain: Union[float, str, int] = Field(default=1.0, description="Red channel gain")
-    BlueGain: Union[float, str, int] = Field(default=1.0, description="Blue channel gain")
+    id: int | None = None
+    SettingsName: str | bool | None = Field(default="Basic", description="Settings profile name")
+    PhotoResolution: str | bool = Field(default="3280x2464", description="Photo resolution")
+    VideoResolution: str | bool = Field(default="1920x1080", description="Video resolution")
+    AeEnable: bool | str | int = Field(default=True, description="Auto Exposure enabled")
+    AwbEnable: bool | str | int = Field(default=True, description="Auto White Balance enabled")
+    ExposureTime: int | str = Field(default=10000, description="Exposure time in microseconds")
+    AnalogueGain: float | str | int = Field(default=1.0, description="Camera analog gain")
+    ExposureValue: float | str | int = Field(default=0.0, description="Exposure compensation")
+    RedGain: float | str | int = Field(default=1.0, description="Red channel gain")
+    BlueGain: float | str | int = Field(default=1.0, description="Blue channel gain")
 
     model_config = ConfigDict(json_schema_extra={
         "example": {
@@ -115,7 +117,7 @@ class CameraSettingsResponse(BaseModel):
 class ParameterUpdateRequest(BaseModel):
     table_name: str = Field(..., description="Name of the table to update")
     parameter: str = Field(..., description="Parameter name to update")
-    value: Union[str, int, float, bool] = Field(..., description="New value for the parameter")
+    value: str | int | float | bool = Field(..., description="New value for the parameter")
 
     @field_validator('table_name')
     @classmethod
@@ -151,7 +153,7 @@ class ParameterUpdateRequest(BaseModel):
 class APIResponse(BaseModel):
     success: bool
     message: str
-    data: Optional[Dict[str, Any]] = None
+    data: dict[str, Any] | None = None
 
     @field_validator('data', mode='before')
     @classmethod
@@ -176,13 +178,13 @@ class APIResponse(BaseModel):
 
 class ErrorApiResponse(BaseModel):
     success: bool = False
-    error: Union[str, Dict[str, Any]]
-    details: Optional[Dict[str, Any]] = None
+    error: str | dict[str, Any]
+    details: dict[str, Any] | None = None
 
 
 class LightSwitcherStatusResponse(BaseModel):
     connected: bool
-    port: Optional[str] = None
+    port: str | None = None
     baudrate: int
     current_state: str
     arduino_responsive: bool
@@ -201,13 +203,13 @@ class LightSwitcherSwitchRequest(BaseModel):
 
 
 class SpectrometerSettingsResponse(BaseModel):
-    id: Optional[int] = Field(default=0, description="Settings slot ID")
+    id: int | None = Field(default=0, description="Settings slot ID")
     SettingsName: str = Field(default="Basic", description="Settings profile name")
     IntegralTime: int = Field(default=100, description="Integration time in milliseconds (1-99999)")
     UseDarkSpectrum: bool = Field(default=False, description="Use dark spectrum for correction")
     AutoDarkCorrection: bool = Field(default=True, description="Automatically apply dark correction")
     OverilluminationThreshold: int = Field(default=65535, description="Threshold for overillumination detection (0-65535)")
-    LastUpdated: Optional[str] = Field(default=None, description="Last update timestamp")
+    LastUpdated: str | None = Field(default=None, description="Last update timestamp")
 
     model_config = ConfigDict(json_schema_extra={
         "example": {
@@ -247,11 +249,11 @@ class SpectrometerInfoResponse(BaseModel):
     auto_dark_correction: bool = Field(..., description="Auto dark correction enabled")
     overillumination: bool = Field(..., description="Current overillumination status")
     overillumination_threshold: int = Field(..., description="Overillumination threshold")
-    vendor: Optional[str] = Field(default=None, description="Spectrometer vendor")
-    pn: Optional[str] = Field(default=None, description="Part number")
-    sn: Optional[str] = Field(default=None, description="Serial number")
-    module_version: Optional[str] = Field(default=None, description="Module firmware version")
-    production_date: Optional[str] = Field(default=None, description="Production date")
+    vendor: str | None = Field(default=None, description="Spectrometer vendor")
+    pn: str | None = Field(default=None, description="Part number")
+    sn: str | None = Field(default=None, description="Serial number")
+    module_version: str | None = Field(default=None, description="Module firmware version")
+    production_date: str | None = Field(default=None, description="Production date")
 
 
 class SpectrometerIntegralTimeRequest(BaseModel):
@@ -273,8 +275,39 @@ class DarkSpectrumResponse(BaseModel):
     dark_spectrum_file_exists: bool = Field(..., description="Whether dark spectrum file exists")
 
 
+class PositionerMoveRequest(BaseModel):
+    x: float
+    y: float
+    z: float
+    feed: float | None = Field(default=None, gt=0)
+
+
+class PositionerStepRequest(BaseModel):
+    axis: str
+    distance: float = Field(..., ge=-1000, le=1000)
+    feed: float | None = Field(default=None, gt=0)
+
+    @field_validator('axis')
+    @classmethod
+    def validate_axis(cls, value):
+        value = value.upper()
+        if value not in ('X', 'Y', 'Z'):
+            raise ValueError("Axis must be X, Y or Z")
+        return value
+
+
+@app.on_event("startup")
+async def initialize_positioner():
+    asyncio.ensure_future(asyncio.get_running_loop().run_in_executor(None, positioner_service.initialize))
+
+
+@app.on_event("shutdown")
+async def disconnect_positioner():
+    await asyncio.get_running_loop().run_in_executor(None, positioner_service.disconnect)
+
+
 # API Endpoints
-@app.get("/api/health", response_model=Dict[str, str])
+@app.get("/api/health", response_model=dict[str, str])
 async def health_check():
     """Health check endpoint."""
     return {"status": "healthy", "message": "FastAPI server is running"}
@@ -393,7 +426,7 @@ async def get_camera_settings_by_slot(slot_id: int):
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 
-@app.get("/api/settings/camera/slots", response_model=Dict[str, Any])
+@app.get("/api/settings/camera/slots", response_model=dict[str, Any])
 async def get_all_camera_settings_slots():
     """Get all camera settings slots (0-9)."""
     try:
@@ -403,7 +436,7 @@ async def get_all_camera_settings_slots():
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 
-@app.get("/api/settings/{table_name}", response_model=Dict[str, Any])
+@app.get("/api/settings/{table_name}", response_model=dict[str, Any])
 async def get_settings(table_name: str):
     """Get all settings from the specified table."""
     try:
@@ -633,7 +666,7 @@ async def get_current_awb_gains():
 
 
 @app.post("/api/camera/photo")
-async def capture_photo(output_path: Optional[str] = None):
+async def capture_photo(output_path: str | None = None):
     """Capture a high-quality photo with all camera settings (PhotoResolution, ExposureTime, etc.).
 
     Args:
@@ -913,6 +946,49 @@ async def get_spectrometer_validation_rules():
             "overillumination_threshold_range": [config.MIN_OVERILLUMINATION_THRESHOLD, config.MAX_OVERILLUMINATION_THRESHOLD]
         }
     }
+
+
+@app.get("/api/positioner/status", response_model=APIResponse)
+async def get_positioner_status():
+    return APIResponse(success=True, message="Positioner status", data=positioner_service.get_status())
+
+
+@app.post("/api/positioner/connect", response_model=APIResponse)
+async def connect_positioner():
+    connected = await asyncio.get_running_loop().run_in_executor(None, positioner_service.connect)
+    if not connected:
+        raise HTTPException(status_code=503, detail=positioner_service.last_error or "Positioner connection failed")
+    return APIResponse(success=True, message="Positioner connected", data=positioner_service.get_status())
+
+
+@app.post("/api/positioner/calibrate", response_model=APIResponse)
+async def calibrate_positioner():
+    try:
+        data = await asyncio.get_running_loop().run_in_executor(None, positioner_service.calibrate)
+        return APIResponse(success=True, message="Positioner calibration completed", data=data)
+    except (RuntimeError, TimeoutError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.post("/api/positioner/move", response_model=APIResponse)
+async def move_positioner(request: PositionerMoveRequest):
+    try:
+        positions = {"x": request.x, "y": request.y, "z": request.z}
+        data = await asyncio.get_running_loop().run_in_executor(None, positioner_service.move_to, positions, request.feed)
+        return APIResponse(success=True, message="Positioner movement completed", data=data)
+    except (RuntimeError, TimeoutError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.post("/api/positioner/step", response_model=APIResponse)
+async def step_positioner(request: PositionerStepRequest):
+    try:
+        data = await asyncio.get_running_loop().run_in_executor(
+            None, positioner_service.step, request.axis, request.distance, request.feed
+        )
+        return APIResponse(success=True, message="Positioner step completed", data=data)
+    except (RuntimeError, TimeoutError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 # Exception handlers

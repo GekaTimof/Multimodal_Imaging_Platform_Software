@@ -12,43 +12,21 @@ Spectrometer service for Raspberry Pi with streaming API and hardware integratio
 ### Quick Start
 
 ```bash
-# Check spectrometer connection
 cd /home/minilumi/Multimodal_Imaging_Platform_Software/RaspberryPi
-./spectrometer_daemon.sh check
-
-# Start spectrometer service
-./spectrometer_daemon.sh start
-
-# Test spectrum capture
-./spectrometer_daemon.sh test
+./scripts/service-control.sh start
+./scripts/service-control.sh status
+./scripts/service-control.sh logs
 ```
 
 ### Service Management
 
-The spectrometer can run as part of the main service or independently:
+The spectrometer runs as part of the unified platform service so that hardware has a single process owner.
 
-**Option 1: Main Service (recommended)**
 ```bash
-# Start all services (API + Camera + Spectrometer)
-sudo systemctl start raspberrypi-settings
-
-# Check status
-sudo systemctl status raspberrypi-settings
-```
-
-**Option 2: Independent Spectrometer Service**
-```bash
-# Install spectrometer service
-./spectrometer_daemon.sh install
-
-# Start/stop/restart
-./spectrometer_daemon.sh start
-./spectrometer_daemon.sh stop
-./spectrometer_daemon.sh restart
-
-# Check status and logs
-./spectrometer_daemon.sh status
-./spectrometer_daemon.sh logs
+./scripts/install-service.sh
+./scripts/service-control.sh start
+./scripts/service-control.sh status
+./scripts/service-control.sh logs
 ```
 
 ### API Endpoints
@@ -125,14 +103,9 @@ curl -X POST http://raspberry-pi-ip:8000/api/spectrometer/settings \
 ### Troubleshooting
 
 ```bash
-# Check hardware connection
-./spectrometer_daemon.sh check
-
-# Test spectrum capture
-./spectrometer_daemon.sh test
-
-# View logs
-./spectrometer_daemon.sh logs
+# View service status and logs
+../scripts/service-control.sh status
+../scripts/service-control.sh logs
 
 # Check USB devices
 lsusb | grep -i stm32

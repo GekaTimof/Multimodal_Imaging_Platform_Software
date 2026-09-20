@@ -126,7 +126,7 @@ self.baudrate = 9600  # должна соответствовать настро
 
 Логи доступны через journal основного сервиса:
 ```bash
-sudo journalctl -u raspberrypi-settings.service -f
+../scripts/service-control.sh logs
 ```
 
 ## Возможные проблемы
@@ -145,7 +145,7 @@ sudo usermod -a -G dialout pi
 ### 3. API не отвечает
 ```bash
 # Проверьте логи основного сервиса
-sudo journalctl -u raspberrypi-settings.service -f
+../scripts/service-control.sh logs
 ```
 
 ## Структура файлов
@@ -155,7 +155,9 @@ RaspberryPi/
 ├── src/services/
 │   ├── light_switcher_service.py      # Основной сервис
 │   └── fastapi_server.py              # API сервер
-├── raspberrypi-settings.service        # Systemd конфиг (общий)
+├── deploy/systemd/
+│   └── multimodal-imaging-platform.service # Общий systemd-шаблон
+├── scripts/service-control.sh           # Управление общим сервисом
 └── Light_switcher/
     ├── light_switcher_end_switch.ino/  # Прошивка Arduino
     └── README.md                       # Этот файл

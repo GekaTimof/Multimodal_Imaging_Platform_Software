@@ -1,5 +1,5 @@
 import sqlite3
-import os
+
 
 def main():
     """Main function to initialize database"""
@@ -41,12 +41,26 @@ def main():
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS PositionerSettings (
         id INTEGER PRIMARY KEY,
-        SettingsName TEXT NOT NULL DEFAULT 'Basic',
-        parameter1 TEXT,
-        parameter2 TEXT,
-        parameter3 TEXT
+        calibrated INTEGER NOT NULL DEFAULT 0,
+        x_min REAL, x_max REAL, x_travel REAL, x_position REAL,
+        y_min REAL, y_max REAL, y_travel REAL, y_position REAL,
+        z_min REAL, z_max REAL, z_travel REAL, z_position REAL,
+        LastUpdated TEXT DEFAULT CURRENT_TIMESTAMP
     )
     """)
+    cursor.execute("PRAGMA table_info(PositionerSettings)")
+    positioner_columns = [row[1] for row in cursor.fetchall()]
+    required_positioner_columns = {
+        'calibrated': 'INTEGER NOT NULL DEFAULT 0',
+        'x_min': 'REAL', 'x_max': 'REAL', 'x_travel': 'REAL', 'x_position': 'REAL',
+        'y_min': 'REAL', 'y_max': 'REAL', 'y_travel': 'REAL', 'y_position': 'REAL',
+        'z_min': 'REAL', 'z_max': 'REAL', 'z_travel': 'REAL', 'z_position': 'REAL',
+        'LastUpdated': 'TEXT'
+    }
+    for column, definition in required_positioner_columns.items():
+        if column not in positioner_columns:
+            cursor.execute(f"ALTER TABLE PositionerSettings ADD COLUMN {column} {definition}")
+    cursor.execute("INSERT OR IGNORE INTO PositionerSettings (id, calibrated) VALUES (0, 0)")
     
     # Migrate CameraSettings: add PhotoResolution/VideoResolution if missing, drop obsolete Resolution column
     cursor.execute("PRAGMA table_info(CameraSettings)")
@@ -114,7 +128,7 @@ def main():
         try:
             cursor.execute("SELECT * FROM SpectrometerSettings WHERE id = 0")
             old_data = cursor.fetchone()
-        except:
+        except sqlite3.Error:
             old_data = None
 
         cursor.execute("DROP TABLE IF EXISTS SpectrometerSettings")

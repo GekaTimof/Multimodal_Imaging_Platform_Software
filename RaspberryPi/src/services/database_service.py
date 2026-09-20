@@ -1,11 +1,14 @@
-import sqlite3
-import os
 import logging
-from typing import Dict, Any, Tuple, Optional
+import sqlite3
+from typing import Any
 
-# Import configuration and error handlers
 from src.config.settings import config
-from ..utils.error_handlers import database_error_handler, api_error_handler, log_execution_time
+
+from ..utils.error_handlers import (
+    api_error_handler,
+    database_error_handler,
+    log_execution_time,
+)
 
 # Get database path from config
 db_path = config.get_database_path()
@@ -22,20 +25,18 @@ class DatabaseService:
     
     def _ensure_database_exists(self):
         """Ensure database and tables exist."""
-        if not os.path.exists(db_path):
-            import sys
-            from . import database_ini
-            database_ini.main()
+        from . import database_ini
+        database_ini.main()
 
     @staticmethod
-    def _convert_bool_fields(settings: Dict[str, Any]) -> Dict[str, Any]:
+    def _convert_bool_fields(settings: dict[str, Any]) -> dict[str, Any]:
         """Convert AeEnable/AwbEnable to native Python bool (avoids numpy.bool_)."""
         settings['AeEnable'] = bool(int(settings['AeEnable']))
         settings['AwbEnable'] = bool(int(settings['AwbEnable']))
         return settings
 
     @staticmethod
-    def _insert_default_camera_slot(cursor, slot_id: int, settings: Dict[str, Any]):
+    def _insert_default_camera_slot(cursor, slot_id: int, settings: dict[str, Any]):
         """INSERT OR IGNORE a camera settings row for slot_id using provided settings dict."""
         cursor.execute("""
         INSERT OR IGNORE INTO CameraSettings
@@ -56,31 +57,31 @@ class DatabaseService:
             settings.get('BlueGain', 2.0),
         ))
     
-    def _validate_parameter(self, table_name: str, parameter: str, value: Any) -> Tuple[bool, str]:
+    def _validate_parameter(self, table_name: str, parameter: str, value: Any) -> tuple[bool, str]:
         """Validate parameter value against configuration rules."""
         if table_name == 'CameraSettings':
             try:
                 return config.validate_camera_parameter(parameter, value)
-            except Exception as e:
+            except (TypeError, ValueError) as e:
                 logger.error(f"Validation error for {parameter}: {e}")
-                return False, f"Validation error: {str(e)}"
+                return False, f"Validation error: {e!s}"
         elif table_name == 'SpectrometerSettings':
             try:
                 return self._validate_spectrometer_parameter(parameter, value)
-            except Exception as e:
+            except (TypeError, ValueError) as e:
                 logger.error(f"Validation error for {parameter}: {e}")
-                return False, f"Validation error: {str(e)}"
+                return False, f"Validation error: {e!s}"
         
         logger.error(f"Unsupported table: {table_name}")
         return False, f"Unsupported table: {table_name}"
     
-    def _validate_spectrometer_parameter(self, parameter: str, value: Any) -> Tuple[bool, str]:
+    def _validate_spectrometer_parameter(self, parameter: str, value: Any) -> tuple[bool, str]:
         """Validate spectrometer parameter values (delegates to Config)."""
         return config.validate_spectrometer_parameter(parameter, value)
     
     @log_execution_time
     @database_error_handler
-    def get_camera_settings(self) -> Dict[str, Any]:
+    def get_camera_settings(self) -> dict[str, Any]:
         """Get current camera settings from database (always from slot 0 - main settings)."""
         try:
             conn = sqlite3.connect(db_path)
@@ -103,13 +104,13 @@ class DatabaseService:
                 
         except sqlite3.Error as e:
             logger.error(f"Database error in get_camera_settings: {e}")
-            raise Exception(f"Database error: {e}")
+            raise RuntimeError(f"Database error: {e}") from e
         finally:
             conn.close()
     
     @api_error_handler
     @log_execution_time
-    def update_parameter(self, table_name: str, parameter: str, value: Any) -> Tuple[bool, str]:
+    def update_parameter(self, table_name: str, parameter: str, value: Any) -> tuple[bool, str]:
         """Update a single parameter in the specified table."""
         # Validate the parameter
         is_valid, validated_value = self._validate_parameter(table_name, parameter, value)
@@ -178,7 +179,7 @@ class DatabaseService:
         finally:
             conn.close()
     
-    def get_all_settings(self, table_name: str) -> Dict[str, Any]:
+    def get_all_settings(self, table_name: str) -> dict[str, Any]:
         """Get all settings from the specified table."""
         try:
             conn = sqlite3.connect(db_path)
@@ -202,11 +203,11 @@ class DatabaseService:
                 return {}
                 
         except sqlite3.Error as e:
-            raise Exception(f"Database error: {e}")
+            raise RuntimeError(f"Database error: {e}") from e
         finally:
             conn.close()
     
-    def get_camera_settings_by_slot(self, slot_id: int) -> Dict[str, Any]:
+    def get_camera_settings_by_slot(self, slot_id: int) -> dict[str, Any]:
         """Get camera settings for a specific slot (0-10). Slot 0 is current session, 1-10 are saved presets."""
         if not 0 <= slot_id <= 10:
             raise ValueError("Slot ID must be between 0 and 10")
@@ -233,11 +234,11 @@ class DatabaseService:
                 return default_settings
                 
         except sqlite3.Error as e:
-            raise Exception(f"Database error: {e}")
+            raise RuntimeError(f"Database error: {e}") from e
         finally:
             conn.close()
     
-    def save_camera_settings_to_slot(self, slot_id: int, settings: Dict[str, Any]) -> Tuple[bool, str]:
+    def save_camera_settings_to_slot(self, slot_id: int, settings: dict[str, Any]) -> tuple[bool, str]:
         """Save camera settings to a specific slot (0-10). Slot 0 is current session, 1-10 are saved presets."""
         if not 0 <= slot_id <= 10:
             return False, "Slot ID must be between 0 and 10"
@@ -300,14 +301,14 @@ class DatabaseService:
         finally:
             conn.close()
     
-    def get_all_camera_settings_slots(self) -> Dict[int, Dict[str, Any]]:
+    def get_all_camera_settings_slots(self) -> dict[int, dict[str, Any]]:
         """Get all camera settings slots (0-10). Slot 0 is current session, 1-10 are saved presets."""
         slots = {}
         for slot_id in range(11):  # 0-10 inclusive
             slots[slot_id] = self.get_camera_settings_by_slot(slot_id)
         return slots
 
-    def copy_slot_to_session(self, source_slot_id: int) -> Tuple[bool, str, Dict[str, Any]]:
+    def copy_slot_to_session(self, source_slot_id: int) -> tuple[bool, str, dict[str, Any]]:
         """Copy settings from a slot (1-10) to the current session (slot 0).
 
         Args:
@@ -336,12 +337,12 @@ class DatabaseService:
             else:
                 return False, f"Failed to copy to session: {message}", {}
 
-        except Exception as e:
+        except (RuntimeError, TypeError, ValueError, sqlite3.Error) as e:
             return False, f"Error copying slot to session: {e}", {}
     
     @log_execution_time
     @database_error_handler
-    def get_spectrometer_settings(self) -> Dict[str, Any]:
+    def get_spectrometer_settings(self) -> dict[str, Any]:
         """Get current spectrometer settings from database (always from slot 0 - main settings)."""
         try:
             conn = sqlite3.connect(db_path)
@@ -375,13 +376,13 @@ class DatabaseService:
                 
         except sqlite3.Error as e:
             logger.error(f"Database error in get_spectrometer_settings: {e}")
-            raise Exception(f"Database error: {e}")
+            raise RuntimeError(f"Database error: {e}") from e
         finally:
             conn.close()
     
     @api_error_handler
     @log_execution_time
-    def save_spectrometer_settings(self, settings: Dict[str, Any]) -> Tuple[bool, str]:
+    def save_spectrometer_settings(self, settings: dict[str, Any]) -> tuple[bool, str]:
         """Save spectrometer settings to database (always to slot 0 - main settings)."""
         try:
             conn = sqlite3.connect(db_path)
@@ -430,6 +431,53 @@ class DatabaseService:
 
         except sqlite3.Error as e:
             return False, f"Database error: {e}"
+        finally:
+            conn.close()
+
+    def get_positioner_state(self) -> dict[str, Any]:
+        try:
+            conn = sqlite3.connect(db_path)
+            conn.row_factory = sqlite3.Row
+            row = conn.execute("SELECT * FROM PositionerSettings WHERE id = 0").fetchone()
+            return dict(row) if row else {}
+        finally:
+            conn.close()
+
+    def save_positioner_state(self, state: dict[str, Any]) -> None:
+        fields = (
+            'calibrated', 'x_min', 'x_max', 'x_travel', 'x_position',
+            'y_min', 'y_max', 'y_travel', 'y_position',
+            'z_min', 'z_max', 'z_travel', 'z_position'
+        )
+        values = [state.get(field) for field in fields]
+        assignments = ', '.join(f"{field} = ?" for field in fields)
+        try:
+            conn = sqlite3.connect(db_path)
+            conn.execute(
+                f"UPDATE PositionerSettings SET {assignments}, LastUpdated = CURRENT_TIMESTAMP WHERE id = 0",
+                values
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def save_positioner_positions(self, positions: dict[str, float]) -> None:
+        try:
+            conn = sqlite3.connect(db_path)
+            conn.execute(
+                "UPDATE PositionerSettings SET x_position = ?, y_position = ?, z_position = ?, "
+                "LastUpdated = CURRENT_TIMESTAMP WHERE id = 0",
+                (positions['X'], positions['Y'], positions['Z'])
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def invalidate_positioner_state(self) -> None:
+        try:
+            conn = sqlite3.connect(db_path)
+            conn.execute("UPDATE PositionerSettings SET calibrated = 0 WHERE id = 0")
+            conn.commit()
         finally:
             conn.close()
 

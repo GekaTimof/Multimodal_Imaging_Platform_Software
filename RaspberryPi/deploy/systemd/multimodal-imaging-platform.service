@@ -1,0 +1,21 @@
+[Unit]
+Description=Multimodal Imaging Platform
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=@SERVICE_USER@
+WorkingDirectory=@PROJECT_ROOT@
+ExecStart=/usr/bin/python3 @PROJECT_ROOT@/main.py
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONPATH=@PROJECT_ROOT@
+EnvironmentFile=-@PROJECT_ROOT@/.env
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

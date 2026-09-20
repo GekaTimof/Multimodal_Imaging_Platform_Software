@@ -4,7 +4,8 @@ Centralized configuration management for Raspberry Pi services.
 """
 
 import os
-from typing import Dict, Any
+from typing import Any, ClassVar
+
 
 class Config:
     """Configuration class for Raspberry Pi services."""
@@ -30,6 +31,19 @@ class Config:
 
     # Spectrometer Configuration
     DARK_SPECTRUM_FILENAME = 'dark_spectrum.npy'
+
+    POSITIONER_PORT = os.getenv('POSITIONER_PORT', '/dev/ttyUSB0')
+    POSITIONER_BAUDRATE = int(os.getenv('POSITIONER_BAUDRATE', '115200'))
+    POSITIONER_CONNECT_DELAY = float(os.getenv('POSITIONER_CONNECT_DELAY', '2'))
+    POSITIONER_SEARCH_FEED = float(os.getenv('POSITIONER_SEARCH_FEED', '2000'))
+    POSITIONER_MOVE_FEED = float(os.getenv('POSITIONER_MOVE_FEED', '3000'))
+    POSITIONER_SEARCH_DISTANCE = float(os.getenv('POSITIONER_SEARCH_DISTANCE', '50000'))
+    POSITIONER_BACKOFF = float(os.getenv('POSITIONER_BACKOFF', '500'))
+    POSITIONER_RELEASE_FEED = float(os.getenv('POSITIONER_RELEASE_FEED', '3000'))
+    POSITIONER_RELEASE_RETRIES = int(os.getenv('POSITIONER_RELEASE_RETRIES', '10'))
+    POSITIONER_IDLE_TIMEOUT = float(os.getenv('POSITIONER_IDLE_TIMEOUT', '120'))
+    POSITIONER_ALARM_TIMEOUT = float(os.getenv('POSITIONER_ALARM_TIMEOUT', '840'))
+    POSITIONER_INVERT_LIMIT_PINS = os.getenv('POSITIONER_INVERT_LIMIT_PINS', '1').lower() in ('1', 'true', 'on')
 
     @classmethod
     def get_dark_spectrum_path(cls) -> str:
@@ -58,7 +72,7 @@ class Config:
     MAX_COLOR_GAIN = 8.0
     
     # Available camera resolutions
-    AVAILABLE_RESOLUTIONS = [
+    AVAILABLE_RESOLUTIONS: ClassVar[list[str]] = [
         '640x480',      # VGA - 4:3
         '800x600',      # SVGA - 4:3
         '1024x768',     # XGA - 4:3
@@ -73,7 +87,7 @@ class Config:
     ]
     
     # Default camera settings
-    DEFAULT_CAMERA_SETTINGS = {
+    DEFAULT_CAMERA_SETTINGS: ClassVar[dict[str, Any]] = {
         'SettingsName': 'Basic',
         'PhotoResolution': '3280x2464',
         'VideoResolution': '1920x1080',
@@ -93,7 +107,7 @@ class Config:
     MAX_OVERILLUMINATION_THRESHOLD = 65535
 
     # Default spectrometer settings
-    DEFAULT_SPECTROMETER_SETTINGS = {
+    DEFAULT_SPECTROMETER_SETTINGS: ClassVar[dict[str, Any]] = {
         'SettingsName': 'Basic',
         'IntegralTime': 100,
         'UseDarkSpectrum': False,
