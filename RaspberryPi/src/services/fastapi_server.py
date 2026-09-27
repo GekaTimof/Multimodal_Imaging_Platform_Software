@@ -21,6 +21,7 @@ from .database_service import db_service
 from .camera_service import CameraService
 from .light_switcher_service import light_switcher_service, SwitchState
 from .spectrometer_service import SpectrometerService
+from .positioner_service import positioner_service
 
 
 # Setup logging
@@ -271,6 +272,33 @@ class DarkSpectrumResponse(BaseModel):
     dark_spectrum: list = Field(..., description="Dark spectrum array")
     use_dark_spectrum: bool = Field(..., description="Whether dark spectrum is enabled")
     dark_spectrum_file_exists: bool = Field(..., description="Whether dark spectrum file exists")
+
+
+class PositionerSettingsResponse(BaseModel):
+    id: Optional[int] = 0
+    SettingsName: str = "Basic"
+    XPosition: float = Field(default=0.0, ge=-1000.0, le=1000.0)
+    YPosition: float = Field(default=0.0, ge=-1000.0, le=1000.0)
+    ZPosition: float = Field(default=0.0, ge=-1000.0, le=1000.0)
+    MovementSpeed: float = Field(default=10.0, ge=0.1, le=100.0)
+    Acceleration: float = Field(default=100.0, ge=0.1, le=1000.0)
+
+
+class PositionerMoveRequest(BaseModel):
+    x: float = Field(..., ge=-5000.0, le=15000.0)
+    y: float = Field(..., ge=-5000.0, le=15000.0)
+    z: float = Field(..., ge=-5000.0, le=15000.0)
+    speed: Optional[float] = Field(default=None, ge=0.1, le=100.0)
+
+
+class PositionerAxisRequest(BaseModel):
+    axis: str = Field(..., pattern=r"^[xXyYzZ]$")
+
+
+class PositionerCalibrateResponse(BaseModel):
+    success: bool
+    message: str
+    data: Optional[Dict[str, Any]] = None
 
 
 # API Endpoints
@@ -913,6 +941,93 @@ async def get_spectrometer_validation_rules():
             "overillumination_threshold_range": [config.MIN_OVERILLUMINATION_THRESHOLD, config.MAX_OVERILLUMINATION_THRESHOLD]
         }
     }
+
+
+@app.get("/api/positioner/settings", response_model=PositionerSettingsResponse)
+async def get_positioner_settings():
+    return PositionerSettingsResponse(**db_service.get_positioner_settings())
+
+
+@app.post("/api/positioner/settings", response_model=APIResponse)
+async def update_positioner_settings(settings: PositionerSettingsResponse):
+    try:
+        data = await asyncio.to_thread(positioner_service.apply_settings, settings.model_dump())
+        return APIResponse(success=True, message="Positioner settings applied", data=data)
+    except ConnectionError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/positioner/status", response_model=APIResponse)
+async def get_positioner_status():
+    try:
+        status = await asyncio.to_thread(positioner_service.refresh_status)
+        return APIResponse(success=True, message="Positioner status received", data=status)
+    except ConnectionError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+
+@app.post("/api/positioner/connect", response_model=APIResponse)
+async def connect_positioner():
+    connected = await asyncio.to_thread(positioner_service.connect)
+    if not connected:
+        raise HTTPException(status_code=503, detail=f"Positioner not available on {positioner_service.port}")
+    return APIResponse(success=True, message="Positioner connected", data=positioner_service.get_status())
+
+
+@app.post("/api/positioner/move", response_model=APIResponse)
+async def move_positioner(request: PositionerMoveRequest):
+    try:
+        status = await asyncio.to_thread(positioner_service.move_to, request.x, request.y, request.z, request.speed)
+        return APIResponse(success=True, message="Positioner movement completed", data=status)
+    except ConnectionError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except (ValueError, RuntimeError, TimeoutError) as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/positioner/home", response_model=APIResponse)
+async def home_positioner():
+    try:
+        status = await asyncio.to_thread(positioner_service.home)
+        return APIResponse(success=True, message="Positioner homing completed", data=status)
+    except ConnectionError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except (RuntimeError, TimeoutError) as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/positioner/stop", response_model=APIResponse)
+async def stop_positioner():
+    await asyncio.to_thread(positioner_service.stop)
+    return APIResponse(success=True, message="Positioner feed hold requested", data=positioner_service.get_status())
+
+
+@app.post("/api/positioner/calibrate/{axis}", response_model=PositionerCalibrateResponse)
+async def calibrate_positioner_axis(axis: str):
+    try:
+        result = await asyncio.to_thread(positioner_service.calibrate_axis, axis)
+        return PositionerCalibrateResponse(
+            success=True,
+            message=f"Axis {axis.upper()} calibrated successfully",
+            data=result,
+        )
+    except ConnectionError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except (ValueError, RuntimeError, TimeoutError) as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/positioner/calibrate", response_model=APIResponse)
+async def calibrate_positioner_all():
+    try:
+        results = await asyncio.to_thread(positioner_service.calibrate_all)
+        return APIResponse(success=True, message="All axes calibrated", data={"axes": results})
+    except ConnectionError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except (ValueError, RuntimeError, TimeoutError) as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 # Exception handlers

@@ -5,6 +5,7 @@ from src.core.streaming import CameraStreamServer
 from src.core.spectrum_streaming import SpectrumStreamServer
 from src.services.fastapi_server import app, camera_service, spectrometer_service
 from src.services.light_switcher_service import light_switcher_service
+from src.services.positioner_service import positioner_service
 from src.config.settings import config
 
 
@@ -42,6 +43,7 @@ if __name__ == '__main__':
     camera_service.start()
     spectrometer_service.start()
     light_switcher_service.connect()
+    positioner_service.connect()
 
     # Create threads for all servers
     api_thread = threading.Thread(target=run_api_server, daemon=True)
@@ -62,4 +64,5 @@ if __name__ == '__main__':
         camera_service.stop()
         spectrometer_service.stop()
         light_switcher_service.disconnect()
+        positioner_service.disconnect()
         print("Services stopped.")
