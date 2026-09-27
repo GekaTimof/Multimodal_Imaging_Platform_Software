@@ -85,19 +85,9 @@ class MainWindow(QMainWindow):
         self.tabs = QTabWidget()
         main_layout.addWidget(self.tabs)
 
-        # Create status container with adaptive height to prevent layout shifts
-        status_container = QWidget()
-        status_height = int(get_scaled_size(interface_config.get('ui_scaling.status_bar_height', 52)) // 2 * 1.15)
-        status_container.setMinimumHeight(status_height)
-        status_container.setMaximumHeight(status_height)
-        status_layout = QHBoxLayout(status_container)
-        status_layout.setContentsMargins(0, get_relative_margin(0.2), 0, get_relative_margin(0.2))
-        status_layout.setSpacing(0)
-
-        # Create status widget for light switcher
+        # Create status widget for light switcher (collapses when hidden)
         self.light_switcher_status = LightSwitcherStatusWidget(self)
-        status_layout.addWidget(self.light_switcher_status)
-        main_layout.addWidget(status_container)
+        main_layout.addWidget(self.light_switcher_status)
         
         # Create centered switch progress widget (overlay)
         self.switch_progress = SwitchProgressWidget(self)
@@ -367,6 +357,11 @@ class MainWindow(QMainWindow):
             if self._previous_tab_index == 1 and index != 1:
                 self.camera_tab.stop_camera()
                 self.camera_tab.clear_display()
+
+            # Stop camera when leaving acquisition tab (index 2)
+            if self._previous_tab_index == 2 and index != 2:
+                self.Acquisition_tab.stop_camera()
+                self.Acquisition_tab.clear_display()
             
             if index == 0:
                 # Switch to spectrometer mode
@@ -392,9 +387,6 @@ class MainWindow(QMainWindow):
                 if not success:
                     # Показать ошибку, но продолжить переключение вкладки
                     self.light_switcher_status.show_error(f"{self.interface_text.error_title()}: {message}")
-                
-                # Switch device settings to Positioner for Acquisition
-                self.Acquisition_tab.device_settings_widget.switch_to_settings(self.interface_text.positioner())
             
             # Update previous tab index for next change
             self._previous_tab_index = index
@@ -439,12 +431,22 @@ class MainWindow(QMainWindow):
                 logger.info("Camera stopped")
             except Exception as e:
                 logger.error(f"Error stopping camera: {e}")
+
+        # Stop acquisition camera if running
+        if hasattr(self, 'Acquisition_tab'):
+            try:
+                self.Acquisition_tab.stop_camera()
+                logger.info("Acquisition camera stopped")
+            except Exception as e:
+                logger.error(f"Error stopping acquisition camera: {e}")
         
         # Call closeEvent on all tabs to clean up resources
         if hasattr(self, 'spectrometer_tab'):
             self.spectrometer_tab.closeEvent(event)
         if hasattr(self, 'camera_tab'):
             self.camera_tab.closeEvent(event)
+        if hasattr(self, 'Acquisition_tab'):
+            self.Acquisition_tab.closeEvent(event)
         
         super().closeEvent(event)
 

@@ -358,6 +358,30 @@ class Interface_text():
     def positioner_not_calibrated(self) -> str:
         return self.text_json.get("Positioner_Not_Calibrated", "Not calibrated")
 
+    def emergency_stop(self) -> str:
+        return self.text_json.get("Emergency_Stop", "EMERGENCY STOP")
+
+    def speed_slow(self) -> str:
+        return self.text_json.get("Speed_Slow", "Slow")
+
+    def speed_medium(self) -> str:
+        return self.text_json.get("Speed_Medium", "Medium")
+
+    def speed_fast(self) -> str:
+        return self.text_json.get("Speed_Fast", "Fast")
+
+    def speed_warning(self) -> str:
+        return self.text_json.get("Speed_Warning", "Speed above 4500: motor may skip steps, accuracy will be lost")
+
+    def calibrate(self) -> str:
+        return self.text_json.get("Calibrate", "Calibrate")
+
+    def current_position(self) -> str:
+        return self.text_json.get("Current_Position", "Current position")
+
+    def capture_photo(self) -> str:
+        return self.text_json.get("Capture_Photo", "Capture")
+
     def light_switcher_connected(self):
         return self.text_json["Light_Switcher_Connected"]
     
