@@ -312,7 +312,52 @@ class Interface_text():
     
     def position_saved(self):
         return self.text_json["Position_Saved"]
-    
+
+    def connect_positioner(self) -> str:
+        return self.text_json.get("Connect_Positioner", "Connect")
+
+    def disconnect_positioner(self) -> str:
+        return self.text_json.get("Disconnect_Positioner", "Disconnect")
+
+    def stop_positioner(self) -> str:
+        return self.text_json.get("Stop_Positioner", "Stop")
+
+    def calibrate_all(self) -> str:
+        return self.text_json.get("Calibrate_All", "Calibrate All")
+
+    def calibrate_axis(self) -> str:
+        return self.text_json.get("Calibrate_Axis", "Cal {axis}")
+
+    def positioner_connecting(self) -> str:
+        return self.text_json.get("Positioner_Connecting", "Connecting positioner...")
+
+    def positioner_connected(self) -> str:
+        return self.text_json.get("Positioner_Connected", "Positioner connected")
+
+    def positioner_disconnected(self) -> str:
+        return self.text_json.get("Positioner_Disconnected", "Positioner disconnected")
+
+    def positioner_connection_failed(self) -> str:
+        return self.text_json.get("Positioner_Connection_Failed", "Positioner connection failed")
+
+    def positioner_stopped(self) -> str:
+        return self.text_json.get("Positioner_Stopped", "Positioner stopped")
+
+    def calibrating_positioner(self) -> str:
+        return self.text_json.get("Calibrating_Positioner", "Calibrating {axis}...")
+
+    def calibrating_all(self) -> str:
+        return self.text_json.get("Calibrating_All", "Calibrating all axes...")
+
+    def calibration_complete(self) -> str:
+        return self.text_json.get("Calibration_Complete", "Calibration complete")
+
+    def positioner_status(self) -> str:
+        return self.text_json.get("Positioner_Status", "Status")
+
+    def positioner_not_calibrated(self) -> str:
+        return self.text_json.get("Positioner_Not_Calibrated", "Not calibrated")
+
     def light_switcher_connected(self):
         return self.text_json["Light_Switcher_Connected"]
     

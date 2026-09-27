@@ -124,7 +124,16 @@ ENDPOINTS = {
     "spectrometer_dark_clear": f"{API_BASE_URL}/spectrometer/dark-spectrum/clear",
     "spectrometer_dark_load": f"{API_BASE_URL}/spectrometer/dark-spectrum/load",
     "spectrometer_validation": f"{API_BASE_URL}/spectrometer/validation-rules",
-    "spectrometer_reconnect": f"{API_BASE_URL}/spectrometer/reconnect"
+    "spectrometer_reconnect": f"{API_BASE_URL}/spectrometer/reconnect",
+    # Positioner endpoints
+    "positioner_settings": f"{API_BASE_URL}/positioner/settings",
+    "positioner_status": f"{API_BASE_URL}/positioner/status",
+    "positioner_connect": f"{API_BASE_URL}/positioner/connect",
+    "positioner_move": f"{API_BASE_URL}/positioner/move",
+    "positioner_home": f"{API_BASE_URL}/positioner/home",
+    "positioner_stop": f"{API_BASE_URL}/positioner/stop",
+    "positioner_calibrate": f"{API_BASE_URL}/positioner/calibrate",
+    "positioner_calibrate_axis": f"{API_BASE_URL}/positioner/calibrate/{{axis}}",
 }
 
 # Headers for API requests
