@@ -5,7 +5,7 @@
     "Spectrometer": "Спектрометр",
     "Spectrum": "Спектр",
     "Camera": "Камера",
-    "Acquisition": "Приобретение",
+    "Acquisition": "Позиционер",
     "Positioner": "Позиционер",
 
     "Switch_to_Light_Theme": "Переключить на светлую тему",
@@ -122,5 +122,23 @@
     "Spectrometer_Connected": "Спектрометр подключён",
     "Spectrometer_Not_Found": "Спектрометр не найден",
     "Reconnect_Failed": "Ошибка переподключения: {}",
-    "Error_Label": "Ошибка: {}"
+    "Error_Label": "Ошибка: {}",
+
+    "Discovery_Title": "Подключение к Raspberry Pi",
+    "Discovery_Desc": "Сканирование локальной сети...",
+    "Discovery_Manual_IP": "IP адрес:",
+    "Discovery_Check": "Проверить",
+    "Discovery_Rescan": "Повторить",
+    "Discovery_Connect": "Подключить",
+    "Discovery_Skip": "Использовать сохранённый",
+    "Discovery_Skip_Tooltip": "Пропустить сканирование и использовать ранее сохранённый IP адрес",
+    "Discovery_Scanning": "Сканирование...",
+    "Discovery_Not_Found": "Устройства не найдены. Введите IP вручную или повторите.",
+    "Discovery_Not_Found_Desc": "MIP устройства не обнаружены в локальной сети.",
+    "Discovery_Found": "Найдено устройств: {count}",
+    "Discovery_Found_Desc": "Выберите устройство из списка и нажмите Подключить.",
+    "Discovery_Checking": "Проверка {ip}...",
+    "Discovery_Check_Fail": "Устройство не отвечает. Проверьте IP и попробуйте снова.",
+    "Discovery_Check_OK": "Устройство найдено!",
+    "Discovery_Already_Listed": "Устройство уже в списке."
 }

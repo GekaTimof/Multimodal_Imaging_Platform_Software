@@ -122,5 +122,23 @@
     "Spectrometer_Connected": "Spectrometer connected",
     "Spectrometer_Not_Found": "Spectrometer not found",
     "Reconnect_Failed": "Reconnect failed: {}",
-    "Error_Label": "Error: {}"
+    "Error_Label": "Error: {}",
+
+    "Discovery_Title": "Connect to Raspberry Pi",
+    "Discovery_Desc": "Scanning the local network for devices...",
+    "Discovery_Manual_IP": "IP address:",
+    "Discovery_Check": "Check",
+    "Discovery_Rescan": "Rescan",
+    "Discovery_Connect": "Connect",
+    "Discovery_Skip": "Use saved",
+    "Discovery_Skip_Tooltip": "Skip discovery and use the previously saved IP address",
+    "Discovery_Scanning": "Scanning...",
+    "Discovery_Not_Found": "No devices found. Enter IP manually or rescan.",
+    "Discovery_Not_Found_Desc": "No MIP devices were detected on the local network.",
+    "Discovery_Found": "Found {count} device(s)",
+    "Discovery_Found_Desc": "Select a device from the list and click Connect.",
+    "Discovery_Checking": "Checking {ip}...",
+    "Discovery_Check_Fail": "Device not responding. Check IP and try again.",
+    "Discovery_Check_OK": "Device found!",
+    "Discovery_Already_Listed": "Device already in the list."
 }
