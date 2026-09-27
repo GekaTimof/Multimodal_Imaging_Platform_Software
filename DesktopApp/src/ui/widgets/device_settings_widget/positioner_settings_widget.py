@@ -5,9 +5,10 @@ Widget for controlling the GRBL positioner in Acquisition mode.
 Layout (top to bottom):
 1. Current XYZ coordinates (3 rows) — each with left/right arrow buttons + slider
 2. Speed selection: 3 presets (slow/medium/fast) + custom field with warning >4500
-3. Calibrate button
-4. Emergency stop button
-5. Status label (minimum height to prevent squishing)
+3. Save / Load position (name + XYZ + speed persisted via API)
+4. Calibrate button
+5. Emergency stop button
+6. Status label (minimum height to prevent squishing)
 """
 
 import logging
@@ -15,7 +16,7 @@ import logging
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QDoubleSpinBox, QPushButton,
-    QSlider, QSizePolicy,
+    QSlider, QSizePolicy, QLineEdit,
 )
 from PyQt5.QtCore import pyqtSignal, Qt
 
@@ -73,12 +74,15 @@ class PositionerSettingsWidget(QWidget):
         # ---- 2. Speed selection ----
         layout.addWidget(self._build_speed_section())
 
-        # ---- 3. Calibrate button ----
+        # ---- 3. Save / Load position ----
+        layout.addWidget(self._build_save_load_section())
+
+        # ---- 4. Calibrate button ----
         self.btn_calibrate = QPushButton(_t(self.interface_text, 'calibrate', 'Calibrate'))
         self.btn_calibrate.clicked.connect(self.calibrate_all)
         layout.addWidget(self.btn_calibrate)
 
-        # ---- 4. Emergency stop ----
+        # ---- 5. Emergency stop ----
         self.btn_estop = QPushButton(_t(self.interface_text, 'emergency_stop', 'EMERGENCY STOP'))
         self.btn_estop.setMinimumHeight(get_relative_margin(3))
         self.btn_estop.setStyleSheet(
@@ -89,7 +93,7 @@ class PositionerSettingsWidget(QWidget):
         self.btn_estop.clicked.connect(self.stop_positioner)
         layout.addWidget(self.btn_estop)
 
-        # ---- 5. Status label ----
+        # ---- 6. Status label ----
         self.status_label = QLabel(_t(self.interface_text, 'ready', 'Ready'))
         self.status_label.setStyleSheet("QLabel { color: green; font-weight: bold; }")
         self.status_label.setWordWrap(True)
@@ -204,6 +208,43 @@ class PositionerSettingsWidget(QWidget):
         self.speed_warning_label.setWordWrap(True)
         self.speed_warning_label.setVisible(False)
         vbox.addWidget(self.speed_warning_label)
+
+        return container
+
+    # ---- Save / Load section builder ----
+
+    def _build_save_load_section(self) -> QWidget:
+        container = QWidget()
+        vbox = QVBoxLayout(container)
+        vbox.setContentsMargins(0, 0, 0, 0)
+        vbox.setSpacing(2)
+
+        save_label = QLabel(_t(self.interface_text, 'position_presets', 'Position Presets'))
+        save_label.setStyleSheet("QLabel { font-weight: bold; }")
+        vbox.addWidget(save_label)
+
+        # Settings name field
+        name_row = QHBoxLayout()
+        name_label = QLabel(_t(self.interface_text, 'settings_name', 'Settings Name:'))
+        name_row.addWidget(name_label)
+        self.settings_name_edit = QLineEdit()
+        self.settings_name_edit.setPlaceholderText("Basic")
+        self.settings_name_edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        name_row.addWidget(self.settings_name_edit)
+        vbox.addLayout(name_row)
+
+        # Save / Load buttons
+        btn_row = QHBoxLayout()
+        self.btn_save = QPushButton(_t(self.interface_text, 'save', 'Save'))
+        self.btn_load = QPushButton(_t(self.interface_text, 'load', 'Load'))
+        self.btn_save.setToolTip("Save current XYZ + speed to Raspberry Pi database")
+        self.btn_load.setToolTip("Load saved XYZ + speed from Raspberry Pi database")
+        self.btn_save.clicked.connect(self.save_position)
+        self.btn_load.clicked.connect(self.load_position)
+        btn_row.addWidget(self.btn_save)
+        btn_row.addWidget(self.btn_load)
+        btn_row.addStretch()
+        vbox.addLayout(btn_row)
 
         return container
 
@@ -376,6 +417,61 @@ class PositionerSettingsWidget(QWidget):
             return
         self._set_status(
             _t(self.interface_text, 'calibration_complete', 'Calibration complete')
+        )
+
+    # ------------------------------------------------------------------
+    # Save / Load position
+    # ------------------------------------------------------------------
+
+    def save_position(self):
+        name = self.settings_name_edit.text().strip() or "Basic"
+        settings = {
+            'SettingsName': name,
+            'XPosition': self._axis_widgets["X"]["spinbox"].value(),
+            'YPosition': self._axis_widgets["Y"]["spinbox"].value(),
+            'ZPosition': self._axis_widgets["Z"]["spinbox"].value(),
+            'MovementSpeed': self.speed_spinbox.value(),
+            'Acceleration': 100.0,
+        }
+        self._set_status(
+            _t(self.interface_text, 'applying_positioner_settings', 'Saving position...'), 'blue'
+        )
+        self._request('POST', ENDPOINTS['positioner_settings'], settings, self._on_position_saved)
+
+    def _on_position_saved(self, success: bool, message: str, response: dict):
+        if not success:
+            self._set_status(f"Save failed: {message}", 'red')
+            return
+        name = self.settings_name_edit.text().strip() or "Basic"
+        self._set_status(
+            _t(self.interface_text, 'position_saved', 'Position saved as preset: {preset_name}').format(preset_name=name)
+        )
+
+    def load_position(self):
+        self._set_status(
+            _t(self.interface_text, 'loading_positioner_settings', 'Loading saved position...'), 'blue'
+        )
+        self._request('GET', ENDPOINTS['positioner_settings'], None, self._on_position_loaded)
+
+    def _on_position_loaded(self, success: bool, message: str, response: dict):
+        if not success:
+            self._set_status(f"Load failed: {message}", 'red')
+            return
+        self.settings_name_edit.setText(response.get('SettingsName', 'Basic'))
+        speed = float(response.get('MovementSpeed', 2000))
+        for axis_name in ('X', 'Y', 'Z'):
+            val = float(response.get(f'{axis_name}Position', 0.0))
+            w = self._axis_widgets[axis_name]
+            w["spinbox"].blockSignals(True)
+            w["spinbox"].setValue(val)
+            w["spinbox"].blockSignals(False)
+            w["slider"].blockSignals(True)
+            w["slider"].setValue(int(val * _SLIDER_SCALE))
+            w["slider"].blockSignals(False)
+        self.speed_spinbox.setValue(speed)
+        name = response.get('SettingsName', 'Basic')
+        self._set_status(
+            _t(self.interface_text, 'positioner_settings_loaded', 'Positioner settings loaded') + f": {name}"
         )
 
     # ------------------------------------------------------------------
