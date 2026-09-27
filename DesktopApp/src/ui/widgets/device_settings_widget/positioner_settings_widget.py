@@ -348,7 +348,35 @@ class PositionerSettingsWidget(QWidget):
             axis_w["slider"].setEnabled(enabled)
         self.btn_calibrate.setEnabled(enabled)
 
+    def _update_axis_limits_from_calibration(self, data: dict):
+        """Update spinbox/slider ranges from calibration data returned by status API.
+
+        After calibration, work coordinates go from 0 to travel (mm).
+        If calibration data is absent, ranges stay at defaults.
+        """
+        # TODO: When the positioner API supports dedicated endpoint for axis
+        #       limits (e.g. GET /positioner/limits), use it instead of
+        #       extracting from the status response calibration dict.
+        calibration = data.get('calibration', {})
+        if not calibration:
+            return
+        for axis_key, axis_name in [('x', 'X'), ('y', 'Y'), ('z', 'Z')]:
+            cal = calibration.get(axis_key)
+            if not cal:
+                continue
+            travel = float(cal.get('travel', 0.0))
+            if travel <= 0:
+                continue
+            w = self._axis_widgets[axis_name]
+            w["spinbox"].blockSignals(True)
+            w["spinbox"].setRange(0.0, travel)
+            w["spinbox"].blockSignals(False)
+            w["slider"].blockSignals(True)
+            w["slider"].setRange(0, int(travel * _SLIDER_SCALE))
+            w["slider"].blockSignals(False)
+
     def _update_position_from_response(self, data: dict):
+        self._update_axis_limits_from_calibration(data)
         position = data.get('work_position') or data.get('position', {})
         if position:
             for axis_key, axis_name in [('x', 'X'), ('y', 'Y'), ('z', 'Z')]:

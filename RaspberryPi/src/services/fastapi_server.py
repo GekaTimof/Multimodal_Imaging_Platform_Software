@@ -968,6 +968,12 @@ async def update_positioner_settings(settings: PositionerSettingsResponse):
         raise HTTPException(status_code=400, detail=str(e))
 
 
+# TODO: Add GET /api/positioner/limits endpoint that returns calibrated
+#       axis ranges: {x: {min: 0, max: travel}, y: ..., z: ...}.
+#       Currently the DesktopApp extracts limits from the calibration dict
+#       inside /api/positioner/status, but a dedicated endpoint would be
+#       cleaner and allow the UI to query limits without a full status refresh.
+
 @app.get("/api/positioner/status", response_model=APIResponse)
 async def get_positioner_status():
     try:
