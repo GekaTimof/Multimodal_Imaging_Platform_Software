@@ -53,7 +53,6 @@ class PositionerSettingsWidget(QWidget):
         self.current_settings = {}
         self._active_threads: list = []
         self._build_ui()
-        self.refresh_status()
 
     # ------------------------------------------------------------------
     # UI construction
