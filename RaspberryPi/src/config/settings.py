@@ -31,6 +31,11 @@ class Config:
     # Spectrometer Configuration
     DARK_SPECTRUM_FILENAME = 'dark_spectrum.npy'
 
+    POSITIONER_PORT = os.getenv('POSITIONER_PORT', '/dev/serial/by-path/platform-xhci-hcd.0-usb-0:1:1.0-port0')
+    POSITIONER_BAUDRATE = int(os.getenv('POSITIONER_BAUDRATE', '115200'))
+    POSITIONER_TIMEOUT_SECONDS = float(os.getenv('POSITIONER_TIMEOUT_SECONDS', '2'))
+    POSITIONER_MOVEMENT_TIMEOUT_SECONDS = float(os.getenv('POSITIONER_MOVEMENT_TIMEOUT_SECONDS', '600'))
+
     @classmethod
     def get_dark_spectrum_path(cls) -> str:
         """Get standard dark spectrum file path."""
@@ -99,6 +104,30 @@ class Config:
         'UseDarkSpectrum': False,
         'AutoDarkCorrection': True,
         'OverilluminationThreshold': 65535
+    }
+
+    MIN_POSITION_MM = -1000.0
+    MAX_POSITION_MM = 1000.0
+    MIN_MOVEMENT_SPEED = 0.1
+    MAX_MOVEMENT_SPEED = 100.0
+    MIN_ACCELERATION = 0.1
+    MAX_ACCELERATION = 1000.0
+    DEFAULT_POSITIONER_SETTINGS = {
+        'SettingsName': 'Basic',
+        'XPosition': 0.0,
+        'YPosition': 0.0,
+        'ZPosition': 0.0,
+        'MovementSpeed': 10.0,
+        'Acceleration': 100.0,
+        'XMin': 0.0,
+        'XMax': 0.0,
+        'YMin': 0.0,
+        'YMax': 0.0,
+        'ZMin': 0.0,
+        'ZMax': 0.0,
+        'XHomeAtMin': 1,
+        'YHomeAtMin': 1,
+        'ZHomeAtMin': 1,
     }
     
     @classmethod
@@ -251,6 +280,38 @@ class Config:
 
         else:
             return False, f"Unknown spectrometer parameter: {parameter}"
+
+    @classmethod
+    def validate_positioner_parameter(cls, parameter: str, value: Any) -> tuple[bool, Any]:
+        if parameter == 'SettingsName':
+            if not isinstance(value, str) or not value.strip():
+                return False, "SettingsName must be a non-empty string"
+            return True, value.strip()
+
+        ranges = {
+            'XPosition': (-5000.0, 15000.0),
+            'YPosition': (-5000.0, 15000.0),
+            'ZPosition': (-5000.0, 15000.0),
+            'MovementSpeed': (cls.MIN_MOVEMENT_SPEED, cls.MAX_MOVEMENT_SPEED),
+            'Acceleration': (cls.MIN_ACCELERATION, cls.MAX_ACCELERATION),
+        }
+        if parameter in ('XMin', 'XMax', 'YMin', 'YMax', 'ZMin', 'ZMax'):
+            try:
+                return True, float(value)
+            except (TypeError, ValueError):
+                return False, f"{parameter} must be a number"
+        if parameter in ('XHomeAtMin', 'YHomeAtMin', 'ZHomeAtMin'):
+            return True, 1 if value in (1, '1', True, 'true', 'True') else 0
+        if parameter not in ranges:
+            return False, f"Unknown positioner parameter: {parameter}"
+        try:
+            value = float(value)
+        except (TypeError, ValueError):
+            return False, f"{parameter} must be a number"
+        minimum, maximum = ranges[parameter]
+        if not minimum <= value <= maximum:
+            return False, f"{parameter} {value} out of range [{minimum}, {maximum}]"
+        return True, value
 
 
 # Global configuration instance

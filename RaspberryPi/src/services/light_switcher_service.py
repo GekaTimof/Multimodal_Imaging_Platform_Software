@@ -9,6 +9,7 @@ import time
 import logging
 import threading
 import glob
+import os
 from typing import Optional, Tuple
 from enum import Enum
 
@@ -404,7 +405,7 @@ class LightSwitcherService:
         self.disconnect()
 
 # Global service instance (with auto port detection)
-light_switcher_service = LightSwitcherService(port=None)
+light_switcher_service = LightSwitcherService(port=os.getenv('LIGHT_SWITCHER_PORT', '/dev/serial/by-path/platform-xhci-hcd.1-usb-0:2:1.0-port0'))
 
 if __name__ == "__main__":
     # Тестирование сервиса
