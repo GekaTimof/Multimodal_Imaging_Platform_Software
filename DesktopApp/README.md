@@ -74,6 +74,11 @@ Edit `resources/settings.json`:
 - `ui.theme` — Theme setting
 - `ui.language` — Language (English/Russian)
 
+Or use the ⚯ button in the top-right corner: enter the address manually, or press
+**Find Raspberry** to detect it automatically in the local network (mDNS hostname
+lookup, then a scan of the local subnets probing `/api/health`). The found address
+is written to `resources/settings.json`; the app offers a restart to apply it.
+
 ### Features
 
 | Tab | Features |
@@ -153,6 +158,11 @@ python main.py
 - `api.base_url` — IP Raspberry Pi (по умолчанию: `http://10.78.112.189:8000/api`)
 - `ui.theme` — Настройка темы
 - `ui.language` — Язык (English/Russian)
+
+Либо используйте кнопку ⚯ в правом верхнем углу: адрес можно ввести вручную или
+нажать **Найти Raspberry** — приложение само найдёт плату в локальной сети (сначала
+mDNS-имя, затем скан локальных подсетей с опросом `/api/health`). Найденный адрес
+сохраняется в `resources/settings.json`, после чего предлагается перезапуск.
 
 ### Функциональность
 

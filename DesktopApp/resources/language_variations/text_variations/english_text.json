@@ -122,5 +122,17 @@
     "Spectrometer_Connected": "Spectrometer connected",
     "Spectrometer_Not_Found": "Spectrometer not found",
     "Reconnect_Failed": "Reconnect failed: {}",
-    "Error_Label": "Error: {}"
+    "Error_Label": "Error: {}",
+    "Connection_Settings": "Connection Settings",
+    "Raspberry_IP": "Raspberry Pi IP:",
+    "Find_Raspberry": "Find Raspberry",
+    "Test_Connection": "Test connection",
+    "Searching_Raspberry": "Searching for Raspberry Pi...",
+    "Raspberry_Found": "Raspberry Pi found: {}",
+    "Raspberry_Not_Found": "Raspberry Pi not found in the local network",
+    "Checking_Connection": "Checking connection...",
+    "Connection_Ok": "Connection OK",
+    "Connection_Failed": "No response from {}",
+    "Restart_Required_Title": "Restart required",
+    "Restart_Required_Text": "The new address will be used after restarting the application. Restart now?"
 }

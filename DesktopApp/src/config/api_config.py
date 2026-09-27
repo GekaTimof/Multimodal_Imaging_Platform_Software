@@ -11,6 +11,7 @@ Centralized configuration for API endpoints and connection settings.
 import json
 import logging
 import os
+from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +63,29 @@ def _get_spectrum_stream_url_from_env() -> str | None:
     return None
 
 
+def _save_settings(settings: dict) -> None:
+    """Сохранить настройки в JSON-файл."""
+    with open(_SETTINGS_FILE, "w", encoding="utf-8") as f:
+        json.dump(settings, f, indent=4, ensure_ascii=False)
+
+
+def _host_from_url(url: str) -> str | None:
+    """Извлечь хост (IP) из URL вида http://<host>:<port>/..."""
+    try:
+        return urlparse(url).hostname
+    except ValueError:
+        return None
+
+
+def _port_from_url(url: str, default: str) -> str:
+    """Извлечь порт из URL, вернуть значение по умолчанию при отсутствии."""
+    try:
+        port = urlparse(url).port
+    except ValueError:
+        port = None
+    return str(port) if port else default
+
+
 _settings = _load_settings()
 
 # Приоритет: переменные окружения > settings.json > значения по умолчанию
@@ -83,6 +107,48 @@ SPECTRUM_STREAM_URL: str = (
     or f"http://{_DEFAULT_RASPBERRY_PI_IP}:{_DEFAULT_SPECTRUM_STREAM_PORT}/spectrum"
 )
 
+
+def get_raspberry_ip() -> str:
+    """Текущий адрес Raspberry Pi, используемый приложением."""
+    return _host_from_url(API_BASE_URL) or _DEFAULT_RASPBERRY_PI_IP
+
+
+def get_api_port() -> int:
+    """Порт API-сервера Raspberry Pi."""
+    return int(_port_from_url(API_BASE_URL, _DEFAULT_API_PORT))
+
+
+def set_raspberry_ip(ip: str, persist: bool = True) -> None:
+    """Переключить приложение на новый адрес Raspberry Pi.
+
+    Обновляет URL-адреса в памяти и (по умолчанию) сохраняет их в
+    resources/settings.json. Уже созданные сервисы продолжают использовать
+    старый адрес, поэтому после смены IP приложение нужно перезапустить.
+    """
+    global API_BASE_URL, CAMERA_STREAM_URL, SPECTRUM_STREAM_URL
+
+    api_port = _port_from_url(API_BASE_URL, _DEFAULT_API_PORT)
+    stream_port = _port_from_url(CAMERA_STREAM_URL, _DEFAULT_STREAM_PORT)
+    spectrum_port = _port_from_url(SPECTRUM_STREAM_URL, _DEFAULT_SPECTRUM_STREAM_PORT)
+
+    API_BASE_URL = f"http://{ip}:{api_port}/api"
+    CAMERA_STREAM_URL = f"http://{ip}:{stream_port}/video"
+    SPECTRUM_STREAM_URL = f"http://{ip}:{spectrum_port}/spectrum"
+    ENDPOINTS.update(_build_endpoints(API_BASE_URL, CAMERA_STREAM_URL))
+
+    if not persist:
+        return
+
+    settings = _load_settings()
+    settings.setdefault("api", {})["base_url"] = API_BASE_URL
+    settings.setdefault("camera", {})["stream_url"] = CAMERA_STREAM_URL
+    settings.setdefault("spectrometer", {})["stream_url"] = SPECTRUM_STREAM_URL
+    try:
+        _save_settings(settings)
+        logger.info(f"Raspberry Pi address saved: {ip}")
+    except Exception as e:
+        logger.error(f"Could not save settings.json: {e}")
+
 # Connection settings
 TIMEOUT_SECONDS = 3
 RETRY_ATTEMPTS = 3
@@ -98,34 +164,39 @@ LIGHT_SWITCHER_CONNECTION_TIMEOUT = 10.0
 LIGHT_SWITCHER_SWITCH_TIMEOUT = 25.0
 
 # API endpoints
-ENDPOINTS = {
-    "health": f"{API_BASE_URL}/health",
-    "camera_settings": f"{API_BASE_URL}/settings/camera",
-    "camera_settings_slot": f"{API_BASE_URL}/settings/camera/slot/{{slot_id}}",
-    "camera_settings_slots": f"{API_BASE_URL}/settings/camera/slots",
-    "update_parameter": f"{API_BASE_URL}/settings/update",
-    "camera_validation": f"{API_BASE_URL}/settings/camera/validation-rules",
-    "save_camera_slot": f"{API_BASE_URL}/settings/camera/save-slot/{{slot_id}}",
-    "load_camera_slot": f"{API_BASE_URL}/settings/camera/load-slot/{{slot_id}}",
-    "apply_camera": f"{API_BASE_URL}/settings/camera/apply",
-    "video_stream": CAMERA_STREAM_URL,
-    "stream_status": f"{CAMERA_STREAM_URL}/status",
-    # Light switcher endpoints
-    "light_switcher_status": f"{API_BASE_URL}/light-switcher/status",
-    "light_switcher_connect": f"{API_BASE_URL}/light-switcher/connect",
-    "light_switcher_switch": f"{API_BASE_URL}/light-switcher/switch",
-    "light_switcher_disconnect": f"{API_BASE_URL}/light-switcher/disconnect",
-    # Spectrometer endpoints
-    "spectrometer_settings": f"{API_BASE_URL}/spectrometer/settings",
-    "spectrometer_info": f"{API_BASE_URL}/spectrometer/info",
-    "spectrometer_spectrum": f"{API_BASE_URL}/spectrometer/spectrum",
-    "spectrometer_integral_time": f"{API_BASE_URL}/spectrometer/integral-time",
-    "spectrometer_dark_capture": f"{API_BASE_URL}/spectrometer/dark-spectrum/capture",
-    "spectrometer_dark_clear": f"{API_BASE_URL}/spectrometer/dark-spectrum/clear",
-    "spectrometer_dark_load": f"{API_BASE_URL}/spectrometer/dark-spectrum/load",
-    "spectrometer_validation": f"{API_BASE_URL}/spectrometer/validation-rules",
-    "spectrometer_reconnect": f"{API_BASE_URL}/spectrometer/reconnect"
-}
+def _build_endpoints(api_base_url: str, camera_stream_url: str) -> dict:
+    """Собрать словарь эндпоинтов для заданных базовых URL."""
+    return {
+        "health": f"{api_base_url}/health",
+        "camera_settings": f"{api_base_url}/settings/camera",
+        "camera_settings_slot": f"{api_base_url}/settings/camera/slot/{{slot_id}}",
+        "camera_settings_slots": f"{api_base_url}/settings/camera/slots",
+        "update_parameter": f"{api_base_url}/settings/update",
+        "camera_validation": f"{api_base_url}/settings/camera/validation-rules",
+        "save_camera_slot": f"{api_base_url}/settings/camera/save-slot/{{slot_id}}",
+        "load_camera_slot": f"{api_base_url}/settings/camera/load-slot/{{slot_id}}",
+        "apply_camera": f"{api_base_url}/settings/camera/apply",
+        "video_stream": camera_stream_url,
+        "stream_status": f"{camera_stream_url}/status",
+        # Light switcher endpoints
+        "light_switcher_status": f"{api_base_url}/light-switcher/status",
+        "light_switcher_connect": f"{api_base_url}/light-switcher/connect",
+        "light_switcher_switch": f"{api_base_url}/light-switcher/switch",
+        "light_switcher_disconnect": f"{api_base_url}/light-switcher/disconnect",
+        # Spectrometer endpoints
+        "spectrometer_settings": f"{api_base_url}/spectrometer/settings",
+        "spectrometer_info": f"{api_base_url}/spectrometer/info",
+        "spectrometer_spectrum": f"{api_base_url}/spectrometer/spectrum",
+        "spectrometer_integral_time": f"{api_base_url}/spectrometer/integral-time",
+        "spectrometer_dark_capture": f"{api_base_url}/spectrometer/dark-spectrum/capture",
+        "spectrometer_dark_clear": f"{api_base_url}/spectrometer/dark-spectrum/clear",
+        "spectrometer_dark_load": f"{api_base_url}/spectrometer/dark-spectrum/load",
+        "spectrometer_validation": f"{api_base_url}/spectrometer/validation-rules",
+        "spectrometer_reconnect": f"{api_base_url}/spectrometer/reconnect"
+    }
+
+
+ENDPOINTS = _build_endpoints(API_BASE_URL, CAMERA_STREAM_URL)
 
 # Headers for API requests
 HEADERS = {

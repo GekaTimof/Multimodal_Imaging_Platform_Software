@@ -450,3 +450,45 @@ class Interface_text():
     def error_label(self) -> str:
         return self.text_json.get("Error_Label", "Error: {}")
 
+
+    def connection_settings(self) -> str:
+        return self.text_json.get("Connection_Settings", "Connection Settings")
+
+    def connection_settings_title(self) -> str:
+        return self.text_json.get("Connection_Settings", "Connection Settings")
+
+    def raspberry_ip(self) -> str:
+        return self.text_json.get("Raspberry_IP", "Raspberry Pi IP:")
+
+    def find_raspberry(self) -> str:
+        return self.text_json.get("Find_Raspberry", "Find Raspberry")
+
+    def test_connection(self) -> str:
+        return self.text_json.get("Test_Connection", "Test connection")
+
+    def searching_raspberry(self) -> str:
+        return self.text_json.get("Searching_Raspberry", "Searching for Raspberry Pi...")
+
+    def raspberry_found(self) -> str:
+        return self.text_json.get("Raspberry_Found", "Raspberry Pi found: {}")
+
+    def raspberry_not_found(self) -> str:
+        return self.text_json.get("Raspberry_Not_Found", "Raspberry Pi not found in the local network")
+
+    def checking_connection(self) -> str:
+        return self.text_json.get("Checking_Connection", "Checking connection...")
+
+    def connection_ok(self) -> str:
+        return self.text_json.get("Connection_Ok", "Connection OK")
+
+    def connection_failed(self) -> str:
+        return self.text_json.get("Connection_Failed", "No response from {}")
+
+    def restart_required_title(self) -> str:
+        return self.text_json.get("Restart_Required_Title", "Restart required")
+
+    def restart_required_text(self) -> str:
+        return self.text_json.get(
+            "Restart_Required_Text",
+            "The new address will be used after restarting the application. Restart now?"
+        )

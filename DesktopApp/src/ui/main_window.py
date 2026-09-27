@@ -14,7 +14,7 @@ import os
 
 from PyQt5.QtWidgets import (
     QMainWindow, QTabWidget, QVBoxLayout, QWidget, QHBoxLayout,
-    QPushButton, QApplication
+    QPushButton, QApplication, QMessageBox
 )
 
 from PyQt5.QtCore import QTimer, Qt, QThread, pyqtSignal, QProcess
@@ -26,6 +26,7 @@ from ui.tabs.Acquisition_tab import AcquisitionTab
 from ui.widgets.light_switcher_status_widget import LightSwitcherStatusWidget
 from ui.widgets.switch_progress_widget import SwitchProgressWidget
 from ui.widgets.interface_settings_dialog import InterfaceSettingsDialog
+from ui.widgets.connection_settings_dialog import ConnectionSettingsDialog
 from models.interface_text import Interface_text
 from config import interface_config
 from config.theme_manager import ThemeManager
@@ -187,6 +188,13 @@ class MainWindow(QMainWindow):
         self._lang_btn.clicked.connect(self._on_language_toggle)
         row.addWidget(self._lang_btn)
 
+        # Connection settings button
+        self._connection_btn = QPushButton("⚭")
+        self._connection_btn.setStyleSheet(btn_style)
+        self._connection_btn.setToolTip(self.interface_text.connection_settings())
+        self._connection_btn.clicked.connect(self._on_connection_settings)
+        row.addWidget(self._connection_btn)
+
         # Interface settings button
         self._settings_btn = QPushButton("⚙")
         self._settings_btn.setStyleSheet(btn_style)
@@ -246,6 +254,28 @@ class MainWindow(QMainWindow):
         dialog.settings_applied.connect(self._apply_font)
         dialog.exec_()
 
+    def _on_connection_settings(self):
+        """Open the Raspberry Pi connection settings dialog."""
+        dialog = ConnectionSettingsDialog(
+            interface_text=self.interface_text,
+            parent=self
+        )
+        dialog.address_changed.connect(self._on_address_changed)
+        dialog.exec_()
+
+    def _on_address_changed(self, ip: str):
+        """Offer a restart so every service picks up the new Raspberry Pi address."""
+        logger.info(f"Raspberry Pi address changed to {ip}")
+        answer = QMessageBox.question(
+            self,
+            self.interface_text.restart_required_title(),
+            self.interface_text.restart_required_text(),
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.Yes
+        )
+        if answer == QMessageBox.Yes:
+            self._restart_application()
+
     def _apply_font(self):
         """Apply font family and size from config to the whole application."""
         try:
@@ -270,7 +300,7 @@ class MainWindow(QMainWindow):
         try:
             pad = get_relative_margin(0.4)
             btn_style = f"QPushButton {{ padding: {pad}px {pad * 2}px; }}"
-            for btn in ('_theme_btn', '_lang_btn', '_settings_btn'):
+            for btn in ('_theme_btn', '_lang_btn', '_connection_btn', '_settings_btn'):
                 if hasattr(self, btn):
                     getattr(self, btn).setStyleSheet(btn_style)
         except Exception as e:

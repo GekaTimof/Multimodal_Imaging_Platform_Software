@@ -122,5 +122,17 @@
     "Spectrometer_Connected": "Спектрометр подключён",
     "Spectrometer_Not_Found": "Спектрометр не найден",
     "Reconnect_Failed": "Ошибка переподключения: {}",
-    "Error_Label": "Ошибка: {}"
+    "Error_Label": "Ошибка: {}",
+    "Connection_Settings": "Настройки подключения",
+    "Raspberry_IP": "IP Raspberry Pi:",
+    "Find_Raspberry": "Найти Raspberry",
+    "Test_Connection": "Проверить связь",
+    "Searching_Raspberry": "Поиск Raspberry Pi...",
+    "Raspberry_Found": "Raspberry Pi найдена: {}",
+    "Raspberry_Not_Found": "Raspberry Pi не найдена в локальной сети",
+    "Checking_Connection": "Проверка подключения...",
+    "Connection_Ok": "Связь установлена",
+    "Connection_Failed": "Нет ответа от {}",
+    "Restart_Required_Title": "Требуется перезапуск",
+    "Restart_Required_Text": "Новый адрес будет использован после перезапуска приложения. Перезапустить сейчас?"
 }
