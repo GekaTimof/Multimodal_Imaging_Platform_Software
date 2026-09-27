@@ -141,3 +141,104 @@ HEADERS = {
     "Content-Type": "application/json",
     "Accept": "application/json"
 }
+
+
+# ------------------------------------------------------------------ #
+#  Dynamic reconfiguration (used by the device-discovery dialog)      #
+# ------------------------------------------------------------------ #
+
+def _build_endpoints(api_base: str, cam_stream: str) -> dict:
+    """Build the full ENDPOINTS dict from base URLs."""
+    return {
+        "health": f"{api_base}/health",
+        "camera_settings": f"{api_base}/settings/camera",
+        "camera_settings_slot": f"{api_base}/settings/camera/slot/{{slot_id}}",
+        "camera_settings_slots": f"{api_base}/settings/camera/slots",
+        "update_parameter": f"{api_base}/settings/update",
+        "camera_validation": f"{api_base}/settings/camera/validation-rules",
+        "save_camera_slot": f"{api_base}/settings/camera/save-slot/{{slot_id}}",
+        "load_camera_slot": f"{api_base}/settings/camera/load-slot/{{slot_id}}",
+        "apply_camera": f"{api_base}/settings/camera/apply",
+        "video_stream": cam_stream,
+        "stream_status": f"{cam_stream}/status",
+        # Light switcher
+        "light_switcher_status": f"{api_base}/light-switcher/status",
+        "light_switcher_connect": f"{api_base}/light-switcher/connect",
+        "light_switcher_switch": f"{api_base}/light-switcher/switch",
+        "light_switcher_disconnect": f"{api_base}/light-switcher/disconnect",
+        # Spectrometer
+        "spectrometer_settings": f"{api_base}/spectrometer/settings",
+        "spectrometer_info": f"{api_base}/spectrometer/info",
+        "spectrometer_spectrum": f"{api_base}/spectrometer/spectrum",
+        "spectrometer_integral_time": f"{api_base}/spectrometer/integral-time",
+        "spectrometer_dark_capture": f"{api_base}/spectrometer/dark-spectrum/capture",
+        "spectrometer_dark_clear": f"{api_base}/spectrometer/dark-spectrum/clear",
+        "spectrometer_dark_load": f"{api_base}/spectrometer/dark-spectrum/load",
+        "spectrometer_validation": f"{api_base}/spectrometer/validation-rules",
+        "spectrometer_reconnect": f"{api_base}/spectrometer/reconnect",
+        # Positioner
+        "positioner_settings": f"{api_base}/positioner/settings",
+        "positioner_status": f"{api_base}/positioner/status",
+        "positioner_connect": f"{api_base}/positioner/connect",
+        "positioner_move": f"{api_base}/positioner/move",
+        "positioner_home": f"{api_base}/positioner/home",
+        "positioner_stop": f"{api_base}/positioner/stop",
+        "positioner_calibrate": f"{api_base}/positioner/calibrate",
+        "positioner_calibrate_axis": f"{api_base}/positioner/calibrate/{{axis}}",
+    }
+
+
+def reconfigure(ip: str, api_port: str | None = None,
+                stream_port: str | None = None,
+                spectrum_stream_port: str | None = None) -> None:
+    """
+    Update all module-level URL constants for a new Raspberry Pi IP
+    and persist the change to ``resources/settings.json``.
+
+    This must be called **before** any service singleton (e.g.
+    ``LightSwitcherService``) is created, because they capture the
+    URL at construction time.
+    """
+    global API_BASE_URL, CAMERA_STREAM_URL, SPECTRUM_STREAM_URL, ENDPOINTS
+
+    _api_port = api_port or _DEFAULT_API_PORT
+    _stream_port = stream_port or _DEFAULT_STREAM_PORT
+    _spec_port = spectrum_stream_port or _DEFAULT_SPECTRUM_STREAM_PORT
+
+    API_BASE_URL = f"http://{ip}:{_api_port}/api"
+    CAMERA_STREAM_URL = f"http://{ip}:{_stream_port}/video"
+    SPECTRUM_STREAM_URL = f"http://{ip}:{_spec_port}/spectrum"
+
+    ENDPOINTS.update(_build_endpoints(API_BASE_URL, CAMERA_STREAM_URL))
+
+    _save_ip_to_settings(ip, _api_port, _stream_port, _spec_port)
+    logger.info(f"API reconfigured for {ip} (api={_api_port}, stream={_stream_port}, spectrum={_spec_port})")
+
+
+def get_saved_ip() -> str | None:
+    """Return the IP currently stored in settings.json, or None."""
+    settings = _load_settings()
+    base_url = settings.get("api", {}).get("base_url", "")
+    try:
+        from urllib.parse import urlparse
+        parsed = urlparse(base_url)
+        host = parsed.hostname
+        if host and not host.startswith("127."):
+            return host
+    except Exception:
+        pass
+    return None
+
+
+def _save_ip_to_settings(ip: str, api_port: str, stream_port: str, spectrum_port: str) -> None:
+    """Write the updated IP/ports back to settings.json."""
+    try:
+        settings = _load_settings()
+        settings.setdefault("api", {})["base_url"] = f"http://{ip}:{api_port}/api"
+        settings.setdefault("camera", {})["stream_url"] = f"http://{ip}:{stream_port}/video"
+        settings.setdefault("spectrometer", {})["stream_url"] = f"http://{ip}:{spectrum_port}/spectrum"
+
+        with open(_SETTINGS_FILE, "w", encoding="utf-8") as f:
+            json.dump(settings, f, indent=4, ensure_ascii=False)
+    except Exception as e:
+        logger.warning(f"Could not persist settings.json: {e}")
