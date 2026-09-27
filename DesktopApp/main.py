@@ -44,9 +44,10 @@ def _show_connection_dialog(app: QApplication) -> bool:
 
     if result == QDialog.Accepted and dialog.selected_ip:
         reconfigure(dialog.selected_ip, api_port=str(dialog.selected_port))
+        return True
 
-    # Dialog closed (X button) — continue with whatever is in settings.json
-    return True
+    # Dialog closed (X button) — exit the application
+    return False
 
 
 def main():

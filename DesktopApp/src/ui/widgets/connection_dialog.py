@@ -224,6 +224,11 @@ class ConnectionDialog(QDialog):
         worker.start()
 
     def _on_device_found(self, device: DiscoveredDevice):
+        # Skip duplicates (may arrive from scan + manual check simultaneously)
+        for d in self._devices:
+            if d.ip == device.ip and d.port == device.port:
+                return
+
         self._devices.append(device)
         item = QListWidgetItem(
             f"{device.display_name}   [{device.response_time_ms:.0f} ms]"
