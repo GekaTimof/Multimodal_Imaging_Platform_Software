@@ -7,6 +7,9 @@ This widget provides controls for:
 - Movement speed
 - Position presets
 - Home/zero positioning
+
+NOTE: The positioner hardware API is not yet implemented on the Raspberry Pi.
+All actions are local placeholders that will be wired to real endpoints later.
 """
 
 import logging
@@ -18,8 +21,6 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import pyqtSignal
 
-from config.api_config import API_BASE_URL
-from core.constants.camera_constants import THREAD_TIMEOUT_MS
 from ui.ui_utils import get_relative_margin
 
 logger = logging.getLogger(__name__)
@@ -27,20 +28,18 @@ logger = logging.getLogger(__name__)
 
 class PositionerSettingsWidget(QWidget):
     """Widget for positioner settings configuration."""
-    
+
     # Signal emitted when settings are updated
     settings_updated = pyqtSignal()
-    
+
     def __init__(self, interface_text=None):
         super().__init__()
         self.interface_text = interface_text
-        self.api_base_url = API_BASE_URL
         self.current_settings = {}
-        self.active_threads = []  # Track active threads
         self._build_ui()
         # Load default settings on startup
         self.load_settings()
-    
+
     def _build_ui(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(
@@ -160,11 +159,10 @@ class PositionerSettingsWidget(QWidget):
         layout.addLayout(button_row1_layout)
         layout.addLayout(button_row2_layout)
 
-        # Status label
+        # Status label (no fixed max width — adapts to panel width)
         self.status_label = QLabel(self.interface_text.ready() if self.interface_text else "Ready")
         self.status_label.setStyleSheet("QLabel { color: green; font-weight: bold; }")
         self.status_label.setWordWrap(True)
-        self.status_label.setMaximumWidth(300)
         layout.addWidget(self.status_label)
 
         layout.addStretch()
@@ -282,17 +280,4 @@ class PositionerSettingsWidget(QWidget):
         self.status_label.setText(status)
         self.status_label.setStyleSheet("QLabel { color: orange; font-weight: bold; }")
     
-    def _cleanup_thread(self, thread):
-        """Remove thread from active threads list when finished."""
-        if thread in self.active_threads:
-            self.active_threads.remove(thread)
-    
-    def closeEvent(self, event):
-        """Clean up active threads when widget is destroyed."""
-        # Terminate all active threads
-        for thread in self.active_threads:
-            if thread.isRunning():
-                thread.terminate()
-                thread.wait(THREAD_TIMEOUT_MS)
-        self.active_threads.clear()
-        super().closeEvent(event)
+
