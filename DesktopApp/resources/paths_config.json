@@ -15,7 +15,7 @@
             "subdir_format": "{date}"
         },
         "spectrum": {
-            "default_save_dir": "/home/evgeniy/Downloads",
+            "default_save_dir": "C:/Users/Evgeniy/Downloads",
             "filename_template": "spectrum_{timestamp}.txt",
             "format": "TXT",
             "allowed_formats": [
