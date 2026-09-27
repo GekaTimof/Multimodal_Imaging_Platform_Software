@@ -218,13 +218,6 @@ class PositionerSettingsWidget(QWidget):
         return container
 
     # ---- Save / Load section builder ----
-    # TODO: Implement 10-slot positioner presets (like camera settings slots).
-    #       - Add a SettingsSlotDialog for positioner (reuse/adapt the camera one).
-    #       - Save button should open slot selection dialog, then POST to
-    #         /api/positioner/settings/{slot_id}.
-    #       - Load button should open slot selection dialog, then GET from
-    #         /api/positioner/settings/{slot_id} and update UI.
-    #       - Requires corresponding slot-based API endpoints on RaspberryPi side.
 
     def _build_save_load_section(self) -> QWidget:
         container = QWidget()
@@ -354,9 +347,6 @@ class PositionerSettingsWidget(QWidget):
         After calibration, work coordinates go from 0 to travel (mm).
         If calibration data is absent, ranges stay at defaults.
         """
-        # TODO: When the positioner API supports dedicated endpoint for axis
-        #       limits (e.g. GET /positioner/limits), use it instead of
-        #       extracting from the status response calibration dict.
         calibration = data.get('calibration', {})
         if not calibration:
             return
@@ -468,9 +458,6 @@ class PositionerSettingsWidget(QWidget):
         name = self.settings_name_edit.text().strip() or "Basic"
         settings = {
             'SettingsName': name,
-            'XPosition': self._axis_widgets["X"]["spinbox"].value(),
-            'YPosition': self._axis_widgets["Y"]["spinbox"].value(),
-            'ZPosition': self._axis_widgets["Z"]["spinbox"].value(),
             'MovementSpeed': self.speed_spinbox.value(),
             'Acceleration': 100.0,
         }
@@ -500,16 +487,8 @@ class PositionerSettingsWidget(QWidget):
             return
         self.settings_name_edit.setText(response.get('SettingsName', 'Basic'))
         speed = float(response.get('MovementSpeed', 2000))
-        for axis_name in ('X', 'Y', 'Z'):
-            val = float(response.get(f'{axis_name}Position', 0.0))
-            w = self._axis_widgets[axis_name]
-            w["spinbox"].blockSignals(True)
-            w["spinbox"].setValue(val)
-            w["spinbox"].blockSignals(False)
-            w["slider"].blockSignals(True)
-            w["slider"].setValue(int(val * _SLIDER_SCALE))
-            w["slider"].blockSignals(False)
         self.speed_spinbox.setValue(speed)
+        self.refresh_status()
         name = response.get('SettingsName', 'Basic')
         self._set_status(
             _t(self.interface_text, 'positioner_settings_loaded', 'Positioner settings loaded') + f": {name}"

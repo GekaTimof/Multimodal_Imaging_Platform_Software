@@ -13,6 +13,19 @@ logger = logging.getLogger(__name__)
 
 
 class PositionerService:
+    # Calibration motion constants (matching the proven Positioner_test/main.py).
+    SEARCH_FEED = 2000.0
+    MOVE_FEED = 3000.0
+    RELEASE_FEED = 3000.0
+    SEARCH_DISTANCE = 50000.0
+    BACKOFF_DISTANCE = 500.0
+    SEND_TIMEOUT = 5.0
+    ALARM_TIMEOUT = 840.0
+    LIMIT_RELEASE_TIMEOUT = 30.0
+    MOTION_TIMEOUT = 120.0
+    RELEASE_MAX_RETRIES = 10
+    STATUS_INTERVAL = 0.1
+
     def __init__(self, port: str = config.POSITIONER_PORT, baudrate: int = config.POSITIONER_BAUDRATE):
         self.port = port
         self.baudrate = baudrate
@@ -43,6 +56,8 @@ class PositionerService:
                 try:
                     min_value = float(settings[min_key])
                     max_value = float(settings[max_key])
+                    if max_value <= min_value:
+                        continue
                     self._calibration[axis] = {
                         "min": min_value,
                         "max": max_value,
@@ -63,8 +78,10 @@ class PositionerService:
                 updates[f"{axis.upper()}HomeAtMin"] = 1 if self._home_at_min.get(axis, True) else 0
         if not updates:
             return
-        settings = {**self.settings, **updates}
-        success, message = db_service.save_positioner_settings(settings)
+        # Save calibration fields into slot 0. Current position is updated separately
+        # by _save_current_position_to_slot_0 after a move/calibration completes.
+        settings = {**db_service.get_positioner_settings_by_slot(0), **updates}
+        success, message = db_service.save_positioner_settings_to_slot(0, settings, allow_system_state=True)
         if not success:
             logger.error("Failed to save calibration: %s", message)
         else:
@@ -89,8 +106,13 @@ class PositionerService:
                 if not response:
                     raise ConnectionError("GRBL controller did not answer $I")
                 self.connected = True
-                # Match the user's working test script: INVERT_LIMIT_PINS=True -> $5=1
-                self._command("$5=1")
+                # MKS DLC32 reports idle NC switches as triggered with $5=1; use $5=0.
+                self._command("$5=0")
+                self.serial_connection.write(b"\x18")
+                self.serial_connection.flush()
+                time.sleep(1.0)
+                self.serial_connection.reset_input_buffer()
+                self._command("$I", accepted_prefixes=("[", "Grbl"))
                 self._command("G21")
                 self._command("G90")
                 self.refresh_status()
@@ -139,22 +161,36 @@ class PositionerService:
         raise TimeoutError(f"No GRBL acknowledgement for {command}")
 
     def _drain(self) -> None:
-        if self.serial_connection:
-            while getattr(self.serial_connection, 'in_waiting', 0):
-                self.serial_connection.readline()
+        try:
+            if self.serial_connection and self.serial_connection.is_open:
+                while getattr(self.serial_connection, 'in_waiting', 0):
+                    self.serial_connection.readline()
+        except (OSError, serial.SerialException):
+            logger.warning("Serial drain failed; marking connection as disconnected")
+            self.disconnect()
 
     def _readline(self) -> str:
         if not self.serial_connection:
             return ""
-        raw = self.serial_connection.readline()
-        if not raw:
+        try:
+            raw = self.serial_connection.readline()
+            if not raw:
+                return ""
+            return raw.decode("ascii", errors="replace").strip()
+        except (OSError, serial.SerialException) as exc:
+            logger.warning("Serial read failed: %s", exc)
+            self.disconnect()
             return ""
-        return raw.decode("ascii", errors="replace").strip()
 
     def _unlock(self) -> bool:
-        self._drain()
-        self.serial_connection.write(b"$X\n")
-        self.serial_connection.flush()
+        try:
+            self._drain()
+            self.serial_connection.write(b"$X\n")
+            self.serial_connection.flush()
+        except (OSError, serial.SerialException) as exc:
+            logger.warning("Serial write failed during unlock: %s", exc)
+            self.disconnect()
+            return False
         deadline = time.monotonic() + config.POSITIONER_TIMEOUT_SECONDS
         while time.monotonic() < deadline:
             line = self._readline()
@@ -163,20 +199,6 @@ class PositionerService:
             if line == "ok":
                 return True
             logger.debug("Unexpected unlock response: %s", line)
-        return False
-
-    def _wait_alarm(self, timeout: float = 300.0) -> bool:
-        deadline = time.monotonic() + timeout
-        while time.monotonic() < deadline:
-            line = self._readline()
-            if not line:
-                continue
-            if line.startswith("<"):
-                continue
-            if line.startswith("ALARM"):
-                return True
-            if line == "ok":
-                continue
         return False
 
     def _wait_idle(self, timeout: Optional[float] = None) -> bool:
@@ -213,12 +235,22 @@ class PositionerService:
         with self._lock:
             self._ensure_connected()
             connection = self.serial_connection
-            self._drain()
-            connection.write(b"?")
-            connection.flush()
+            try:
+                self._drain()
+                connection.write(b"?")
+                connection.flush()
+            except (OSError, serial.SerialException) as exc:
+                logger.warning("Serial write failed in refresh_status: %s", exc)
+                self.disconnect()
+                raise ConnectionError("Serial write failed") from exc
             deadline = time.monotonic() + config.POSITIONER_TIMEOUT_SECONDS
             while time.monotonic() < deadline:
-                line = connection.readline().decode("ascii", errors="replace").strip()
+                try:
+                    line = connection.readline().decode("ascii", errors="replace").strip()
+                except (OSError, serial.SerialException) as exc:
+                    logger.warning("Serial read failed in refresh_status: %s", exc)
+                    self.disconnect()
+                    raise ConnectionError("Serial read failed") from exc
                 if not line.startswith("<"):
                     continue
                 match = re.search(r"<(\w+).*?(?:MPos|WPos):(-?[\d.]+),(-?[\d.]+),(-?[\d.]+)", line)
@@ -236,112 +268,294 @@ class PositionerService:
                 return status
             raise TimeoutError("No GRBL status response")
 
-    def _set_hard_limits(self, enabled: bool) -> None:
+    def _set_hard_limits(self, enabled: bool) -> bool:
         value = "1" if enabled else "0"
-        self._command(f"$21={value}")
+        try:
+            return self._send_calib_command(f"$21={value}")
+        except Exception as exc:
+            logger.warning("Failed to set $21=%s: %s", value, exc)
+            return False
 
-    def _release_from_limit(self, axis: str, direction: int, distance: float = 1000.0, feed: float = 3000.0) -> bool:
-        """Move axis off the limit switch; may retry several times."""
-        for attempt in range(10):
-            self._unlock()
-            time.sleep(0.2)
-            self._command("G91")
-            move = distance * direction
-            cmd = f"G1 {axis.upper()}{move:.3f} F{feed:.3f}"
-            self._drain()
-            self.serial_connection.write(f"{cmd}\n".encode("ascii"))
+    # ------------------------------------------------------------------
+    # Calibration helpers (modelled on Positioner_test/main.py)
+    # ------------------------------------------------------------------
+
+    def _send_calib_command(self, command: str, timeout: Optional[float] = None) -> bool:
+        """Send a command and wait for ok/error/ALARM without raising."""
+        if not self.serial_connection or not self.serial_connection.is_open:
+            return False
+        self._drain()
+        try:
+            self.serial_connection.write(f"{command}\n".encode("ascii"))
             self.serial_connection.flush()
-            success = self._wait_idle(timeout=30.0)
-            if success:
+        except (OSError, serial.SerialException) as exc:
+            logger.warning("Serial write failed for command %r: %s", command, exc)
+            self.disconnect()
+            return False
+        deadline = time.monotonic() + (timeout or self.SEND_TIMEOUT)
+        while time.monotonic() < deadline:
+            line = self._readline()
+            if not line or line.startswith("<"):
+                continue
+            if line == "ok":
                 return True
-            if self.state == "alarm":
-                logger.warning("ALARM during release from %s limit, retry %d", axis, attempt + 1)
+            if line.startswith("error:") or line.startswith("ALARM"):
+                return False
+        return False
+
+    def _wait_alarm(self, timeout: Optional[float] = None) -> bool:
+        """Wait for a hard-limit alarm, querying status periodically."""
+        deadline = time.monotonic() + (timeout or self.ALARM_TIMEOUT)
+        next_query = time.monotonic() + 0.5
+        while time.monotonic() < deadline:
+            now = time.monotonic()
+            if now >= next_query:
+                if not self.serial_connection or not self.serial_connection.is_open:
+                    logger.warning("Serial port disconnected during alarm wait")
+                    return False
+                try:
+                    self.serial_connection.write(b"?")
+                    self.serial_connection.flush()
+                except (OSError, serial.SerialException, AttributeError, TypeError):
+                    logger.warning("Serial write failed during alarm wait")
+                    return False
+                next_query = now + 0.5
+            line = self._readline()
+            if not line:
+                continue
+            if line.startswith("<Alarm"):
+                return True
+            if line.startswith("ALARM"):
+                return True
+            if line == "ok" or line.startswith("<"):
                 continue
         return False
 
-    def _find_edge(self, axis: str, direction: int, feed: float = 2000.0, distance: float = 50000.0) -> Optional[float]:
-        """Move until limit triggers (ALARM). Return MPos coordinate."""
+    def _wait_motion_complete(self, timeout: Optional[float] = None) -> bool:
+        """Wait until GRBL reports Idle."""
+        time.sleep(0.5)
+        deadline = time.monotonic() + (timeout or self.MOTION_TIMEOUT)
+        while time.monotonic() < deadline:
+            status = self.refresh_status()
+            if status["state"] == "idle":
+                return True
+            if status["state"] in ("alarm", "error"):
+                return False
+            time.sleep(self.STATUS_INTERVAL)
+        return False
+
+    def _active_limit_axes_from_raw(self, raw_status: str) -> set:
+        if "|Pn:" not in raw_status:
+            return set()
+        pn = raw_status.split("|Pn:", 1)[1]
+        if "|" in pn:
+            pn = pn.split("|", 1)[0]
+        return {a.lower() for a in ("X", "Y", "Z") if a in pn}
+
+    def _release_from_limit(self, axis: str, direction: int, distance: float = 1000.0) -> bool:
+        """Move axis off the limit switch; retry only if it remains triggered."""
+        axis_upper = axis.upper()
+        move = distance * direction
+        cmd = f"G1 {axis_upper}{move:.3f} F{self.RELEASE_FEED:.3f}"
+
+        for attempt in range(self.RELEASE_MAX_RETRIES):
+            logger.info("Release %s from limit, attempt %d, cmd=%s", axis, attempt + 1, cmd)
+            self._unlock()
+            time.sleep(0.2)
+            if not self._send_calib_command("G91"):
+                logger.warning("G91 not acknowledged before release move for %s", axis)
+                continue
+
+            self._drain()
+            try:
+                self.serial_connection.write(f"{cmd}\n".encode("ascii"))
+                self.serial_connection.flush()
+            except (OSError, serial.SerialException, AttributeError, TypeError) as exc:
+                logger.warning("Serial write failed during release move: %s", exc)
+                return False
+
+            deadline = time.monotonic() + self.LIMIT_RELEASE_TIMEOUT
+            next_query = time.monotonic() + 0.5
+            got_alarm = False
+            while time.monotonic() < deadline:
+                now = time.monotonic()
+                if now >= next_query:
+                    try:
+                        self.serial_connection.write(b"?")
+                        self.serial_connection.flush()
+                    except Exception:
+                        pass
+                    next_query = now + 0.5
+
+                line = self._readline()
+                if not line:
+                    continue
+                if line.startswith("<"):
+                    if "<Idle" in line:
+                        logger.info("%s is idle after release move", axis)
+                        return True
+                    if "<Alarm" in line:
+                        got_alarm = True
+                        break
+                    continue
+                if line.startswith("ALARM"):
+                    got_alarm = True
+                    break
+                if line == "ok":
+                    continue
+
+            if got_alarm:
+                logger.warning("ALARM while releasing %s, retrying", axis)
+                continue
+
+            # Final check via a fresh status poll
+            status = self.refresh_status()
+            if status["state"] == "idle":
+                return True
+            logger.warning("%s release did not complete cleanly, retrying", axis)
+
+        logger.error("Failed to release %s from limit after %d attempts", axis, self.RELEASE_MAX_RETRIES)
+        return False
+
+    def _find_edge(self, axis: str, direction: int) -> Optional[float]:
+        """Move until the limit switch triggers and return the MPos coordinate."""
+        axis_upper = axis.upper()
         self._unlock()
         time.sleep(0.1)
-        self._command("G91")
-        move = distance * direction
-        cmd = f"G1 {axis.upper()}{move:.3f} F{feed:.3f}"
-        logger.info("Finding %s edge: %s", axis, cmd)
+        if not self._send_calib_command("G91"):
+            logger.error("Failed to set G91 before finding %s edge", axis)
+            return None
+
+        move = self.SEARCH_DISTANCE * direction
+        cmd = f"G1 {axis_upper}{move:.3f} F{self.SEARCH_FEED:.3f}"
+        logger.info("Finding %s%s edge: %s", axis, "+" if direction > 0 else "-", cmd)
         self._drain()
-        self.serial_connection.write(f"{cmd}\n".encode("ascii"))
-        self.serial_connection.flush()
-        if not self._wait_alarm(timeout=120.0):
+        try:
+            self.serial_connection.write(f"{cmd}\n".encode("ascii"))
+            self.serial_connection.flush()
+        except (OSError, serial.SerialException, AttributeError, TypeError) as exc:
+            logger.warning("Serial write failed during find-edge move: %s", exc)
+            return None
+
+        if not self._wait_alarm(timeout=self.ALARM_TIMEOUT):
+            self.stop()
             logger.error("Limit not reached for %s%s", axis, "+" if direction > 0 else "-")
             return None
+
         time.sleep(0.1)
         status = self.refresh_status()
         return status["position"][axis]
 
+    def _calibrate_single_axis(self, axis: str) -> Optional[Dict[str, Any]]:
+        """Calibrate one axis: find both edges, back off, move to center."""
+        edge_plus = self._find_edge(axis, +1)
+        if edge_plus is None:
+            return None
+        if not self._release_from_limit(axis, -1, distance=self.BACKOFF_DISTANCE):
+            return None
+
+        edge_minus = self._find_edge(axis, -1)
+        if edge_minus is None:
+            return None
+        if not self._release_from_limit(axis, +1, distance=self.BACKOFF_DISTANCE):
+            return None
+
+        min_val = min(edge_plus, edge_minus)
+        max_val = max(edge_plus, edge_minus)
+        travel = max_val - min_val
+        center = (max_val + min_val) / 2.0
+
+        status = self.refresh_status()
+        current = status["position"][axis]
+        delta = center - current
+
+        if not self._send_calib_command("G91"):
+            return None
+        cmd = f"G1 {axis.upper()}{delta:.3f} F{self.MOVE_FEED:.3f}"
+        logger.info("Move %s to center: %s", axis, cmd)
+        if not self._send_calib_command(cmd):
+            return None
+        if not self._wait_motion_complete(timeout=self.MOTION_TIMEOUT):
+            return None
+
+        final = self.refresh_status()["position"][axis]
+        return {
+            "axis": axis,
+            "edge_plus": edge_plus,
+            "edge_minus": edge_minus,
+            "min": min_val,
+            "max": max_val,
+            "travel": travel,
+            "center": center,
+            "final": final,
+        }
+
     def calibrate_axis(self, axis: str) -> Dict[str, Any]:
+        """Calibrate a single axis and persist the result for that axis only."""
         axis = axis.lower()
         if axis not in ("x", "y", "z"):
             raise ValueError(f"Invalid axis: {axis}")
+
         with self._lock:
             self._ensure_connected()
-            # Make sure we can move even if currently on a limit
-            if self.state == "alarm":
-                self._unlock()
-            self._set_hard_limits(True)
-            try:
-                # Find positive edge
-                edge_plus = self._find_edge(axis, +1)
-                if edge_plus is None:
-                    raise RuntimeError(f"Could not find {axis} positive edge")
-                # Back off from positive limit
-                if not self._release_from_limit(axis, -1):
-                    raise RuntimeError(f"Could not release from {axis} positive limit")
-                # Find negative edge
-                edge_minus = self._find_edge(axis, -1)
-                if edge_minus is None:
-                    raise RuntimeError(f"Could not find {axis} negative edge")
-                # Back off from negative limit
-                if not self._release_from_limit(axis, +1):
-                    raise RuntimeError(f"Could not release from {axis} negative limit")
-
-                travel = abs(edge_plus - edge_minus)
-                center = (edge_plus + edge_minus) / 2.0
-                self._calibration[axis] = {
-                    "min": min(edge_plus, edge_minus),
-                    "max": max(edge_plus, edge_minus),
-                    "travel": travel,
-                    "center": center,
-                }
-                # Positive search direction is taken as the home (motor) side by default.
-                self._home_at_min[axis] = edge_plus < edge_minus
-                self._save_calibration()
-
-                # Move to center in raw coordinates using the same feed as the user's script
-                self._command("G91")
-                current = self.position[axis]
-                delta = center - current
-                self._command(f"G1 {axis.upper()}{delta:.3f} F3000.000")
-                if not self._wait_idle(timeout=config.POSITIONER_MOVEMENT_TIMEOUT_SECONDS):
-                    raise RuntimeError(f"Failed to move {axis} to center")
-
-                result = {
-                    "axis": axis,
-                    "edge_plus": edge_plus,
-                    "edge_minus": edge_minus,
-                    "travel": travel,
-                    "center": center,
-                    "home_at_min": self._home_at_min.get(axis, True),
-                    "final": self.position[axis],
-                }
-                logger.info("Axis %s calibrated: %s", axis, result)
-                return result
-            finally:
-                self._set_hard_limits(False)
+            if not self._set_hard_limits(True):
+                raise RuntimeError("Failed to enable GRBL hard limits for calibration")
+            if not self._send_calib_command("G91"):
+                raise RuntimeError("Failed to set G91 for calibration")
+            result = self._calibrate_single_axis(axis)
+            if result is None:
+                raise RuntimeError(f"Calibration failed for axis {axis.upper()}")
+            self._apply_calibration_for_axis(axis, result)
+            self._save_calibration()
+            self.refresh_status()
+            self._save_current_position_to_slot_0()
+            return result
 
     def calibrate_all(self) -> List[Dict[str, Any]]:
-        results = []
-        for axis in ("x", "y", "z"):
-            results.append(self.calibrate_axis(axis))
-        return results
+        """Calibrate all axes atomically: only save if every axis succeeds."""
+        with self._lock:
+            self._ensure_connected()
+            if not self._set_hard_limits(True):
+                raise RuntimeError("Failed to enable GRBL hard limits for calibration")
+            if not self._send_calib_command("G91"):
+                raise RuntimeError("Failed to set G91 for calibration")
+
+            temp_results: Dict[str, Dict[str, Any]] = {}
+            for axis in ("x", "y", "z"):
+                result = self._calibrate_single_axis(axis)
+                if result is None:
+                    raise RuntimeError(f"Calibration failed for axis {axis.upper()}")
+                temp_results[axis] = result
+
+            # Atomic commit: do not overwrite existing calibration until all axes succeeded.
+            results = []
+            for axis in ("x", "y", "z"):
+                result = temp_results[axis]
+                self._apply_calibration_for_axis(axis, result)
+                results.append(result)
+            self._save_calibration()
+            self.refresh_status()
+            self._save_current_position_to_slot_0()
+            return results
+
+    def _apply_calibration_for_axis(self, axis: str, result: Dict[str, Any]) -> None:
+        """Update in-memory calibration for one axis, preserving known home direction."""
+        axis = axis.lower()
+        existing = db_service.get_positioner_settings_by_slot(0)
+        defaults = {"x": True, "y": False, "z": True}
+        home_key = f"{axis.upper()}HomeAtMin"
+        if home_key in existing:
+            home_at_min = bool(existing[home_key])
+        else:
+            home_at_min = defaults[axis]
+        self._calibration[axis] = {
+            "min": result["min"],
+            "max": result["max"],
+            "travel": result["travel"],
+            "center": result["center"],
+        }
+        self._home_at_min[axis] = home_at_min
+        result["home_at_min"] = home_at_min
 
     def _to_machine_coordinate(self, axis: str, value: float) -> float:
         calibration = self._calibration.get(axis.lower())
@@ -361,6 +575,16 @@ class PositionerService:
             return machine_value - calibration["min"]
         return calibration["max"] - machine_value
 
+    def get_axis_limits(self) -> Dict[str, Dict[str, float]]:
+        limits = {}
+        for axis in ("x", "y", "z"):
+            calibration = self._calibration.get(axis)
+            if calibration is None:
+                limits[axis] = {"min": 0.0, "max": 0.0}
+            else:
+                limits[axis] = {"min": 0.0, "max": calibration["travel"]}
+        return limits
+
     def move_to(self, x: float, y: float, z: float, speed: Optional[float] = None) -> Dict[str, Any]:
         values = {}
         for name, value in (("XPosition", x), ("YPosition", y), ("ZPosition", z)):
@@ -372,53 +596,77 @@ class PositionerService:
         valid, speed = config.validate_positioner_parameter("MovementSpeed", speed)
         if not valid:
             raise ValueError(speed)
-        # TODO: Remove this conversion. The DesktopApp should send raw motor
-        #       speed (1..10000) matching the positioner test script, and the
-        #       value should be used directly as the GRBL F parameter (mm/min)
-        #       without any multiplication. Update the validation range in
-        #       config.validate_positioner_parameter('MovementSpeed', ...) to
-        #       accept 1..10000 and change PositionerMoveRequest.speed accordingly.
-        feed = speed * 300.0
+        # DesktopApp sends raw GRBL feed rate (F parameter, mm/min).
         with self._lock:
             self._ensure_connected()
             if self.state in ("alarm", "hold"):
                 self._unlock()
-            if not self._calibration:
-                raise RuntimeError("Positioner is not calibrated. Run calibration first.")
+            if set(self._calibration) != {"x", "y", "z"}:
+                raise RuntimeError("Positioner is not fully calibrated. Run calibration first.")
+            work_targets = {
+                "x": values["XPosition"],
+                "y": values["YPosition"],
+                "z": values["ZPosition"],
+            }
+            for axis, value in work_targets.items():
+                travel = self._calibration[axis]["travel"]
+                if not 0.0 <= value <= travel:
+                    raise ValueError(f"{axis.upper()} position {value} is outside calibrated range 0..{travel}")
             targets = {
-                "x": self._to_machine_coordinate("x", values["XPosition"]),
-                "y": self._to_machine_coordinate("y", values["YPosition"]),
-                "z": self._to_machine_coordinate("z", values["ZPosition"]),
+                axis: self._to_machine_coordinate(axis, value)
+                for axis, value in work_targets.items()
             }
             self._command("G21")
             self._command("G90")
             self._command(
                 f"G1 X{targets['x']:.3f} Y{targets['y']:.3f} "
-                f"Z{targets['z']:.3f} F{feed:.3f}"
+                f"Z{targets['z']:.3f} F{speed:.3f}"
             )
             if not self._wait_idle(timeout=config.POSITIONER_MOVEMENT_TIMEOUT_SECONDS):
                 raise TimeoutError("Positioner movement timed out")
+            self.refresh_status()
+            self._save_current_position_to_slot_0()
             return self.get_status()
 
     def home(self) -> Dict[str, Any]:
         if not self._calibration:
             raise RuntimeError("Positioner is not calibrated. Run calibration first.")
-        return self.move_to(
-            self.settings["XPosition"],
-            self.settings["YPosition"],
-            self.settings["ZPosition"],
-            self.settings["MovementSpeed"],
-        )
+        # Home is always the motor-side edge: work coordinate (0, 0, 0).
+        return self.move_to(0.0, 0.0, 0.0, self.settings["MovementSpeed"])
+
+    def _save_current_position_to_slot_0(self) -> None:
+        """Persist the current work position into slot 0 as read-only state."""
+        try:
+            position = self.get_status().get("work_position", {"x": 0.0, "y": 0.0, "z": 0.0})
+            settings = db_service.get_positioner_settings_by_slot(0)
+            settings["XPosition"] = position["x"]
+            settings["YPosition"] = position["y"]
+            settings["ZPosition"] = position["z"]
+            db_service.save_positioner_settings_to_slot(0, settings, allow_system_state=True)
+            self.reload_settings()
+        except Exception as exc:
+            logger.warning("Failed to save current position to slot 0: %s", exc)
 
     def stop(self) -> None:
         with self._lock:
-            if self.serial_connection and self.serial_connection.is_open:
-                self.serial_connection.write(b"!")
-                self.serial_connection.flush()
-                self.state = "hold"
+            try:
+                if self.serial_connection and self.serial_connection.is_open:
+                    self.serial_connection.write(b"!")
+                    self.serial_connection.flush()
+                    self.state = "hold"
+            except (OSError, serial.SerialException) as exc:
+                logger.warning("Serial write failed during stop: %s", exc)
+                self.disconnect()
 
     def apply_settings(self, settings: Dict[str, Any]) -> Dict[str, Any]:
-        success, message = db_service.save_positioner_settings(settings)
+        # X/Y/Z Position are read-only state from GRBL status; ignore any values
+        # supplied by the caller. Only speed/acceleration/name can be changed.
+        sanitized = {
+            "SettingsName": settings.get("SettingsName", self.settings.get("SettingsName", "Basic")),
+            "MovementSpeed": settings.get("MovementSpeed", self.settings.get("MovementSpeed", 2000.0)),
+            "Acceleration": settings.get("Acceleration", self.settings.get("Acceleration", 100.0)),
+        }
+        success, message = db_service.save_positioner_settings(sanitized)
         if not success:
             raise ValueError(message)
         self.reload_settings()

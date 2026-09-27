@@ -277,27 +277,35 @@ class DarkSpectrumResponse(BaseModel):
 class PositionerSettingsResponse(BaseModel):
     id: Optional[int] = 0
     SettingsName: str = "Basic"
-    XPosition: float = Field(default=0.0, ge=-1000.0, le=1000.0)
-    YPosition: float = Field(default=0.0, ge=-1000.0, le=1000.0)
-    ZPosition: float = Field(default=0.0, ge=-1000.0, le=1000.0)
-    MovementSpeed: float = Field(default=10.0, ge=0.1, le=100.0)
+    XPosition: float = Field(default=0.0, ge=-5000.0, le=15000.0)
+    YPosition: float = Field(default=0.0, ge=-5000.0, le=15000.0)
+    ZPosition: float = Field(default=0.0, ge=-5000.0, le=15000.0)
+    MovementSpeed: float = Field(default=2000.0, ge=1.0, le=10000.0)
+    Acceleration: float = Field(default=100.0, ge=0.1, le=1000.0)
+    XMin: float = Field(default=0.0)
+    XMax: float = Field(default=0.0)
+    YMin: float = Field(default=0.0)
+    YMax: float = Field(default=0.0)
+    ZMin: float = Field(default=0.0)
+    ZMax: float = Field(default=0.0)
+    XHomeAtMin: int = Field(default=1)
+    YHomeAtMin: int = Field(default=1)
+    ZHomeAtMin: int = Field(default=1)
+
+
+class PositionerSettingsUpdate(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+
+    SettingsName: str = "Basic"
+    MovementSpeed: float = Field(default=2000.0, ge=1.0, le=10000.0)
     Acceleration: float = Field(default=100.0, ge=0.1, le=1000.0)
 
 
-# TODO: BUG — speed validation is wrong. The DesktopApp sends raw motor speed
-#       values from 1 to 10,000 (same units as in the positioner test script),
-#       but this model validates speed as mm/s (0.1..100.0).
-#       Need to change the schema: accept speed as raw motor value (1..10000)
-#       instead of mm/s, and remove the `feed = speed * 300.0` conversion in
-#       positioner_service.move_to(). The speed value should be passed directly
-#       to GRBL as the F parameter (feed rate in mm/min), matching the test
-#       script behaviour. Also update PositionerSettingsResponse.MovementSpeed
-#       and config.validate_positioner_parameter('MovementSpeed', ...) accordingly.
 class PositionerMoveRequest(BaseModel):
     x: float = Field(..., ge=-5000.0, le=15000.0)
     y: float = Field(..., ge=-5000.0, le=15000.0)
     z: float = Field(..., ge=-5000.0, le=15000.0)
-    speed: Optional[float] = Field(default=None, ge=0.1, le=100.0)
+    speed: Optional[float] = Field(default=None, ge=1.0, le=10000.0)
 
 
 class PositionerAxisRequest(BaseModel):
@@ -952,22 +960,41 @@ async def get_spectrometer_validation_rules():
     }
 
 
-# TODO: Implement 10-slot positioner presets (like camera settings slots).
-#       - Add GET /api/positioner/settings/{slot_id} to load a specific slot.
-#       - Add POST /api/positioner/settings/{slot_id} to save to a specific slot.
-#       - Add GET /api/positioner/settings/slots to list all slots.
-#       - Add POST /api/positioner/settings/load/{slot_id} to load slot into current session.
-#       - Update database_service.py: get_positioner_settings(slot_id),
-#         save_positioner_settings(settings, slot_id).
-#       - Mirror the camera settings slot pattern from camera endpoints.
-
 @app.get("/api/positioner/settings", response_model=PositionerSettingsResponse)
 async def get_positioner_settings():
     return PositionerSettingsResponse(**db_service.get_positioner_settings())
 
 
+@app.get("/api/positioner/settings/slots", response_model=APIResponse)
+async def get_all_positioner_settings_slots():
+    try:
+        slots = db_service.get_all_positioner_settings_slots()
+        return APIResponse(
+            success=True,
+            message="Positioner settings slots received",
+            data={str(slot_id): settings for slot_id, settings in slots.items()},
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {e}")
+
+
+@app.get("/api/positioner/settings/{slot_id}", response_model=PositionerSettingsResponse)
+async def get_positioner_settings_by_slot(slot_id: int):
+    if not 0 <= slot_id <= 10:
+        raise HTTPException(status_code=400, detail="Slot ID must be between 0 and 10")
+    try:
+        settings = db_service.get_positioner_settings_by_slot(slot_id)
+        if not settings:
+            raise HTTPException(status_code=404, detail=f"No positioner settings found for slot {slot_id}")
+        return PositionerSettingsResponse(**settings)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {e}")
+
+
 @app.post("/api/positioner/settings", response_model=APIResponse)
-async def update_positioner_settings(settings: PositionerSettingsResponse):
+async def update_positioner_settings(settings: PositionerSettingsUpdate):
     try:
         data = await asyncio.to_thread(positioner_service.apply_settings, settings.model_dump())
         return APIResponse(success=True, message="Positioner settings applied", data=data)
@@ -977,11 +1004,44 @@ async def update_positioner_settings(settings: PositionerSettingsResponse):
         raise HTTPException(status_code=400, detail=str(e))
 
 
-# TODO: Add GET /api/positioner/limits endpoint that returns calibrated
-#       axis ranges: {x: {min: 0, max: travel}, y: ..., z: ...}.
-#       Currently the DesktopApp extracts limits from the calibration dict
-#       inside /api/positioner/status, but a dedicated endpoint would be
-#       cleaner and allow the UI to query limits without a full status refresh.
+@app.post("/api/positioner/settings/{slot_id}", response_model=APIResponse)
+async def save_positioner_settings_to_slot(slot_id: int, settings: PositionerSettingsUpdate):
+    if not 0 <= slot_id <= 10:
+        raise HTTPException(status_code=400, detail="Slot ID must be between 0 and 10")
+    try:
+        success, message = await asyncio.to_thread(
+            db_service.save_positioner_settings_to_slot, slot_id, settings.model_dump()
+        )
+        if success:
+            return APIResponse(success=True, message=message)
+        raise HTTPException(status_code=400, detail=message)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {e}")
+
+
+@app.post("/api/positioner/settings/load/{slot_id}", response_model=APIResponse)
+async def load_positioner_settings_from_slot(slot_id: int):
+    if not 1 <= slot_id <= 10:
+        raise HTTPException(status_code=400, detail="Slot ID must be between 1 and 10")
+    try:
+        success, message, settings = await asyncio.to_thread(
+            db_service.copy_positioner_slot_to_session, slot_id
+        )
+        if success:
+            return APIResponse(success=True, message=message, data=settings)
+        raise HTTPException(status_code=400, detail=message)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {e}")
+
+
+@app.get("/api/positioner/limits", response_model=APIResponse)
+async def get_positioner_limits():
+    try:
+        limits = await asyncio.to_thread(positioner_service.get_axis_limits)
+        return APIResponse(success=True, message="Positioner axis limits", data=limits)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting positioner limits: {e}")
+
 
 @app.get("/api/positioner/status", response_model=APIResponse)
 async def get_positioner_status():

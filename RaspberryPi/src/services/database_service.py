@@ -115,6 +115,14 @@ class DatabaseService:
     @log_execution_time
     def update_parameter(self, table_name: str, parameter: str, value: Any) -> Tuple[bool, str]:
         """Update a single parameter in the specified table."""
+        protected_positioner_fields = {
+            'XPosition', 'YPosition', 'ZPosition',
+            'XMin', 'XMax', 'YMin', 'YMax', 'ZMin', 'ZMax',
+            'XHomeAtMin', 'YHomeAtMin', 'ZHomeAtMin',
+        }
+        if table_name == 'PositionerSettings' and parameter in protected_positioner_fields:
+            return False, f"Parameter {parameter} is read-only"
+
         # Validate the parameter
         is_valid, validated_value = self._validate_parameter(table_name, parameter, value)
         if not is_valid:
@@ -437,29 +445,95 @@ class DatabaseService:
         finally:
             conn.close()
 
-    def get_positioner_settings(self) -> Dict[str, Any]:
-        settings = self.get_all_settings('PositionerSettings')
-        if settings:
-            return settings
-        self.save_positioner_settings(config.DEFAULT_POSITIONER_SETTINGS)
-        return {**config.DEFAULT_POSITIONER_SETTINGS, 'id': 0}
+    def _insert_default_positioner_slot(self, cursor, slot_id: int, settings: Dict[str, Any]):
+        """INSERT OR IGNORE a positioner settings row for slot_id."""
+        cursor.execute("""
+        INSERT OR IGNORE INTO PositionerSettings
+        (id, SettingsName, XPosition, YPosition, ZPosition, MovementSpeed, Acceleration,
+         XMin, XMax, YMin, YMax, ZMin, ZMax, XHomeAtMin, YHomeAtMin, ZHomeAtMin)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            slot_id,
+            settings.get('SettingsName', f"Slot {slot_id}"),
+            settings.get('XPosition', 0.0),
+            settings.get('YPosition', 0.0),
+            settings.get('ZPosition', 0.0),
+            settings.get('MovementSpeed', 2000.0),
+            settings.get('Acceleration', 100.0),
+            settings.get('XMin', 0.0),
+            settings.get('XMax', 0.0),
+            settings.get('YMin', 0.0),
+            settings.get('YMax', 0.0),
+            settings.get('ZMin', 0.0),
+            settings.get('ZMax', 0.0),
+            int(settings.get('XHomeAtMin', 1)),
+            int(settings.get('YHomeAtMin', 1)),
+            int(settings.get('ZHomeAtMin', 1)),
+        ))
 
-    def save_positioner_settings(self, settings: Dict[str, Any]) -> Tuple[bool, str]:
-        parameters = ('SettingsName', 'XPosition', 'YPosition', 'ZPosition', 'MovementSpeed', 'Acceleration',
-                      'XMin', 'XMax', 'YMin', 'YMax', 'ZMin', 'ZMax',
-                      'XHomeAtMin', 'YHomeAtMin', 'ZHomeAtMin')
-        # Calibration fields are preserved from the database unless explicitly provided.
-        preserved = {}
-        calibration_fields = {'XMin', 'XMax', 'YMin', 'YMax', 'ZMin', 'ZMax',
-                               'XHomeAtMin', 'YHomeAtMin', 'ZHomeAtMin'}
+    def get_positioner_settings(self) -> Dict[str, Any]:
+        """Get current positioner settings from database (slot 0 - main session)."""
+        return self.get_positioner_settings_by_slot(0)
+
+    def get_positioner_settings_by_slot(self, slot_id: int) -> Dict[str, Any]:
+        """Get positioner settings for a specific slot (0-10). Slot 0 is current session, 1-10 are presets."""
+        if not 0 <= slot_id <= 10:
+            raise ValueError("Slot ID must be between 0 and 10")
+
         try:
             conn = sqlite3.connect(db_path)
             cursor = conn.cursor()
-            cursor.execute("SELECT * FROM PositionerSettings WHERE id = 0")
+
+            cursor.execute("SELECT * FROM PositionerSettings WHERE id = ?", (slot_id,))
+            row = cursor.fetchone()
+
+            if row:
+                columns = [desc[0] for desc in cursor.description]
+                return dict(zip(columns, row))
+            else:
+                default_name = "Current Session" if slot_id == 0 else f"Slot {slot_id}"
+                default_settings = config.DEFAULT_POSITIONER_SETTINGS.copy()
+                default_settings['id'] = slot_id
+                default_settings['SettingsName'] = default_name
+                self._insert_default_positioner_slot(cursor, slot_id, default_settings)
+                conn.commit()
+                return default_settings
+
+        except sqlite3.Error as e:
+            raise Exception(f"Database error: {e}")
+        finally:
+            conn.close()
+
+    def get_all_positioner_settings_slots(self) -> Dict[int, Dict[str, Any]]:
+        """Get all positioner settings slots (0-10)."""
+        slots = {}
+        for slot_id in range(11):
+            slots[slot_id] = self.get_positioner_settings_by_slot(slot_id)
+        return slots
+
+    def save_positioner_settings_to_slot(
+        self, slot_id: int, settings: Dict[str, Any], allow_system_state: bool = False
+    ) -> Tuple[bool, str]:
+        """Save positioner settings to a specific slot (0-10)."""
+        if not 0 <= slot_id <= 10:
+            return False, "Slot ID must be between 0 and 10"
+
+        parameters = ('SettingsName', 'XPosition', 'YPosition', 'ZPosition', 'MovementSpeed', 'Acceleration',
+                      'XMin', 'XMax', 'YMin', 'YMax', 'ZMin', 'ZMax',
+                      'XHomeAtMin', 'YHomeAtMin', 'ZHomeAtMin')
+        # Preserve calibration and current position from existing slot if not provided.
+        preserved_fields = {'XMin', 'XMax', 'YMin', 'YMax', 'ZMin', 'ZMax',
+                              'XHomeAtMin', 'YHomeAtMin', 'ZHomeAtMin',
+                              'XPosition', 'YPosition', 'ZPosition'}
+        preserved = {}
+        try:
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM PositionerSettings WHERE id = ?", (slot_id,))
             row = cursor.fetchone()
             if row:
                 existing = {desc[0]: row[i] for i, desc in enumerate(cursor.description)}
-                for field in calibration_fields:
+                for field in preserved_fields:
                     preserved[field] = existing.get(field)
         except sqlite3.Error:
             pass
@@ -469,7 +543,9 @@ class DatabaseService:
 
         validated = {}
         for parameter in parameters:
-            if parameter in preserved and parameter not in settings:
+            if parameter in preserved_fields and not allow_system_state:
+                value = preserved.get(parameter, config.DEFAULT_POSITIONER_SETTINGS.get(parameter))
+            elif parameter in preserved and parameter not in settings:
                 value = preserved[parameter]
             else:
                 value = settings.get(parameter, config.DEFAULT_POSITIONER_SETTINGS.get(parameter))
@@ -485,7 +561,7 @@ class DatabaseService:
             cursor.execute(f"""
             INSERT INTO PositionerSettings
             (id, {columns})
-            VALUES (0, {placeholders})
+            VALUES ({slot_id}, {placeholders})
             ON CONFLICT(id) DO UPDATE SET
                 SettingsName=excluded.SettingsName,
                 XPosition=excluded.XPosition,
@@ -504,11 +580,34 @@ class DatabaseService:
                 ZHomeAtMin=excluded.ZHomeAtMin
             """, tuple(validated[p] for p in parameters))
             conn.commit()
-            return True, "Positioner settings saved successfully"
+            return True, f"Positioner settings saved to slot {slot_id}"
         except sqlite3.Error as e:
             return False, f"Database error: {e}"
         finally:
             conn.close()
+
+    def copy_positioner_slot_to_session(self, source_slot_id: int) -> Tuple[bool, str, Dict[str, Any]]:
+        """Copy positioner settings from a slot (1-10) into current session (slot 0)."""
+        if not 1 <= source_slot_id <= 10:
+            return False, "Source slot must be between 1 and 10", {}
+
+        try:
+            source_settings = self.get_positioner_settings_by_slot(source_slot_id)
+            if not source_settings:
+                return False, f"Slot {source_slot_id} not found or empty", {}
+
+            success, message = self.save_positioner_settings_to_slot(0, source_settings)
+            if success:
+                session_settings = self.get_positioner_settings_by_slot(0)
+                return True, f"Settings from slot {source_slot_id} loaded to session", session_settings
+            else:
+                return False, f"Failed to copy to session: {message}", {}
+        except Exception as e:
+            return False, f"Error copying slot to session: {e}", {}
+
+    def save_positioner_settings(self, settings: Dict[str, Any]) -> Tuple[bool, str]:
+        """Save positioner settings to current session (slot 0)."""
+        return self.save_positioner_settings_to_slot(0, settings)
 
 
 # Global instance

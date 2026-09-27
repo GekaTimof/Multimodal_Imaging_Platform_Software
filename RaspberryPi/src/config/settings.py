@@ -117,7 +117,7 @@ class Config:
         'XPosition': 0.0,
         'YPosition': 0.0,
         'ZPosition': 0.0,
-        'MovementSpeed': 10.0,
+        'MovementSpeed': 2000.0,
         'Acceleration': 100.0,
         'XMin': 0.0,
         'XMax': 0.0,
@@ -292,7 +292,7 @@ class Config:
             'XPosition': (-5000.0, 15000.0),
             'YPosition': (-5000.0, 15000.0),
             'ZPosition': (-5000.0, 15000.0),
-            'MovementSpeed': (cls.MIN_MOVEMENT_SPEED, cls.MAX_MOVEMENT_SPEED),
+            'MovementSpeed': (1.0, 10000.0),
             'Acceleration': (cls.MIN_ACCELERATION, cls.MAX_ACCELERATION),
         }
         if parameter in ('XMin', 'XMax', 'YMin', 'YMax', 'ZMin', 'ZMax'):

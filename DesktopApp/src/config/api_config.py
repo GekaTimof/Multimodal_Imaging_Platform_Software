@@ -127,7 +127,11 @@ ENDPOINTS = {
     "spectrometer_reconnect": f"{API_BASE_URL}/spectrometer/reconnect",
     # Positioner endpoints
     "positioner_settings": f"{API_BASE_URL}/positioner/settings",
+    "positioner_settings_slot": f"{API_BASE_URL}/positioner/settings/{{slot_id}}",
+    "positioner_settings_slots": f"{API_BASE_URL}/positioner/settings/slots",
+    "positioner_load_slot": f"{API_BASE_URL}/positioner/settings/load/{{slot_id}}",
     "positioner_status": f"{API_BASE_URL}/positioner/status",
+    "positioner_limits": f"{API_BASE_URL}/positioner/limits",
     "positioner_connect": f"{API_BASE_URL}/positioner/connect",
     "positioner_move": f"{API_BASE_URL}/positioner/move",
     "positioner_home": f"{API_BASE_URL}/positioner/home",
@@ -178,7 +182,11 @@ def _build_endpoints(api_base: str, cam_stream: str) -> dict:
         "spectrometer_reconnect": f"{api_base}/spectrometer/reconnect",
         # Positioner
         "positioner_settings": f"{api_base}/positioner/settings",
+        "positioner_settings_slot": f"{api_base}/positioner/settings/{{slot_id}}",
+        "positioner_settings_slots": f"{api_base}/positioner/settings/slots",
+        "positioner_load_slot": f"{api_base}/positioner/settings/load/{{slot_id}}",
         "positioner_status": f"{api_base}/positioner/status",
+        "positioner_limits": f"{api_base}/positioner/limits",
         "positioner_connect": f"{api_base}/positioner/connect",
         "positioner_move": f"{api_base}/positioner/move",
         "positioner_home": f"{api_base}/positioner/home",
