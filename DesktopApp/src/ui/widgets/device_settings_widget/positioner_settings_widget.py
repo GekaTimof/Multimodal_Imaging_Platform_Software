@@ -32,7 +32,7 @@ _AXIS_MIN = -5000.0
 _AXIS_MAX = 15000.0
 _SLIDER_SCALE = 100  # slider uses int, we multiply by this for 0.01 precision
 _SPEED_WARNING_THRESHOLD = 4500
-_SPEED_PRESETS = {"slow": 500, "medium": 2000, "fast": 5000}
+_SPEED_PRESETS = {"slow": 100, "medium": 2000, "fast": 4000}
 
 
 def _t(interface_text, method_name: str, fallback: str) -> str:

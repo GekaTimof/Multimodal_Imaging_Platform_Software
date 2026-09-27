@@ -284,6 +284,15 @@ class PositionerSettingsResponse(BaseModel):
     Acceleration: float = Field(default=100.0, ge=0.1, le=1000.0)
 
 
+# TODO: BUG — speed validation is wrong. The DesktopApp sends raw motor speed
+#       values from 1 to 10,000 (same units as in the positioner test script),
+#       but this model validates speed as mm/s (0.1..100.0).
+#       Need to change the schema: accept speed as raw motor value (1..10000)
+#       instead of mm/s, and remove the `feed = speed * 300.0` conversion in
+#       positioner_service.move_to(). The speed value should be passed directly
+#       to GRBL as the F parameter (feed rate in mm/min), matching the test
+#       script behaviour. Also update PositionerSettingsResponse.MovementSpeed
+#       and config.validate_positioner_parameter('MovementSpeed', ...) accordingly.
 class PositionerMoveRequest(BaseModel):
     x: float = Field(..., ge=-5000.0, le=15000.0)
     y: float = Field(..., ge=-5000.0, le=15000.0)

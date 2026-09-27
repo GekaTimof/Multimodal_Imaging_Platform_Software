@@ -372,8 +372,12 @@ class PositionerService:
         valid, speed = config.validate_positioner_parameter("MovementSpeed", speed)
         if not valid:
             raise ValueError(speed)
-        # Map the UI "mm/s" value to GRBL feed. The user's working script uses 3000 mm/min,
-        # which corresponds to a reasonable real speed on this machine.
+        # TODO: Remove this conversion. The DesktopApp should send raw motor
+        #       speed (1..10000) matching the positioner test script, and the
+        #       value should be used directly as the GRBL F parameter (mm/min)
+        #       without any multiplication. Update the validation range in
+        #       config.validate_positioner_parameter('MovementSpeed', ...) to
+        #       accept 1..10000 and change PositionerMoveRequest.speed accordingly.
         feed = speed * 300.0
         with self._lock:
             self._ensure_connected()
