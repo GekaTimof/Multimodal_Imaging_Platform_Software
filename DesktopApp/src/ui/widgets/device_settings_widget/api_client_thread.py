@@ -19,11 +19,12 @@ class APIClientThread(QThread):
     """Thread for making API calls to avoid blocking the UI."""
     response_received = pyqtSignal(bool, str, dict)
 
-    def __init__(self, method: str, url: str, data: Optional[Dict[str, Any]] = None):
+    def __init__(self, method: str, url: str, data: Optional[Dict[str, Any]] = None, timeout: Optional[float] = None):
         super().__init__()
         self.method = method.upper()
         self.url = url
         self.data = data
+        self.timeout = timeout if timeout is not None else TIMEOUT_SECONDS
 
     def run(self) -> None:
         """Execute the API request."""
@@ -31,9 +32,9 @@ class APIClientThread(QThread):
             headers = {'Content-Type': 'application/json'}
 
             if self.method == 'GET':
-                response = requests.get(self.url, timeout=TIMEOUT_SECONDS)
+                response = requests.get(self.url, timeout=self.timeout)
             elif self.method == 'POST':
-                response = requests.post(self.url, json=self.data, headers=headers, timeout=TIMEOUT_SECONDS)
+                response = requests.post(self.url, json=self.data, headers=headers, timeout=self.timeout)
             else:
                 logger.error(f"Unsupported method: {self.method}")
                 self.response_received.emit(False, f"Unsupported method: {self.method}", {})

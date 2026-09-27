@@ -21,6 +21,7 @@ from PyQt5.QtCore import pyqtSignal
 from config.api_config import API_BASE_URL
 from core.constants.camera_constants import THREAD_TIMEOUT_MS
 from ui.ui_utils import get_relative_margin
+from .api_client_thread import APIClientThread
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +66,7 @@ class PositionerSettingsWidget(QWidget):
         settings_layout.addWidget(x_label, row, 0, 1, 2)
         row += 1
         self.x_position = QDoubleSpinBox()
-        self.x_position.setRange(-1000.0, 1000.0)
+        self.x_position.setRange(-5000.0, 15000.0)
         self.x_position.setValue(0.0)
         self.x_position.setDecimals(2)
         settings_layout.addWidget(self.x_position, row, 0, 1, 2)
@@ -77,7 +78,7 @@ class PositionerSettingsWidget(QWidget):
         settings_layout.addWidget(y_label, row, 0, 1, 2)
         row += 1
         self.y_position = QDoubleSpinBox()
-        self.y_position.setRange(-1000.0, 1000.0)
+        self.y_position.setRange(-5000.0, 15000.0)
         self.y_position.setValue(0.0)
         self.y_position.setDecimals(2)
         settings_layout.addWidget(self.y_position, row, 0, 1, 2)
@@ -89,7 +90,7 @@ class PositionerSettingsWidget(QWidget):
         settings_layout.addWidget(z_label, row, 0, 1, 2)
         row += 1
         self.z_position = QDoubleSpinBox()
-        self.z_position.setRange(-1000.0, 1000.0)
+        self.z_position.setRange(-5000.0, 15000.0)
         self.z_position.setValue(0.0)
         self.z_position.setDecimals(2)
         settings_layout.addWidget(self.z_position, row, 0, 1, 2)
@@ -176,31 +177,29 @@ class PositionerSettingsWidget(QWidget):
         self.btn_save_preset.clicked.connect(self.save_preset)
         self.btn_apply.clicked.connect(self.apply_settings)
     
+    POSITIONER_TIMEOUT = 600.0  # Positioner moves can take several minutes
+
+    def _request(self, method, endpoint, data, callback, timeout=None):
+        thread = APIClientThread(method, f"{self.api_base_url}{endpoint}", data, timeout=timeout)
+        thread.response_received.connect(callback)
+        thread.finished.connect(lambda: self._cleanup_thread(thread))
+        self.active_threads.append(thread)
+        thread.start()
+
     def load_settings(self):
         """Load current positioner settings from API."""
         self.status_label.setText(self.interface_text.loading_positioner_settings() if self.interface_text else "Loading positioner settings...")
         self.status_label.setStyleSheet("QLabel { color: blue; font-weight: bold; }")
-        
-        # For now, use placeholder logic since positioner API might not exist yet
-        self._load_placeholder_settings()
-    
-    def _load_placeholder_settings(self):
-        """Load placeholder settings until positioner API is implemented."""
-        # Simulate loading with placeholder values
-        placeholder_settings = {
-            'XPosition': 0.0,
-            'YPosition': 0.0,
-            'ZPosition': 0.0,
-            'MovementSpeed': 10.0,
-            'Acceleration': 100.0
-        }
-        
-        self.current_settings = placeholder_settings
-        self._update_ui_from_settings(placeholder_settings)
-        
-        status = self.interface_text.positioner_settings_loaded() if self.interface_text else "Positioner settings loaded (placeholder)"
-        self.status_label.setText(status)
-        self.status_label.setStyleSheet("QLabel { color: orange; font-weight: bold; }")
+        self._request('GET', '/positioner/settings', None, self._settings_loaded)
+
+    def _settings_loaded(self, success, message, response):
+        if not success:
+            self._show_error(message)
+            return
+        self.current_settings = response
+        self._update_ui_from_settings(response)
+        self.status_label.setText("Positioner settings loaded")
+        self.status_label.setStyleSheet("QLabel { color: green; font-weight: bold; }")
     
     def _update_ui_from_settings(self, settings):
         """Update UI controls from settings dictionary."""
@@ -220,7 +219,7 @@ class PositionerSettingsWidget(QWidget):
         status = self.interface_text.applying_positioner_settings() if self.interface_text else "Applying positioner settings..."
         self.status_label.setText(status)
         self.status_label.setStyleSheet("QLabel { color: blue; font-weight: bold; }")
-        
+
         # Collect current settings
         settings = {
             'XPosition': self.x_position.value(),
@@ -229,14 +228,17 @@ class PositionerSettingsWidget(QWidget):
             'MovementSpeed': self.movement_speed.value(),
             'Acceleration': self.acceleration.value()
         }
-        
-        # For now, just update locally since positioner API might not exist
-        self.current_settings = settings
-        status = self.interface_text.positioner_settings_applied() if self.interface_text else "Positioner settings applied locally"
-        self.status_label.setText(status)
-        self.status_label.setStyleSheet("QLabel { color: orange; font-weight: bold; }")
-        
-        # Emit signal that settings were updated
+
+        settings['SettingsName'] = self.current_settings.get('SettingsName', 'Basic')
+        self._request('POST', '/positioner/settings', settings, self._settings_applied)
+
+    def _settings_applied(self, success, message, response):
+        if not success:
+            self._show_error(message)
+            return
+        self.current_settings = response.get('data', self.current_settings)
+        self.status_label.setText(response.get('message', 'Positioner settings applied'))
+        self.status_label.setStyleSheet("QLabel { color: green; font-weight: bold; }")
         self.settings_updated.emit()
     
     def go_home(self):
@@ -244,31 +246,42 @@ class PositionerSettingsWidget(QWidget):
         status = self.interface_text.moving_to_home() if self.interface_text else "Moving to home position..."
         self.status_label.setText(status)
         self.status_label.setStyleSheet("QLabel { color: blue; font-weight: bold; }")
-        
-        self.x_position.setValue(0.0)
-        self.y_position.setValue(0.0)
-        self.z_position.setValue(0.0)
-        
-        status = self.interface_text.positioner_moved_home() if self.interface_text else "Positioner moved to home (simulated)"
-        self.status_label.setText(status)
-        self.status_label.setStyleSheet("QLabel { color: orange; font-weight: bold; }")
-    
+
+        self._request('POST', '/positioner/home', {}, self._motion_completed, timeout=self.POSITIONER_TIMEOUT)
+
     def move_to_position(self):
         """Move positioner to current target position."""
         status = self.interface_text.moving_to_position() if self.interface_text else "Moving to position..."
         self.status_label.setText(status)
         self.status_label.setStyleSheet("QLabel { color: blue; font-weight: bold; }")
-        
+
         x = self.x_position.value()
         y = self.y_position.value()
         z = self.z_position.value()
-        
-        if self.interface_text:
-            status = self.interface_text.moved_to_position().format(x=x, y=y, z=z)
-        else:
-            status = f"Moved to position: X={x:.2f}, Y={y:.2f}, Z={z:.2f} (simulated)"
-        self.status_label.setText(status)
-        self.status_label.setStyleSheet("QLabel { color: orange; font-weight: bold; }")
+
+        self._request('POST', '/positioner/move', {
+            'x': x,
+            'y': y,
+            'z': z,
+            'speed': self.movement_speed.value(),
+        }, self._motion_completed, timeout=self.POSITIONER_TIMEOUT)
+
+    def _motion_completed(self, success, message, response):
+        if not success:
+            self._show_error(message)
+            return
+        data = response.get('data', {})
+        position = data.get('work_position') or data.get('position', {})
+        if position:
+            self.x_position.setValue(float(position.get('x', self.x_position.value())))
+            self.y_position.setValue(float(position.get('y', self.y_position.value())))
+            self.z_position.setValue(float(position.get('z', self.z_position.value())))
+        self.status_label.setText(response.get('message', 'Positioner movement completed'))
+        self.status_label.setStyleSheet("QLabel { color: green; font-weight: bold; }")
+
+    def _show_error(self, message):
+        self.status_label.setText(message)
+        self.status_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
     
     def save_preset(self):
         """Save current position as a preset."""
