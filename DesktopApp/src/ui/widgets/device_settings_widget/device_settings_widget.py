@@ -96,7 +96,7 @@ class DeviceSettingsWidget(QWidget):
             self.stacked_widget.setCurrentWidget(self.spectrometer_tab)
         elif text == positioner_text:
             self.stacked_widget.setCurrentWidget(self.positioner_tab)
-            self.positioner_tab.load_settings()
+            self.positioner_tab.refresh_status()
         elif text == file_settings_text:
             self.stacked_widget.setCurrentWidget(self.file_tab)
 

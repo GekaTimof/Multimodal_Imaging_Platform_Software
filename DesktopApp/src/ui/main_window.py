@@ -387,6 +387,9 @@ class MainWindow(QMainWindow):
                 if not success:
                     # Показать ошибку, но продолжить переключение вкладки
                     self.light_switcher_status.show_error(f"{self.interface_text.error_title()}: {message}")
+                
+                # Switch device settings to Positioner for Acquisition
+                self.Acquisition_tab.device_settings_widget.switch_to_settings(self.interface_text.positioner())
             
             # Update previous tab index for next change
             self._previous_tab_index = index

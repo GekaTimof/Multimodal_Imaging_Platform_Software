@@ -2,15 +2,17 @@
 Acquisition Tab
 Combines camera feed with positioner controls.
 
-Layout:
-  Left:  camera video display (same pattern as CameraTab)
-  Right: camera start/stop/capture + PositionerSettingsWidget (scrollable)
+Layout identical to CameraTab:
+  Left:  camera video display
+  Right: upper = camera start/stop/capture controls (scroll, 2/5)
+         lower = DeviceSettingsWidget with switchable tabs (scroll, 3/5)
 """
 
 import logging
 import os
 from typing import Optional
 
+import requests
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QPixmap, QImage
 from PyQt5.QtWidgets import (
@@ -39,14 +41,15 @@ from core.constants.camera_constants import (
     PHOTO_TIMEOUT_ADDITIONS,
     PHOTO_EXPECTED_ADDITIONS,
 )
+from core.constants.ui_strings import CameraTabStrings
 from services.save_photo import save_photo
-from ui.widgets.device_settings_widget.positioner_settings_widget import PositionerSettingsWidget
+from ui.widgets.device_settings_widget import DeviceSettingsWidget
 
 logger = logging.getLogger(__name__)
 
 
 class AcquisitionTab(QWidget):
-    """Acquisition tab: camera video + positioner controls."""
+    """Acquisition tab: camera video + device settings (identical layout to CameraTab)."""
 
     def __init__(self, interface_text: Interface_text, theme_manager: ThemeManager = None):
         super().__init__()
@@ -59,7 +62,7 @@ class AcquisitionTab(QWidget):
         self._progress_elapsed_ms: int = 0
         self._progress_total_ms: int = 1000
 
-        # ---- Left: camera display ----
+        # ---- Left: video label ----
         self.video_label = QLabel(interface_text.no_video())
         self.video_label.setAlignment(Qt.AlignCenter)
         self.video_label.setStyleSheet("QLabel { background-color: black; color: white; }")
@@ -67,62 +70,70 @@ class AcquisitionTab(QWidget):
         self.video_label.setMinimumSize(0, 0)
         self.video_label.setScaledContents(False)
 
-        # ---- Right: camera buttons + positioner ----
-        right_inner = QVBoxLayout()
-        right_inner.setContentsMargins(
+        # ---- Right upper: camera controls ----
+        self.start_button = QPushButton(interface_text.start_camera())
+        self.stop_button = QPushButton(interface_text.stop_camera())
+        self.save_image_button = QPushButton(interface_text.save_image())
+        self.status_label = QLabel("")
+        self.status_label.setWordWrap(True)
+        self.status_label.setMinimumWidth(200)
+
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setVisible(False)
+
+        upper_control_layout = QVBoxLayout()
+        upper_control_layout.setContentsMargins(
             get_relative_margin(0.4), get_relative_margin(0.4),
             get_relative_margin(2.5), get_relative_margin(0.4),
         )
+        upper_control_layout.addWidget(self.start_button)
+        upper_control_layout.addWidget(self.stop_button)
+        upper_control_layout.addWidget(QLabel(f"Stream URL: {self.camera_source}"))
+        upper_control_layout.addWidget(self.save_image_button)
+        upper_control_layout.addWidget(self.progress_bar)
+        upper_control_layout.addWidget(self.status_label)
+        upper_control_layout.addStretch()
 
-        # Camera control buttons
-        cam_row = QHBoxLayout()
-        self.start_button = QPushButton(interface_text.start_camera())
-        self.stop_button = QPushButton(interface_text.stop_camera())
-        self.capture_button = QPushButton(interface_text.capture_photo())
-        cam_row.addWidget(self.start_button)
-        cam_row.addWidget(self.stop_button)
-        cam_row.addWidget(self.capture_button)
-        right_inner.addLayout(cam_row)
+        upper_scroll_area = QScrollArea()
+        upper_scroll_area.setWidgetResizable(True)
+        upper_scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        upper_scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        upper_widget = QWidget()
+        upper_widget.setLayout(upper_control_layout)
+        upper_scroll_area.setWidget(upper_widget)
 
-        # Progress bar (hidden)
-        self.progress_bar = QProgressBar()
-        self.progress_bar.setVisible(False)
-        right_inner.addWidget(self.progress_bar)
+        # ---- Right lower: device settings (tabbed, same as CameraTab) ----
+        self.device_settings_widget = DeviceSettingsWidget(interface_text, theme_manager)
 
-        # Camera status
-        self.camera_status = QLabel("")
-        self.camera_status.setWordWrap(True)
-        right_inner.addWidget(self.camera_status)
+        lower_scroll_area = QScrollArea()
+        lower_scroll_area.setWidgetResizable(True)
+        lower_scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        lower_scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        lower_scroll_area.setWidget(self.device_settings_widget)
 
-        # Positioner controls (takes remaining space)
-        self.positioner_widget = PositionerSettingsWidget(interface_text)
-        right_inner.addWidget(self.positioner_widget, stretch=1)
+        # ---- Right panel (2:3 split) ----
+        right_panel_layout = QVBoxLayout()
+        right_panel_layout.setContentsMargins(
+            get_relative_margin(0.6), get_relative_margin(0.6),
+            get_relative_margin(0.6), get_relative_margin(0.6),
+        )
+        right_panel_layout.addWidget(upper_scroll_area, 2)
+        right_panel_layout.addWidget(lower_scroll_area, 3)
 
-        # Wrap in scroll area
-        right_widget = QWidget()
-        right_widget.setLayout(right_inner)
-        right_scroll = QScrollArea()
-        right_scroll.setWidgetResizable(True)
-        right_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        right_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        right_scroll.setWidget(right_widget)
-
-        right_panel = QWidget()
-        right_panel_layout = QVBoxLayout(right_panel)
-        right_panel_layout.setContentsMargins(0, 0, 0, 0)
-        right_panel_layout.addWidget(right_scroll)
-        right_panel.setMinimumWidth(interface_config.get('ui_scaling.side_panel_min_width', 320))
-        right_panel.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
+        right_panel_widget = QWidget()
+        right_panel_widget.setLayout(right_panel_layout)
+        right_panel_widget.setMinimumWidth(interface_config.get('ui_scaling.side_panel_min_width', 320))
+        right_panel_widget.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
 
         # ---- Main layout ----
         main_layout = QHBoxLayout(self)
         main_layout.addWidget(self.video_label, 1)
-        main_layout.addWidget(right_panel)
+        main_layout.addWidget(right_panel_widget)
 
         # ---- Signals ----
         self.start_button.clicked.connect(self.start_camera)
         self.stop_button.clicked.connect(self.stop_camera)
-        self.capture_button.clicked.connect(self.save_current_image)
+        self.save_image_button.clicked.connect(self.save_current_image)
 
     # ------------------------------------------------------------------
     # Camera
@@ -139,7 +150,7 @@ class AcquisitionTab(QWidget):
         self.stop_button.setEnabled(True)
 
     def _on_camera_status(self, message: str):
-        self.camera_status.setText(message)
+        self.status_label.setText(message)
 
     def update_frame(self, image: QImage):
         self.current_frame = image
@@ -150,14 +161,14 @@ class AcquisitionTab(QWidget):
     def stop_camera(self):
         if self.thread is None:
             return
-        self.camera_status.setText("Stopping camera...")
+        self.status_label.setText(CameraTabStrings.STOPPING_CAMERA)
         self.thread.stop()
         if self.thread.isRunning():
             if not self.thread.wait(3000):
                 self.thread.terminate()
                 self.thread.wait(1000)
         self.thread = None
-        self.camera_status.setText("Camera stopped")
+        self.status_label.setText(CameraTabStrings.CAMERA_STOPPED)
         self.start_button.setEnabled(True)
         self.stop_button.setEnabled(False)
 
@@ -201,7 +212,6 @@ class AcquisitionTab(QWidget):
             return PHOTO_EXPECTED_ADDITIONS['short']
 
     def _get_expected_capture_duration_ms(self) -> tuple:
-        import requests
         try:
             api_url = f"{API_BASE_URL}/settings/camera"
             response = requests.get(api_url, timeout=5)
@@ -227,16 +237,29 @@ class AcquisitionTab(QWidget):
     def save_current_image(self):
         if self.photo_thread is not None and self.photo_thread.isRunning():
             return
+
+        # Use photo save directory from file settings if configured
+        photo_dir = self.device_settings_widget.file_tab.get_photo_save_directory()
+        if not photo_dir:
+            warn_msg = (
+                self.interface_text.warning_no_photo_dir() if self.interface_text
+                else "Photo save directory is not configured.\nPlease select a folder in File Settings."
+            )
+            QMessageBox.warning(self, "Save Directory", warn_msg)
+            return
+
         self._progress_total_ms, http_timeout_s = self._get_expected_capture_duration_ms()
         self._progress_elapsed_ms = 0
-        self.capture_button.setEnabled(False)
+        self.save_image_button.setEnabled(False)
         self.progress_bar.setVisible(True)
         self.progress_bar.setValue(0)
-        self.camera_status.setText("Capturing photo...")
+        self.status_label.setText("Capturing high-resolution photo...")
+
         self._progress_timer = QTimer(self)
         self._progress_timer.setInterval(200)
         self._progress_timer.timeout.connect(self._advance_progress)
         self._progress_timer.start()
+
         self.photo_thread = PhotoCaptureThread(timeout=http_timeout_s)
         self.photo_thread.finished.connect(self._on_photo_captured)
         self.photo_thread.failed.connect(self._on_photo_failed)
@@ -255,29 +278,36 @@ class AcquisitionTab(QWidget):
 
     def _on_photo_captured(self, image: QImage, photo_info: dict):
         self._stop_progress_timer()
-        # Save to default pictures folder
-        photo_dir = os.path.expanduser("~/Pictures")
-        os.makedirs(photo_dir, exist_ok=True)
+        photo_dir = self.device_settings_widget.file_tab.get_photo_save_directory()
+        if not photo_dir:
+            warn_msg = (
+                self.interface_text.warning_no_photo_dir() if self.interface_text
+                else "Photo save directory is not configured.\nPlease select a folder in File Settings."
+            )
+            QMessageBox.warning(self, "Save Directory", warn_msg)
+            self.progress_bar.setVisible(False)
+            self.save_image_button.setEnabled(True)
+            return
         try:
             saved_path = save_photo(image, photo_dir)
         except (ValueError, RuntimeError) as e:
             logger.error(f"Failed to save photo: {e}")
-            self.camera_status.setText(f"Error: {e}")
+            self.status_label.setText(f"Error saving photo: {e}")
             self.progress_bar.setVisible(False)
-            self.capture_button.setEnabled(True)
+            self.save_image_button.setEnabled(True)
             return
         self.progress_bar.setValue(100)
         resolution = photo_info.get("resolution", "unknown")
-        self.camera_status.setText(f"Photo saved: {os.path.basename(saved_path)} ({resolution})")
+        self.status_label.setText(f"Photo saved: {os.path.basename(saved_path)} ({resolution})")
         self.progress_bar.setVisible(False)
-        self.capture_button.setEnabled(True)
+        self.save_image_button.setEnabled(True)
         self.photo_thread = None
 
     def _on_photo_failed(self, error_message: str):
         self._stop_progress_timer()
-        self.camera_status.setText(f"Error: {error_message}")
+        self.status_label.setText(f"Error: {error_message}")
         self.progress_bar.setVisible(False)
-        self.capture_button.setEnabled(True)
+        self.save_image_button.setEnabled(True)
         self.photo_thread = None
 
     # ------------------------------------------------------------------
@@ -294,10 +324,8 @@ class AcquisitionTab(QWidget):
         self.interface_text = interface_text
         self.start_button.setText(interface_text.start_camera())
         self.stop_button.setText(interface_text.stop_camera())
-        self.capture_button.setText(interface_text.capture_photo())
+        self.save_image_button.setText(interface_text.save_image())
 
     def closeEvent(self, event):
         self.stop_camera()
-        if hasattr(self, 'positioner_widget'):
-            self.positioner_widget.closeEvent(event)
         super().closeEvent(event)

@@ -943,6 +943,15 @@ async def get_spectrometer_validation_rules():
     }
 
 
+# TODO: Implement 10-slot positioner presets (like camera settings slots).
+#       - Add GET /api/positioner/settings/{slot_id} to load a specific slot.
+#       - Add POST /api/positioner/settings/{slot_id} to save to a specific slot.
+#       - Add GET /api/positioner/settings/slots to list all slots.
+#       - Add POST /api/positioner/settings/load/{slot_id} to load slot into current session.
+#       - Update database_service.py: get_positioner_settings(slot_id),
+#         save_positioner_settings(settings, slot_id).
+#       - Mirror the camera settings slot pattern from camera endpoints.
+
 @app.get("/api/positioner/settings", response_model=PositionerSettingsResponse)
 async def get_positioner_settings():
     return PositionerSettingsResponse(**db_service.get_positioner_settings())

@@ -71,6 +71,13 @@ class PositionerSettingsWidget(QWidget):
             row_widget = self._build_axis_row(axis)
             layout.addWidget(row_widget)
 
+        # ---- Get current position button ----
+        self.btn_get_position = QPushButton(
+            _t(self.interface_text, 'current_position', 'Current position')
+        )
+        self.btn_get_position.clicked.connect(self.refresh_status)
+        layout.addWidget(self.btn_get_position)
+
         # ---- 2. Speed selection ----
         layout.addWidget(self._build_speed_section())
 
@@ -212,6 +219,13 @@ class PositionerSettingsWidget(QWidget):
         return container
 
     # ---- Save / Load section builder ----
+    # TODO: Implement 10-slot positioner presets (like camera settings slots).
+    #       - Add a SettingsSlotDialog for positioner (reuse/adapt the camera one).
+    #       - Save button should open slot selection dialog, then POST to
+    #         /api/positioner/settings/{slot_id}.
+    #       - Load button should open slot selection dialog, then GET from
+    #         /api/positioner/settings/{slot_id} and update UI.
+    #       - Requires corresponding slot-based API endpoints on RaspberryPi side.
 
     def _build_save_load_section(self) -> QWidget:
         container = QWidget()
