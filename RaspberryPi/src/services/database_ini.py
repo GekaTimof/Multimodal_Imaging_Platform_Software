@@ -42,9 +42,20 @@ def main():
     CREATE TABLE IF NOT EXISTS PositionerSettings (
         id INTEGER PRIMARY KEY,
         SettingsName TEXT NOT NULL DEFAULT 'Basic',
-        parameter1 TEXT,
-        parameter2 TEXT,
-        parameter3 TEXT
+        XPosition REAL NOT NULL DEFAULT 0.0,
+        YPosition REAL NOT NULL DEFAULT 0.0,
+        ZPosition REAL NOT NULL DEFAULT 0.0,
+        MovementSpeed REAL NOT NULL DEFAULT 10.0,
+        Acceleration REAL NOT NULL DEFAULT 100.0,
+        XMin REAL DEFAULT 0.0,
+        XMax REAL DEFAULT 0.0,
+        YMin REAL DEFAULT 0.0,
+        YMax REAL DEFAULT 0.0,
+        ZMin REAL DEFAULT 0.0,
+        ZMax REAL DEFAULT 0.0,
+        XHomeAtMin INTEGER DEFAULT 1,
+        YHomeAtMin INTEGER DEFAULT 1,
+        ZHomeAtMin INTEGER DEFAULT 1
     )
     """)
     
@@ -144,6 +155,39 @@ def main():
             VALUES (?, 'Migrated', ?, ?, ?, ?, datetime('now'))
             """, (0, old_integral_time, use_dark, old_auto_dark, old_threshold))
     
+    cursor.execute("PRAGMA table_info(PositionerSettings)")
+    positioner_columns = [row[1] for row in cursor.fetchall()]
+    if 'parameter1' in positioner_columns or 'XMin' not in positioner_columns:
+        cursor.execute("DROP TABLE PositionerSettings")
+        cursor.execute("""
+        CREATE TABLE PositionerSettings (
+            id INTEGER PRIMARY KEY,
+            SettingsName TEXT NOT NULL DEFAULT 'Basic',
+            XPosition REAL NOT NULL DEFAULT 0.0,
+            YPosition REAL NOT NULL DEFAULT 0.0,
+            ZPosition REAL NOT NULL DEFAULT 0.0,
+            MovementSpeed REAL NOT NULL DEFAULT 10.0,
+            Acceleration REAL NOT NULL DEFAULT 100.0,
+            XMin REAL DEFAULT 0.0,
+            XMax REAL DEFAULT 0.0,
+            YMin REAL DEFAULT 0.0,
+            YMax REAL DEFAULT 0.0,
+            ZMin REAL DEFAULT 0.0,
+            ZMax REAL DEFAULT 0.0,
+            XHomeAtMin INTEGER DEFAULT 1,
+            YHomeAtMin INTEGER DEFAULT 1,
+            ZHomeAtMin INTEGER DEFAULT 1
+        )
+        """)
+    for col in ('XHomeAtMin', 'YHomeAtMin', 'ZHomeAtMin'):
+        if col not in positioner_columns:
+            cursor.execute(f"ALTER TABLE PositionerSettings ADD COLUMN {col} INTEGER DEFAULT 1")
+    cursor.execute("""
+    INSERT OR IGNORE INTO PositionerSettings
+    (id, SettingsName, XPosition, YPosition, ZPosition, MovementSpeed, Acceleration, XMin, XMax, YMin, YMax, ZMin, ZMax, XHomeAtMin, YHomeAtMin, ZHomeAtMin)
+    VALUES (0, 'Basic', 0.0, 0.0, 0.0, 10.0, 100.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1, 1, 1)
+    """)
+
     # Insert default spectrometer settings for slot 0 if not exists
     cursor.execute("SELECT COUNT(*) FROM SpectrometerSettings WHERE id = 0")
     if cursor.fetchone()[0] == 0:

@@ -22,10 +22,8 @@ class DatabaseService:
     
     def _ensure_database_exists(self):
         """Ensure database and tables exist."""
-        if not os.path.exists(db_path):
-            import sys
-            from . import database_ini
-            database_ini.main()
+        from . import database_ini
+        database_ini.main()
 
     @staticmethod
     def _convert_bool_fields(settings: Dict[str, Any]) -> Dict[str, Any]:
@@ -67,6 +65,12 @@ class DatabaseService:
         elif table_name == 'SpectrometerSettings':
             try:
                 return self._validate_spectrometer_parameter(parameter, value)
+            except Exception as e:
+                logger.error(f"Validation error for {parameter}: {e}")
+                return False, f"Validation error: {str(e)}"
+        elif table_name == 'PositionerSettings':
+            try:
+                return config.validate_positioner_parameter(parameter, value)
             except Exception as e:
                 logger.error(f"Validation error for {parameter}: {e}")
                 return False, f"Validation error: {str(e)}"
@@ -428,6 +432,79 @@ class DatabaseService:
             conn.commit()
             return True, "Spectrometer settings saved successfully"
 
+        except sqlite3.Error as e:
+            return False, f"Database error: {e}"
+        finally:
+            conn.close()
+
+    def get_positioner_settings(self) -> Dict[str, Any]:
+        settings = self.get_all_settings('PositionerSettings')
+        if settings:
+            return settings
+        self.save_positioner_settings(config.DEFAULT_POSITIONER_SETTINGS)
+        return {**config.DEFAULT_POSITIONER_SETTINGS, 'id': 0}
+
+    def save_positioner_settings(self, settings: Dict[str, Any]) -> Tuple[bool, str]:
+        parameters = ('SettingsName', 'XPosition', 'YPosition', 'ZPosition', 'MovementSpeed', 'Acceleration',
+                      'XMin', 'XMax', 'YMin', 'YMax', 'ZMin', 'ZMax',
+                      'XHomeAtMin', 'YHomeAtMin', 'ZHomeAtMin')
+        # Calibration fields are preserved from the database unless explicitly provided.
+        preserved = {}
+        calibration_fields = {'XMin', 'XMax', 'YMin', 'YMax', 'ZMin', 'ZMax',
+                               'XHomeAtMin', 'YHomeAtMin', 'ZHomeAtMin'}
+        try:
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM PositionerSettings WHERE id = 0")
+            row = cursor.fetchone()
+            if row:
+                existing = {desc[0]: row[i] for i, desc in enumerate(cursor.description)}
+                for field in calibration_fields:
+                    preserved[field] = existing.get(field)
+        except sqlite3.Error:
+            pass
+        finally:
+            if conn:
+                conn.close()
+
+        validated = {}
+        for parameter in parameters:
+            if parameter in preserved and parameter not in settings:
+                value = preserved[parameter]
+            else:
+                value = settings.get(parameter, config.DEFAULT_POSITIONER_SETTINGS.get(parameter))
+            valid, result = config.validate_positioner_parameter(parameter, value)
+            if not valid:
+                return False, result
+            validated[parameter] = result
+        columns = ', '.join(parameters)
+        placeholders = ', '.join(['?'] * len(parameters))
+        try:
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+            cursor.execute(f"""
+            INSERT INTO PositionerSettings
+            (id, {columns})
+            VALUES (0, {placeholders})
+            ON CONFLICT(id) DO UPDATE SET
+                SettingsName=excluded.SettingsName,
+                XPosition=excluded.XPosition,
+                YPosition=excluded.YPosition,
+                ZPosition=excluded.ZPosition,
+                MovementSpeed=excluded.MovementSpeed,
+                Acceleration=excluded.Acceleration,
+                XMin=excluded.XMin,
+                XMax=excluded.XMax,
+                YMin=excluded.YMin,
+                YMax=excluded.YMax,
+                ZMin=excluded.ZMin,
+                ZMax=excluded.ZMax,
+                XHomeAtMin=excluded.XHomeAtMin,
+                YHomeAtMin=excluded.YHomeAtMin,
+                ZHomeAtMin=excluded.ZHomeAtMin
+            """, tuple(validated[p] for p in parameters))
+            conn.commit()
+            return True, "Positioner settings saved successfully"
         except sqlite3.Error as e:
             return False, f"Database error: {e}"
         finally:
