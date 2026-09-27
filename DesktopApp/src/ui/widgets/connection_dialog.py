@@ -195,15 +195,6 @@ class ConnectionDialog(QDialog):
         self._connect_btn.clicked.connect(self._on_connect)
         btn_row.addWidget(self._connect_btn)
 
-        self._skip_btn = QPushButton(self._t("discovery_skip", "Use saved"))
-        self._skip_btn.setToolTip(
-            self._t("discovery_skip_tooltip",
-                     "Skip discovery and use the previously saved IP address")
-        )
-        self._skip_btn.setEnabled(self._saved_ip is not None)
-        self._skip_btn.clicked.connect(self._on_skip)
-        btn_row.addWidget(self._skip_btn)
-
         root.addLayout(btn_row)
 
     # ------------------------------------------------------------------ #
@@ -337,9 +328,4 @@ class ConnectionDialog(QDialog):
             self.selected_port = self._api_port
         self.accept()
 
-    def _on_skip(self):
-        """Use the previously saved IP without scanning."""
-        if self._saved_ip:
-            self.selected_ip = self._saved_ip
-            self.selected_port = self._api_port
-            self.accept()
+
