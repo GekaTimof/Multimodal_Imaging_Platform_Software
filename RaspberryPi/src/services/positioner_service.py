@@ -34,6 +34,8 @@ class PositionerService:
         self.state = "disconnected"
         self.position = {"x": 0.0, "y": 0.0, "z": 0.0}
         self._lock = threading.RLock()
+        self._stop_event = threading.Event()
+        self._busy = False
         self.settings = config.DEFAULT_POSITIONER_SETTINGS.copy()
         self.reload_settings()
         # Calibration results: {axis: {"min": mm, "max": mm, "travel": mm, "center": mm}}
@@ -90,6 +92,7 @@ class PositionerService:
     def connect(self) -> bool:
         with self._lock:
             self.disconnect()
+            self._stop_event.clear()
             try:
                 self.serial_connection = serial.Serial(
                     self.port,
@@ -99,17 +102,16 @@ class PositionerService:
                 )
                 time.sleep(2.0)
                 self.serial_connection.reset_input_buffer()
+                # Soft reset to get a clean GRBL prompt and avoid stale command buffer.
                 self.serial_connection.write(b"\x18")
                 self.serial_connection.flush()
                 time.sleep(1.0)
-                response = self._command("$I", accepted_prefixes=("[", "Grbl"))
-                if not response:
-                    raise ConnectionError("GRBL controller did not answer $I")
+                self.serial_connection.reset_input_buffer()
+                self._command("$I", accepted_prefixes=("[", "Grbl"))
                 self.connected = True
                 # MKS DLC32 reports idle NC switches as triggered with $5=1; use $5=0.
                 self._command("$5=0")
-                self.serial_connection.write(b"\x18")
-                self.serial_connection.flush()
+                self._write_command_raw(b"\x18")
                 time.sleep(1.0)
                 self.serial_connection.reset_input_buffer()
                 self._command("$I", accepted_prefixes=("[", "Grbl"))
@@ -137,37 +139,39 @@ class PositionerService:
                 raise ConnectionError(f"Positioner is not available on {self.port}")
 
     def _command(self, command: str, accepted_prefixes: Tuple[str, ...] = (), timeout: Optional[float] = None) -> list[str]:
-        if not self.serial_connection or not self.serial_connection.is_open:
-            raise ConnectionError("Serial connection is not open")
-        self.serial_connection.reset_input_buffer()
-        self.serial_connection.write(f"{command}\n".encode("ascii"))
-        self.serial_connection.flush()
-        lines = []
-        deadline = time.monotonic() + (timeout or config.POSITIONER_TIMEOUT_SECONDS)
-        while time.monotonic() < deadline:
-            raw = self.serial_connection.readline()
-            if not raw:
-                continue
-            line = raw.decode("ascii", errors="replace").strip()
-            if not line:
-                continue
-            lines.append(line)
-            if line == "ok":
-                return lines
-            if line.startswith("error:") or line.startswith("ALARM:"):
-                raise RuntimeError(line)
-            if accepted_prefixes and line.startswith(accepted_prefixes):
-                return lines
-        raise TimeoutError(f"No GRBL acknowledgement for {command}")
+        with self._lock:
+            if not self.serial_connection or not self.serial_connection.is_open:
+                raise ConnectionError("Serial connection is not open")
+            self.serial_connection.reset_input_buffer()
+            self.serial_connection.write(f"{command}\n".encode("ascii"))
+            self.serial_connection.flush()
+            lines = []
+            deadline = time.monotonic() + (timeout or config.POSITIONER_TIMEOUT_SECONDS)
+            while time.monotonic() < deadline:
+                raw = self.serial_connection.readline()
+                if not raw:
+                    continue
+                line = raw.decode("ascii", errors="replace").strip()
+                if not line:
+                    continue
+                lines.append(line)
+                if line == "ok":
+                    return lines
+                if line.startswith("error:") or line.startswith("ALARM:"):
+                    raise RuntimeError(line)
+                if accepted_prefixes and line.startswith(accepted_prefixes):
+                    return lines
+            raise TimeoutError(f"No GRBL acknowledgement for {command}")
 
     def _drain(self) -> None:
-        try:
-            if self.serial_connection and self.serial_connection.is_open:
-                while getattr(self.serial_connection, 'in_waiting', 0):
-                    self.serial_connection.readline()
-        except (OSError, serial.SerialException):
-            logger.warning("Serial drain failed; marking connection as disconnected")
-            self.disconnect()
+        with self._lock:
+            try:
+                if self.serial_connection and self.serial_connection.is_open:
+                    while getattr(self.serial_connection, 'in_waiting', 0):
+                        self.serial_connection.readline()
+            except (OSError, serial.SerialException):
+                logger.warning("Serial drain failed; marking connection as disconnected")
+                self.disconnect()
 
     def _readline(self) -> str:
         if not self.serial_connection:
@@ -182,28 +186,44 @@ class PositionerService:
             self.disconnect()
             return ""
 
-    def _unlock(self) -> bool:
-        try:
-            self._drain()
-            self.serial_connection.write(b"$X\n")
-            self.serial_connection.flush()
-        except (OSError, serial.SerialException) as exc:
-            logger.warning("Serial write failed during unlock: %s", exc)
-            self.disconnect()
-            return False
-        deadline = time.monotonic() + config.POSITIONER_TIMEOUT_SECONDS
-        while time.monotonic() < deadline:
-            line = self._readline()
-            if not line or line.startswith("<"):
-                continue
-            if line == "ok":
+    def _write_command_raw(self, data: bytes) -> bool:
+        with self._lock:
+            if not self.serial_connection or not self.serial_connection.is_open:
+                return False
+            try:
+                self.serial_connection.write(data)
+                self.serial_connection.flush()
                 return True
-            logger.debug("Unexpected unlock response: %s", line)
+            except (OSError, serial.SerialException) as exc:
+                logger.warning("Serial write failed: %s", exc)
+                self.disconnect()
+                return False
+
+    def _unlock(self) -> bool:
+        with self._lock:
+            self._drain()
+            try:
+                self.serial_connection.write(b"$X\n")
+                self.serial_connection.flush()
+            except (OSError, serial.SerialException) as exc:
+                logger.warning("Serial write failed during unlock: %s", exc)
+                self.disconnect()
+                return False
+            deadline = time.monotonic() + config.POSITIONER_TIMEOUT_SECONDS
+            while time.monotonic() < deadline:
+                line = self._readline()
+                if not line or line.startswith("<"):
+                    continue
+                if line == "ok":
+                    return True
+                logger.debug("Unexpected unlock response: %s", line)
         return False
 
     def _wait_idle(self, timeout: Optional[float] = None) -> bool:
         deadline = time.monotonic() + (timeout or config.POSITIONER_MOVEMENT_TIMEOUT_SECONDS)
         while time.monotonic() < deadline:
+            if self._stop_event.is_set():
+                return False
             status = self.refresh_status()
             if status["state"] == "idle":
                 return True
@@ -215,6 +235,8 @@ class PositionerService:
     def _wait_axis_released(self, axis: str, timeout: float = 30.0) -> bool:
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
+            if self._stop_event.is_set():
+                return False
             active = self._active_limit_axes()
             if axis not in active:
                 return True
@@ -232,8 +254,8 @@ class PositionerService:
         return {a.lower() for a in ("X", "Y", "Z") if a in pn}
 
     def refresh_status(self, raw: bool = False) -> Dict[str, Any]:
+        self._ensure_connected()
         with self._lock:
-            self._ensure_connected()
             connection = self.serial_connection
             try:
                 self._drain()
@@ -282,25 +304,30 @@ class PositionerService:
 
     def _send_calib_command(self, command: str, timeout: Optional[float] = None) -> bool:
         """Send a command and wait for ok/error/ALARM without raising."""
-        if not self.serial_connection or not self.serial_connection.is_open:
+        if self._stop_event.is_set():
             return False
-        self._drain()
-        try:
-            self.serial_connection.write(f"{command}\n".encode("ascii"))
-            self.serial_connection.flush()
-        except (OSError, serial.SerialException) as exc:
-            logger.warning("Serial write failed for command %r: %s", command, exc)
-            self.disconnect()
-            return False
-        deadline = time.monotonic() + (timeout or self.SEND_TIMEOUT)
-        while time.monotonic() < deadline:
-            line = self._readline()
-            if not line or line.startswith("<"):
-                continue
-            if line == "ok":
-                return True
-            if line.startswith("error:") or line.startswith("ALARM"):
+        with self._lock:
+            if not self.serial_connection or not self.serial_connection.is_open:
                 return False
+            self._drain()
+            try:
+                self.serial_connection.write(f"{command}\n".encode("ascii"))
+                self.serial_connection.flush()
+            except (OSError, serial.SerialException) as exc:
+                logger.warning("Serial write failed for command %r: %s", command, exc)
+                self.disconnect()
+                return False
+            deadline = time.monotonic() + (timeout or self.SEND_TIMEOUT)
+            while time.monotonic() < deadline:
+                if self._stop_event.is_set():
+                    return False
+                line = self._readline()
+                if not line or line.startswith("<"):
+                    continue
+                if line == "ok":
+                    return True
+                if line.startswith("error:") or line.startswith("ALARM"):
+                    return False
         return False
 
     def _wait_alarm(self, timeout: Optional[float] = None) -> bool:
@@ -308,19 +335,23 @@ class PositionerService:
         deadline = time.monotonic() + (timeout or self.ALARM_TIMEOUT)
         next_query = time.monotonic() + 0.5
         while time.monotonic() < deadline:
+            if self._stop_event.is_set():
+                return False
             now = time.monotonic()
             if now >= next_query:
-                if not self.serial_connection or not self.serial_connection.is_open:
-                    logger.warning("Serial port disconnected during alarm wait")
-                    return False
-                try:
-                    self.serial_connection.write(b"?")
-                    self.serial_connection.flush()
-                except (OSError, serial.SerialException, AttributeError, TypeError):
-                    logger.warning("Serial write failed during alarm wait")
-                    return False
+                with self._lock:
+                    if not self.serial_connection or not self.serial_connection.is_open:
+                        logger.warning("Serial port disconnected during alarm wait")
+                        return False
+                    try:
+                        self.serial_connection.write(b"?")
+                        self.serial_connection.flush()
+                    except (OSError, serial.SerialException, AttributeError, TypeError):
+                        logger.warning("Serial write failed during alarm wait")
+                        return False
                 next_query = now + 0.5
-            line = self._readline()
+            with self._lock:
+                line = self._readline()
             if not line:
                 continue
             if line.startswith("<Alarm"):
@@ -336,6 +367,8 @@ class PositionerService:
         time.sleep(0.5)
         deadline = time.monotonic() + (timeout or self.MOTION_TIMEOUT)
         while time.monotonic() < deadline:
+            if self._stop_event.is_set():
+                return False
             status = self.refresh_status()
             if status["state"] == "idle":
                 return True
@@ -359,6 +392,8 @@ class PositionerService:
         cmd = f"G1 {axis_upper}{move:.3f} F{self.RELEASE_FEED:.3f}"
 
         for attempt in range(self.RELEASE_MAX_RETRIES):
+            if self._stop_event.is_set():
+                return False
             logger.info("Release %s from limit, attempt %d, cmd=%s", axis, attempt + 1, cmd)
             self._unlock()
             time.sleep(0.2)
@@ -367,27 +402,32 @@ class PositionerService:
                 continue
 
             self._drain()
-            try:
-                self.serial_connection.write(f"{cmd}\n".encode("ascii"))
-                self.serial_connection.flush()
-            except (OSError, serial.SerialException, AttributeError, TypeError) as exc:
-                logger.warning("Serial write failed during release move: %s", exc)
-                return False
+            with self._lock:
+                try:
+                    self.serial_connection.write(f"{cmd}\n".encode("ascii"))
+                    self.serial_connection.flush()
+                except (OSError, serial.SerialException, AttributeError, TypeError) as exc:
+                    logger.warning("Serial write failed during release move: %s", exc)
+                    return False
 
             deadline = time.monotonic() + self.LIMIT_RELEASE_TIMEOUT
             next_query = time.monotonic() + 0.5
             got_alarm = False
             while time.monotonic() < deadline:
+                if self._stop_event.is_set():
+                    return False
                 now = time.monotonic()
                 if now >= next_query:
-                    try:
-                        self.serial_connection.write(b"?")
-                        self.serial_connection.flush()
-                    except Exception:
-                        pass
+                    with self._lock:
+                        try:
+                            self.serial_connection.write(b"?")
+                            self.serial_connection.flush()
+                        except Exception:
+                            pass
                     next_query = now + 0.5
 
-                line = self._readline()
+                with self._lock:
+                    line = self._readline()
                 if not line:
                     continue
                 if line.startswith("<"):
@@ -420,6 +460,8 @@ class PositionerService:
     def _find_edge(self, axis: str, direction: int) -> Optional[float]:
         """Move until the limit switch triggers and return the MPos coordinate."""
         axis_upper = axis.upper()
+        if self._stop_event.is_set():
+            return None
         self._unlock()
         time.sleep(0.1)
         if not self._send_calib_command("G91"):
@@ -430,15 +472,15 @@ class PositionerService:
         cmd = f"G1 {axis_upper}{move:.3f} F{self.SEARCH_FEED:.3f}"
         logger.info("Finding %s%s edge: %s", axis, "+" if direction > 0 else "-", cmd)
         self._drain()
-        try:
-            self.serial_connection.write(f"{cmd}\n".encode("ascii"))
-            self.serial_connection.flush()
-        except (OSError, serial.SerialException, AttributeError, TypeError) as exc:
-            logger.warning("Serial write failed during find-edge move: %s", exc)
-            return None
+        with self._lock:
+            try:
+                self.serial_connection.write(f"{cmd}\n".encode("ascii"))
+                self.serial_connection.flush()
+            except (OSError, serial.SerialException, AttributeError, TypeError) as exc:
+                logger.warning("Serial write failed during find-edge move: %s", exc)
+                return None
 
         if not self._wait_alarm(timeout=self.ALARM_TIMEOUT):
-            self.stop()
             logger.error("Limit not reached for %s%s", axis, "+" if direction > 0 else "-")
             return None
 
@@ -496,7 +538,11 @@ class PositionerService:
         if axis not in ("x", "y", "z"):
             raise ValueError(f"Invalid axis: {axis}")
 
-        with self._lock:
+        if self._busy:
+            raise RuntimeError("Positioner is already busy")
+        self._stop_event.clear()
+        self._busy = True
+        try:
             self._ensure_connected()
             if not self._set_hard_limits(True):
                 raise RuntimeError("Failed to enable GRBL hard limits for calibration")
@@ -510,10 +556,16 @@ class PositionerService:
             self.refresh_status()
             self._save_current_position_to_slot_0()
             return result
+        finally:
+            self._busy = False
 
     def calibrate_all(self) -> List[Dict[str, Any]]:
         """Calibrate all axes atomically: only save if every axis succeeds."""
-        with self._lock:
+        if self._busy:
+            raise RuntimeError("Positioner is already busy")
+        self._stop_event.clear()
+        self._busy = True
+        try:
             self._ensure_connected()
             if not self._set_hard_limits(True):
                 raise RuntimeError("Failed to enable GRBL hard limits for calibration")
@@ -537,6 +589,8 @@ class PositionerService:
             self.refresh_status()
             self._save_current_position_to_slot_0()
             return results
+        finally:
+            self._busy = False
 
     def _apply_calibration_for_axis(self, axis: str, result: Dict[str, Any]) -> None:
         """Update in-memory calibration for one axis, preserving known home direction."""
@@ -597,36 +651,39 @@ class PositionerService:
         if not valid:
             raise ValueError(speed)
         # DesktopApp sends raw GRBL feed rate (F parameter, mm/min).
-        with self._lock:
-            self._ensure_connected()
-            if self.state in ("alarm", "hold"):
-                self._unlock()
-            if set(self._calibration) != {"x", "y", "z"}:
-                raise RuntimeError("Positioner is not fully calibrated. Run calibration first.")
-            work_targets = {
-                "x": values["XPosition"],
-                "y": values["YPosition"],
-                "z": values["ZPosition"],
-            }
-            for axis, value in work_targets.items():
-                travel = self._calibration[axis]["travel"]
-                if not 0.0 <= value <= travel:
-                    raise ValueError(f"{axis.upper()} position {value} is outside calibrated range 0..{travel}")
-            targets = {
-                axis: self._to_machine_coordinate(axis, value)
-                for axis, value in work_targets.items()
-            }
-            self._command("G21")
-            self._command("G90")
-            self._command(
-                f"G1 X{targets['x']:.3f} Y{targets['y']:.3f} "
-                f"Z{targets['z']:.3f} F{speed:.3f}"
-            )
-            if not self._wait_idle(timeout=config.POSITIONER_MOVEMENT_TIMEOUT_SECONDS):
-                raise TimeoutError("Positioner movement timed out")
-            self.refresh_status()
-            self._save_current_position_to_slot_0()
-            return self.get_status()
+        if self._busy:
+            raise RuntimeError("Positioner is busy")
+        self._ensure_connected()
+        if self.state in ("alarm", "hold"):
+            self._unlock()
+        if set(self._calibration) != {"x", "y", "z"}:
+            raise RuntimeError("Positioner is not fully calibrated. Run calibration first.")
+        work_targets = {
+            "x": values["XPosition"],
+            "y": values["YPosition"],
+            "z": values["ZPosition"],
+        }
+        for axis, value in work_targets.items():
+            travel = self._calibration[axis]["travel"]
+            if not 0.0 <= value <= travel:
+                raise ValueError(f"{axis.upper()} position {value} is outside calibrated range 0..{travel}")
+        targets = {
+            axis: self._to_machine_coordinate(axis, value)
+            for axis, value in work_targets.items()
+        }
+        self._command("G21")
+        self._command("G90")
+        self._command(
+            f"G1 X{targets['x']:.3f} Y{targets['y']:.3f} "
+            f"Z{targets['z']:.3f} F{speed:.3f}"
+        )
+        if not self._wait_idle(timeout=config.POSITIONER_MOVEMENT_TIMEOUT_SECONDS):
+            if self._stop_event.is_set():
+                raise RuntimeError("Positioner movement cancelled")
+            raise TimeoutError("Positioner movement timed out")
+        self.refresh_status()
+        self._save_current_position_to_slot_0()
+        return self.get_status()
 
     def home(self) -> Dict[str, Any]:
         if not self._calibration:
@@ -648,15 +705,30 @@ class PositionerService:
             logger.warning("Failed to save current position to slot 0: %s", exc)
 
     def stop(self) -> None:
+        self._stop_event.set()
+        self._write_command_raw(b"!")
+        self.state = "hold"
+
+    def is_busy(self) -> bool:
+        return self._busy
+
+    def _clear_stop(self):
+        self._stop_event.clear()
+
+    def _wait_axis_released(self, axis: str, timeout: float = 30.0) -> bool:
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if self._stop_event.is_set():
+                return False
+            active = self._active_limit_axes()
+            if axis not in active:
+                return True
+            time.sleep(0.1)
+        return False
+
+    def _execute_locked_command(self, command: str) -> list[str]:
         with self._lock:
-            try:
-                if self.serial_connection and self.serial_connection.is_open:
-                    self.serial_connection.write(b"!")
-                    self.serial_connection.flush()
-                    self.state = "hold"
-            except (OSError, serial.SerialException) as exc:
-                logger.warning("Serial write failed during stop: %s", exc)
-                self.disconnect()
+            return self._command(command)
 
     def apply_settings(self, settings: Dict[str, Any]) -> Dict[str, Any]:
         # X/Y/Z Position are read-only state from GRBL status; ignore any values
@@ -670,11 +742,10 @@ class PositionerService:
         if not success:
             raise ValueError(message)
         self.reload_settings()
-        with self._lock:
-            self._ensure_connected()
-            acceleration = self.settings["Acceleration"]
-            for axis_setting in (120, 121, 122):
-                self._command(f"${axis_setting}={acceleration:.3f}")
+        self._ensure_connected()
+        acceleration = self.settings["Acceleration"]
+        for axis_setting in (120, 121, 122):
+            self._execute_locked_command(f"${axis_setting}={acceleration:.3f}")
         return self.settings.copy()
 
     def get_status(self) -> Dict[str, Any]:

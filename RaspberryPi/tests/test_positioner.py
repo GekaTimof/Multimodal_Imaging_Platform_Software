@@ -22,6 +22,8 @@ class PositionerServiceTest(unittest.TestCase):
         service.state = 'idle'
         service.position = {'x': 0.0, 'y': 0.0, 'z': 0.0}
         service._lock = __import__('threading').RLock()
+        service._stop_event = __import__('threading').Event()
+        service._busy = False
         service.settings = config.DEFAULT_POSITIONER_SETTINGS.copy()
         service._calibration = {}
         service._home_at_min = {}
@@ -173,6 +175,12 @@ class PositionerServiceTest(unittest.TestCase):
             success, message = db_service.update_parameter('PositionerSettings', parameter, 123)
             self.assertFalse(success)
             self.assertIn('read-only', message)
+
+    def test_stop_sets_stop_event_without_waiting_for_lock(self):
+        service = self.make_service()
+        service.stop()
+        self.assertTrue(service._stop_event.is_set())
+        self.assertEqual(service.state, 'hold')
 
     def test_get_axis_limits_returns_travel_ranges(self):
         service = self.make_service()

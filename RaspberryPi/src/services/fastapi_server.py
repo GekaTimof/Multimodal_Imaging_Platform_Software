@@ -1088,6 +1088,12 @@ async def stop_positioner():
     return APIResponse(success=True, message="Positioner feed hold requested", data=positioner_service.get_status())
 
 
+@app.get("/api/positioner/busy", response_model=APIResponse)
+async def is_positioner_busy():
+    busy = await asyncio.to_thread(positioner_service.is_busy)
+    return APIResponse(success=True, message="Positioner busy state", data={"busy": busy})
+
+
 @app.post("/api/positioner/calibrate/{axis}", response_model=PositionerCalibrateResponse)
 async def calibrate_positioner_axis(axis: str):
     try:
