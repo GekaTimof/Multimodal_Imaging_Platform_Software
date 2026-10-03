@@ -18,7 +18,7 @@ from PyQt5.QtWidgets import (
     QLabel, QDoubleSpinBox, QPushButton,
     QSlider, QSizePolicy, QLineEdit,
 )
-from PyQt5.QtCore import pyqtSignal, Qt
+from PyQt5.QtCore import pyqtSignal, Qt, QTimer
 
 from config.api_config import ENDPOINTS
 from core.constants.camera_constants import THREAD_TIMEOUT_MS, MAX_POSITIONER_SLOTS
@@ -56,6 +56,7 @@ class PositionerSettingsWidget(QWidget):
         self.interface_text = interface_text
         self.current_settings = {}
         self._active_threads: list = []
+        self._busy_timer: QTimer | None = None
         self._build_ui()
 
     # ------------------------------------------------------------------
@@ -345,7 +346,13 @@ class PositionerSettingsWidget(QWidget):
             axis_w["btn_right"].setEnabled(enabled)
             axis_w["btn_move"].setEnabled(enabled)
             axis_w["slider"].setEnabled(enabled)
+            axis_w["spinbox"].setEnabled(enabled)
         self.btn_calibrate.setEnabled(enabled)
+        self.btn_save.setEnabled(enabled)
+        self.btn_load.setEnabled(enabled)
+        self.btn_get_position.setEnabled(enabled)
+        self.speed_spinbox.setEnabled(enabled)
+        self.settings_name_edit.setEnabled(enabled)
 
     def _update_axis_limits_from_calibration(self, data: dict):
         """Update spinbox/slider ranges from calibration data returned by status API.
@@ -393,8 +400,49 @@ class PositionerSettingsWidget(QWidget):
         self._set_status(
             _t(self.interface_text, 'loading_positioner_settings', 'Loading...'), 'blue'
         )
+        self._request('GET', ENDPOINTS['positioner_busy'], None, self._on_busy_checked,
+                      timeout=_STATUS_TIMEOUT)
+
+    def _on_busy_checked(self, success: bool, message: str, response: dict):
+        """After checking busy state: block UI if calibrating, then fetch position."""
+        busy = False
+        if success and response.get('success'):
+            busy = response.get('data', {}).get('busy', False)
+        if busy:
+            self._set_motion_enabled(False)
+            self._set_status(
+                _t(self.interface_text, 'positioner_calibrating', 'Positioner is calibrating...'), 'orange'
+            )
+            self._start_busy_polling()
+            return
+        self._stop_busy_polling()
         self._request('GET', ENDPOINTS['positioner_status'], None, self._on_status,
                       timeout=_STATUS_TIMEOUT)
+
+    def _start_busy_polling(self):
+        """Poll /positioner/busy every second until calibration finishes."""
+        if self._busy_timer is None:
+            self._busy_timer = QTimer(self)
+            self._busy_timer.timeout.connect(self._poll_busy)
+        if not self._busy_timer.isActive():
+            self._busy_timer.start(1000)
+
+    def _stop_busy_polling(self):
+        if self._busy_timer is not None and self._busy_timer.isActive():
+            self._busy_timer.stop()
+
+    def _poll_busy(self):
+        self._request('GET', ENDPOINTS['positioner_busy'], None, self._on_busy_poll_result,
+                      timeout=_STATUS_TIMEOUT)
+
+    def _on_busy_poll_result(self, success: bool, message: str, response: dict):
+        busy = False
+        if success and response.get('success'):
+            busy = response.get('data', {}).get('busy', False)
+        if not busy:
+            self._stop_busy_polling()
+            self._set_motion_enabled(True)
+            self.refresh_status()
 
     def _on_status(self, success: bool, message: str, response: dict):
         if not success:
@@ -456,6 +504,7 @@ class PositionerSettingsWidget(QWidget):
         self._set_status(
             _t(self.interface_text, 'calibration_complete', 'Calibration complete')
         )
+        self.refresh_status()
 
     # ------------------------------------------------------------------
     # Save / Load position slots
