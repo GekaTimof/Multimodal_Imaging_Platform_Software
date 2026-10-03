@@ -53,10 +53,10 @@ class CameraService:
                 self._init_rpicam_app()
                 self.use_real_camera = True
                 self.camera_backend = "rpicam"
-                print("rpicam-apps camera initialized successfully")
+                logger.info("rpicam-apps camera initialized successfully")
                 return
             except Exception as e:
-                print(f"rpicam-apps camera failed: {e}")
+                logger.info(f"rpicam-apps camera failed: {e}")
         
         # Try OpenCV + V4L2
         if OPENCV_AVAILABLE:
@@ -64,13 +64,13 @@ class CameraService:
                 self._init_opencv_camera()
                 self.use_real_camera = True
                 self.camera_backend = "opencv"
-                print("OpenCV + V4L2 camera initialized successfully")
+                logger.info("OpenCV + V4L2 camera initialized successfully")
                 return
             except Exception as e:
-                print(f"OpenCV camera failed: {e}")
+                logger.info(f"OpenCV camera failed: {e}")
         
         # If all fail, use test pattern
-        print("All camera backends failed, using test pattern")
+        logger.info("All camera backends failed, using test pattern")
         self.use_real_camera = False
         self.camera_backend = "test"
     
@@ -78,14 +78,14 @@ class CameraService:
         """Initialize camera using OpenCV + V4L2."""
         video_devices = glob.glob('/dev/video*')
         
-        print(f"Trying video devices: {video_devices}")
+        logger.info(f"Trying video devices: {video_devices}")
         
         for device in video_devices:
             try:
-                print(f"Testing {device}...")
+                logger.info(f"Testing {device}...")
                 cap = cv2.VideoCapture(device)
                 if cap.isOpened():
-                    print(f"Device {device} opened successfully")
+                    logger.info(f"Device {device} opened successfully")
                     
                     # Try different backend indices
                     backends = [cv2.CAP_V4L2, cv2.CAP_ANY]
@@ -107,19 +107,19 @@ class CameraService:
                                     actual_height = int(cap_with_backend.get(cv2.CAP_PROP_FRAME_HEIGHT))
                                     self.width = actual_width
                                     self.height = actual_height
-                                    print(f"OpenCV camera working with {device} (backend {backend}): {actual_width}x{actual_height}")
+                                    logger.info(f"OpenCV camera working with {device} (backend {backend}): {actual_width}x{actual_height}")
                                     return
                                 else:
                                     cap_with_backend.release()
                         except Exception as e:
-                            print(f"Backend {backend} failed for {device}: {e}")
+                            logger.info(f"Backend {backend} failed for {device}: {e}")
                             continue
                     
                     cap.release()
                 else:
-                    print(f"Could not open {device}")
+                    logger.info(f"Could not open {device}")
             except Exception as e:
-                print(f"Failed to open {device}: {e}")
+                logger.info(f"Failed to open {device}: {e}")
                 continue
         
         raise Exception("No working OpenCV camera device found")
@@ -138,7 +138,7 @@ class CameraService:
         if test_result.returncode != 0 and b'Available cameras' not in test_result.stdout + test_result.stderr:
             raise Exception("No cameras found by rpicam-vid")
 
-        print("rpicam-apps backend selected")
+        logger.info("rpicam-apps backend selected")
         
     def _load_settings(self):
         """Load camera settings from database."""
@@ -146,7 +146,7 @@ class CameraService:
             settings = db_service.get_camera_settings()
             self._apply_settings_to_attributes(settings)
         except Exception as e:
-            print(f"Error loading camera settings: {e}")
+            logger.info(f"Error loading camera settings: {e}")
             # Fallback to safe default settings
             self._set_default_settings()
 
@@ -218,7 +218,7 @@ class CameraService:
             True if settings were applied successfully, False otherwise
         """
         try:
-            print(f"Applying session settings: {settings}")
+            logger.info(f"Applying session settings: {settings}")
 
             # Store old resolution to check if camera needs reinitialization
             old_resolution = (self.width, self.height)
@@ -238,18 +238,18 @@ class CameraService:
 
             # Restart camera to apply new settings
             if self.camera_backend == "rpicam" and self.use_real_camera:
-                print("Restarting rpicam-vid with session settings...")
+                logger.info("Restarting rpicam-vid with session settings...")
                 self._restart_rpicam_vid()
             elif resolution_changed and self.use_real_camera:
-                print("Resolution changed, reinitializing camera...")
+                logger.info("Resolution changed, reinitializing camera...")
                 self._reinitialize_camera()
             else:
-                print("Settings applied to camera session")
+                logger.info("Settings applied to camera session")
 
             return True
 
         except Exception as e:
-            print(f"Error applying session settings: {e}")
+            logger.info(f"Error applying session settings: {e}")
             logger.error(f"Failed to apply session settings: {e}")
             return False
 
@@ -299,7 +299,7 @@ class CameraService:
             stderr=subprocess.DEVNULL,
             bufsize=0
         )
-        print(f"rpicam-vid started (PID {self.rpicam_process.pid}): {' '.join(cmd)}")
+        logger.info(f"rpicam-vid started (PID {self.rpicam_process.pid}): {' '.join(cmd)}")
 
     def start(self):
         if self.running:
@@ -328,10 +328,10 @@ class CameraService:
                 if self.rpicam_process is None or self.rpicam_process.poll() is not None:
                     # Don't auto-restart if we're paused for photo capture (global flag)
                     if _pause_for_photo_global.is_set():
-                        print("rpicam-vid process ended (paused for photo), waiting...")
+                        logger.info("rpicam-vid process ended (paused for photo), waiting...")
                         time.sleep(0.5)
                         continue
-                    print("rpicam-vid process died, restarting...")
+                    logger.info("rpicam-vid process died, restarting...")
                     self._start_rpicam_vid()
                     buf = b''
 
@@ -359,9 +359,9 @@ class CameraService:
 
             except Exception as e:
                 consecutive_errors += 1
-                print(f"rpicam-vid read error ({consecutive_errors}): {e}")
+                logger.info(f"rpicam-vid read error ({consecutive_errors}): {e}")
                 if consecutive_errors > 10:
-                    print("Too many errors, falling back to test pattern")
+                    logger.info("Too many errors, falling back to test pattern")
                     self.use_real_camera = False
                     self.camera_backend = "test"
                     self._capture_loop_generic()
@@ -377,7 +377,7 @@ class CameraService:
                     if not ret or frame is None:
                         raise Exception("Failed to read frame from OpenCV camera")
                 except Exception as e:
-                    print(f"Camera capture error: {e}")
+                    logger.info(f"Camera capture error: {e}")
                     self.use_real_camera = False
                     self.camera_backend = "test"
                     frame = self._generate_test_pattern()
@@ -419,7 +419,7 @@ class CameraService:
         """Pause video stream by stopping rpicam-vid process."""
         # Set flag FIRST to prevent auto-restart by capture loop (race condition guard)
         _pause_for_photo_global.set()
-        print("Pausing video stream for photo capture")
+        logger.info("Pausing video stream for photo capture")
 
         # Give capture loop one iteration to notice the flag (~10ms)
         time.sleep(0.02)
@@ -434,7 +434,7 @@ class CameraService:
                     self.rpicam_process.kill()
                     self.rpicam_process.wait(timeout=1.0)
             except Exception as e:
-                print(f"Warning: error stopping video stream: {e}")
+                logger.info(f"Warning: error stopping video stream: {e}")
             finally:
                 self.rpicam_process = None
 
@@ -449,18 +449,18 @@ class CameraService:
                         if pid.strip():
                             stray_pids.add(pid.strip())
             if stray_pids:
-                print(f"Killing stray camera processes: {sorted(stray_pids)}")
+                logger.info(f"Killing stray camera processes: {sorted(stray_pids)}")
                 for pid in sorted(stray_pids):
                     try:
                         subprocess.run(['kill', '-9', pid], check=False, timeout=2)
                     except Exception:
                         pass
         except Exception as e:
-            print(f"Warning: could not check for stray camera processes: {e}")
+            logger.info(f"Warning: could not check for stray camera processes: {e}")
 
         # Wait until no rpicam processes are running (camera device will then be free)
         self._wait_for_camera_release(max_wait_time=10.0, check_interval=0.05)
-        print("Video stream paused, camera is free")
+        logger.info("Video stream paused, camera is free")
 
     def _wait_for_camera_release(self, max_wait_time=10.0, check_interval=0.05):
         """Poll until no rpicam-vid / rpicam-still processes are running.
@@ -475,15 +475,15 @@ class CameraService:
             elapsed = time.time() - start_time
             camera_processes = self._get_camera_processes()
             if not camera_processes:
-                print(f"Camera ready after {elapsed:.2f}s")
+                logger.info(f"Camera ready after {elapsed:.2f}s")
                 return True
             if elapsed - last_log_time >= 1.0:
-                print(f"[{elapsed:.1f}s] Waiting for camera processes: {camera_processes}")
+                logger.info(f"[{elapsed:.1f}s] Waiting for camera processes: {camera_processes}")
                 last_log_time = elapsed
             time.sleep(check_interval)
 
         elapsed = time.time() - start_time
-        print(f"Warning: Camera wait timeout after {elapsed:.1f}s — proceeding anyway")
+        logger.info(f"Warning: Camera wait timeout after {elapsed:.1f}s — proceeding anyway")
         return False
     
     def _is_rpicam_vid_running(self):
@@ -516,7 +516,7 @@ class CameraService:
         with the capture loop and produce two conflicting rpicam-vid processes.
         """
         _pause_for_photo_global.clear()
-        print("Video stream resume flag cleared — capture loop will restart rpicam-vid")
+        logger.info("Video stream resume flag cleared — capture loop will restart rpicam-vid")
 
     def capture_photo(self, output_path: Optional[str] = None) -> Tuple[bool, Union[np.ndarray, str]]:
         """Capture a high-quality photo using PhotoResolution and all camera settings.
@@ -579,7 +579,7 @@ class CameraService:
                     else:
                         # Short exposure (<1s): 10s total (fast init + ZSL)
                         timeout_seconds = 10
-                    print(f"rpicam-still command: {' '.join(cmd)}, timeout={timeout_seconds}s")
+                    logger.info(f"rpicam-still command: {' '.join(cmd)}, timeout={timeout_seconds}s")
 
                     # Retry logic for camera acquisition race condition
                     max_retries = 3
@@ -588,7 +588,7 @@ class CameraService:
                     
                     for attempt in range(max_retries):
                         if attempt > 0:
-                            print(f"Retry attempt {attempt}/{max_retries} after {retry_delay}s...")
+                            logger.info(f"Retry attempt {attempt}/{max_retries} after {retry_delay}s...")
                             time.sleep(retry_delay)
                         
                         if output_path:
@@ -596,11 +596,11 @@ class CameraService:
                             cmd_with_output = cmd + ['-o', output_path]
                             result = subprocess.run(cmd_with_output, capture_output=True, timeout=timeout_seconds)
                             if result.returncode == 0:
-                                print(f"Photo captured successfully on attempt {attempt + 1}")
+                                logger.info(f"Photo captured successfully on attempt {attempt + 1}")
                                 return True, output_path
                             else:
                                 error_msg = result.stderr.decode('utf-8', errors='ignore') if result.stderr else "Unknown error"
-                                print(f"rpicam-still attempt {attempt + 1} failed: {error_msg[:200]}")
+                                logger.info(f"rpicam-still attempt {attempt + 1} failed: {error_msg[:200]}")
                                 # Check if it's a camera busy error - retry if so
                                 if 'in use by another process' in error_msg or 'failed to acquire' in error_msg:
                                     if attempt < max_retries - 1:
@@ -615,16 +615,16 @@ class CameraService:
                                 frame_array = np.frombuffer(result.stdout, dtype=np.uint8)
                                 frame = cv2.imdecode(frame_array, cv2.IMREAD_COLOR)
                                 if frame is not None:
-                                    print(f"Photo captured successfully on attempt {attempt + 1}")
+                                    logger.info(f"Photo captured successfully on attempt {attempt + 1}")
                                     return True, frame
                                 else:
-                                    print("Failed to decode captured image from rpicam-still output")
+                                    logger.info("Failed to decode captured image from rpicam-still output")
                                     if attempt < max_retries - 1:
                                         continue
                                     return False, "Failed to decode captured image"
                             else:
                                 error_msg = result.stderr.decode('utf-8', errors='ignore') if result.stderr else "Unknown error"
-                                print(f"rpicam-still attempt {attempt + 1} failed: {error_msg[:200]}")
+                                logger.info(f"rpicam-still attempt {attempt + 1} failed: {error_msg[:200]}")
                                 # Check if it's a camera busy error - retry if so
                                 if 'in use by another process' in error_msg or 'failed to acquire' in error_msg:
                                     if attempt < max_retries - 1:

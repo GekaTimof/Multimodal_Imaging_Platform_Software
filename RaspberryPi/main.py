@@ -1,3 +1,4 @@
+import logging
 import threading
 import time
 import uvicorn
@@ -7,6 +8,9 @@ from src.services.fastapi_server import app, camera_service, spectrometer_servic
 from src.services.light_switcher_service import light_switcher_service
 from src.services.positioner_service import positioner_service
 from src.config.settings import config
+
+logging.basicConfig(level=config.LOG_LEVEL, format=config.LOG_FORMAT)
+logger = logging.getLogger(__name__)
 
 
 def run_camera_server():
@@ -33,11 +37,11 @@ def run_api_server():
 
 
 if __name__ == '__main__':
-    print("Starting Multimodal Imaging Platform...")
-    print(f"API server will be available at http://0.0.0.0:{config.API_PORT}/api")
-    print(f"Camera stream will be available at http://0.0.0.0:{config.STREAM_PORT}/video")
-    print(f"Spectrum stream will be available at http://0.0.0.0:{config.SPECTRUM_STREAM_PORT}/spectrum")
-    print("Press Ctrl+C to stop all servers")
+    logger.info("Starting Multimodal Imaging Platform...")
+    logger.info(f"API server will be available at http://0.0.0.0:{config.API_PORT}/api")
+    logger.info(f"Camera stream will be available at http://0.0.0.0:{config.STREAM_PORT}/video")
+    logger.info(f"Spectrum stream will be available at http://0.0.0.0:{config.SPECTRUM_STREAM_PORT}/spectrum")
+    logger.info("Press Ctrl+C to stop all servers")
 
     # Start shared services once — both streaming server and FastAPI reuse them
     camera_service.start()
@@ -60,9 +64,9 @@ if __name__ == '__main__':
         while True:
             time.sleep(1)
     except KeyboardInterrupt:
-        print("\nShutting down servers...")
+        logger.info("\nShutting down servers...")
         camera_service.stop()
         spectrometer_service.stop()
         light_switcher_service.disconnect()
         positioner_service.disconnect()
-        print("Services stopped.")
+        logger.info("Services stopped.")
