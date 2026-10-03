@@ -6,6 +6,7 @@ Main entry point for the Multimodal Imaging Platform desktop application.
 
 import sys
 import os
+from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import QApplication, QDialog
 
 # Add src directory to Python path
@@ -25,6 +26,10 @@ def _show_connection_dialog(app: QApplication) -> bool:
     from config.theme_manager import ThemeManager
     from models.interface_text import Interface_text
     from ui.widgets.connection_dialog import ConnectionDialog
+
+    font_family = interface_config.get('ui_scaling.font_family', 'DejaVu Sans')
+    font_size = interface_config.get('ui_scaling.font_point_size', 11)
+    app.setFont(QFont(font_family, font_size))
 
     # Apply theme so the dialog matches the app look
     theme_mgr = ThemeManager(interface_config)

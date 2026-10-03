@@ -462,6 +462,51 @@ class Interface_text():
     def connecting_desc(self) -> str:
         return self.text_json.get("Connecting_Desc", "Please wait")
 
+    def discovery_title(self) -> str:
+        return self.text_json.get("Discovery_Title", "Connect to Raspberry Pi")
+
+    def discovery_desc(self) -> str:
+        return self.text_json.get("Discovery_Desc", "Scanning the local network for devices...")
+
+    def discovery_manual_ip(self) -> str:
+        return self.text_json.get("Discovery_Manual_IP", "IP address:")
+
+    def discovery_check(self) -> str:
+        return self.text_json.get("Discovery_Check", "Check")
+
+    def discovery_rescan(self) -> str:
+        return self.text_json.get("Discovery_Rescan", "Rescan")
+
+    def discovery_connect(self) -> str:
+        return self.text_json.get("Discovery_Connect", "Connect")
+
+    def discovery_scanning(self) -> str:
+        return self.text_json.get("Discovery_Scanning", "Scanning...")
+
+    def discovery_not_found(self) -> str:
+        return self.text_json.get("Discovery_Not_Found", "No devices found. Enter IP manually or rescan.")
+
+    def discovery_not_found_desc(self) -> str:
+        return self.text_json.get("Discovery_Not_Found_Desc", "No MIP devices were detected on the local network.")
+
+    def discovery_found(self) -> str:
+        return self.text_json.get("Discovery_Found", "Found {count} device(s)")
+
+    def discovery_found_desc(self) -> str:
+        return self.text_json.get("Discovery_Found_Desc", "Select a device from the list and click Connect.")
+
+    def discovery_checking(self) -> str:
+        return self.text_json.get("Discovery_Checking", "Checking {ip}...")
+
+    def discovery_check_fail(self) -> str:
+        return self.text_json.get("Discovery_Check_Fail", "Device not responding. Check IP and try again.")
+
+    def discovery_already_listed(self) -> str:
+        return self.text_json.get("Discovery_Already_Listed", "Device already in the list.")
+
+    def discovery_check_ok(self) -> str:
+        return self.text_json.get("Discovery_Check_OK", "Device found!")
+
     def capturing_dark(self) -> str:
         return self.text_json.get("Capturing_Dark", "Capturing dark spectrum...")
 

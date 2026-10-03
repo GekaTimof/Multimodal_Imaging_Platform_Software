@@ -11,21 +11,30 @@ The dialog:
 """
 
 import logging
-from typing import Optional, Tuple
+from typing import Optional
 
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer
 from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QLineEdit, QListWidget, QListWidgetItem, QProgressBar,
-    QFrame, QApplication, QMessageBox,
+    QLineEdit, QListWidget, QListWidgetItem, QProgressBar, QFrame,
 )
 
+from config import interface_config
 from services.network_discovery import (
     DiscoveredDevice, discover_devices, probe_single,
 )
+from ui.ui_utils import get_scaled_size
 
 logger = logging.getLogger(__name__)
+
+_ACTIVE_WORKERS: set[QThread] = set()
+
+
+def _keep_worker_alive(worker: QThread) -> None:
+    _ACTIVE_WORKERS.add(worker)
+    worker.finished.connect(lambda: _ACTIVE_WORKERS.discard(worker))
+    worker.finished.connect(worker.deleteLater)
 
 
 # ------------------------------------------------------------------ #
@@ -118,17 +127,18 @@ class ConnectionDialog(QDialog):
     def _build_ui(self):
         self.setWindowTitle(self._t("discovery_title", "Connect to Raspberry Pi"))
         self.setModal(True)
-        self.setMinimumSize(520, 420)
-        self.resize(560, 480)
+        self.setMinimumSize(get_scaled_size(520), get_scaled_size(420))
+        self.resize(get_scaled_size(560), get_scaled_size(480))
 
         root = QVBoxLayout(self)
-        root.setContentsMargins(18, 18, 18, 18)
-        root.setSpacing(12)
+        margin = get_scaled_size(18)
+        root.setContentsMargins(margin, margin, margin, margin)
+        root.setSpacing(get_scaled_size(12))
 
         # Title
         title = QLabel(self._t("discovery_title", "Connect to Raspberry Pi"))
-        title_font = QFont()
-        title_font.setPointSize(14)
+        title_font = QFont(self.font())
+        title_font.setPointSize(interface_config.get('ui_scaling.font_point_size', 11) + 3)
         title_font.setBold(True)
         title.setFont(title_font)
         root.addWidget(title)
@@ -152,12 +162,12 @@ class ConnectionDialog(QDialog):
         self._progress = QProgressBar()
         self._progress.setRange(0, 0)  # indeterminate
         self._progress.setTextVisible(False)
-        self._progress.setMaximumHeight(6)
+        self._progress.setMaximumHeight(get_scaled_size(6))
         root.addWidget(self._progress)
 
         # Device list
         self._list = QListWidget()
-        self._list.setMinimumHeight(140)
+        self._list.setMinimumHeight(get_scaled_size(140))
         self._list.itemDoubleClicked.connect(self._on_connect)
         self._list.currentRowChanged.connect(self._on_selection_changed)
         root.addWidget(self._list, stretch=1)
@@ -178,7 +188,10 @@ class ConnectionDialog(QDialog):
 
         # Status label
         self._status_label = QLabel("")
-        self._status_label.setStyleSheet("color: gray; font-size: 10pt;")
+        status_font = QFont(self.font())
+        status_font.setPointSize(interface_config.get('ui_scaling.error_font_size', 12))
+        self._status_label.setFont(status_font)
+        self._status_label.setStyleSheet("color: gray;")
         root.addWidget(self._status_label)
 
         # Buttons row
@@ -216,10 +229,10 @@ class ConnectionDialog(QDialog):
         )
         self._rescan_btn.setEnabled(False)
 
-        worker = _ScanWorker(self._api_port, self._saved_ip, self)
+        worker = _ScanWorker(self._api_port, self._saved_ip)
         worker.device_found.connect(self._on_device_found)
         worker.scan_finished.connect(self._on_scan_finished)
-        worker.finished.connect(worker.deleteLater)
+        _keep_worker_alive(worker)
         self._scan_worker = worker
         worker.start()
 
@@ -282,9 +295,9 @@ class ConnectionDialog(QDialog):
             self._t("discovery_checking", "Checking {ip}...").replace("{ip}", ip)
         )
 
-        worker = _ProbeWorker(ip, self._api_port, self)
+        worker = _ProbeWorker(ip, self._api_port)
         worker.result.connect(self._on_probe_result)
-        worker.finished.connect(worker.deleteLater)
+        _keep_worker_alive(worker)
         self._probe_worker = worker
         worker.start()
 
