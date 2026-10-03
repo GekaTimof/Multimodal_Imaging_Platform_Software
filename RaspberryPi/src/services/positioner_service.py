@@ -654,6 +654,7 @@ class PositionerService:
         if self._busy:
             raise RuntimeError("Positioner is busy")
         self._ensure_connected()
+        self._clear_stop()
         if self.state in ("alarm", "hold"):
             self._unlock()
         if set(self._calibration) != {"x", "y", "z"}:
@@ -705,9 +706,26 @@ class PositionerService:
             logger.warning("Failed to save current position to slot 0: %s", exc)
 
     def stop(self) -> None:
+        """Emergency stop / feed hold.
+
+        Sends GRBL feed hold, then soft-resets the controller so the next
+        command starts from a clean state. Marks the service as disconnected so
+        that the next operation reinitialises G21/G90 and status safely.
+        """
         self._stop_event.set()
         self._write_command_raw(b"!")
-        self.state = "hold"
+        # After feed hold GRBL will not accept new G-code until it is reset or
+        # the previous motion is resumed. Soft reset is the safest recovery.
+        time.sleep(0.1)
+        self._write_command_raw(b"\x18")
+        time.sleep(1.0)
+        self._drain()
+        self.state = "idle"
+        self._busy = False
+        self._stop_event.clear()
+        # Force a full reconnect/reset on the next operation to avoid
+        # "No GRBL acknowledgement for G21" errors.
+        self.connected = False
 
     def is_busy(self) -> bool:
         return self._busy

@@ -176,11 +176,35 @@ class PositionerServiceTest(unittest.TestCase):
             self.assertFalse(success)
             self.assertIn('read-only', message)
 
-    def test_stop_sets_stop_event_without_waiting_for_lock(self):
+    def test_stop_resets_controller_and_marks_disconnected(self):
         service = self.make_service()
         service.stop()
-        self.assertTrue(service._stop_event.is_set())
-        self.assertEqual(service.state, 'hold')
+        # After an emergency stop the controller is soft-reset and the service is
+        # marked as disconnected so the next operation performs a clean reconnect.
+        self.assertFalse(service._stop_event.is_set())
+        self.assertEqual(service.state, 'idle')
+        self.assertFalse(service.connected)
+        self.assertFalse(service._busy)
+        writes = [call.args[0] for call in service.serial_connection.write.call_args_list]
+        self.assertIn(b'!', writes)
+        self.assertIn(b'\x18', writes)
+
+    def test_move_reconnects_after_stop(self):
+        service = self.make_service()
+        service.connected = False
+        service._calibration = {
+            'x': {'min': 0.0, 'max': 100.0, 'travel': 100.0},
+            'y': {'min': 0.0, 'max': 100.0, 'travel': 100.0},
+            'z': {'min': 0.0, 'max': 100.0, 'travel': 100.0},
+        }
+        service.connect = Mock(return_value=True)
+        service._command = Mock()
+        service._wait_idle = Mock(return_value=True)
+        service.refresh_status = Mock(return_value=service.get_status())
+
+        service.move_to(10, 10, 10, 1000)
+
+        service.connect.assert_called_once()
 
     def test_get_axis_limits_returns_travel_ranges(self):
         service = self.make_service()
