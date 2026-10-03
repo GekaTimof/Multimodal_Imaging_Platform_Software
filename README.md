@@ -31,12 +31,15 @@ A platform for controlling scientific instruments (spectrometer, camera, positio
 ├── RaspberryPi/           # Hardware control server
 │   ├── main.py            # Server entry point
 │   ├── src/
+│   │   ├── api/           # FastAPI per-device routers
 │   │   ├── config/        # Server configuration
 │   │   ├── core/          # Streaming servers (video, spectrum)
-│   │   ├── services/      # FastAPI, camera, spectrometer, database
+│   │   ├── services/      # FastAPI app, camera, spectrometer, positioner, database
 │   │   └── utils/         # Error handlers
 │   ├── Spectrometer/      # Spectrometer utilities
-│   └── Light_switcher/    # Arduino light control
+│   ├── Light_switcher/    # Arduino light control
+│   ├── Camera_test/       # Legacy camera test script
+│   └── Positioner_test/   # Legacy positioner test script
 └── docs/Diploma/          # Thesis materials
 ```
 
@@ -105,12 +108,15 @@ python main.py
 ├── RaspberryPi/           # Сервер управления оборудованием
 │   ├── main.py            # Точка входа сервера
 │   ├── src/
+│   │   ├── api/           # FastAPI-роутеры по устройствам
 │   │   ├── config/        # Конфигурация сервера
 │   │   ├── core/          # Стриминговые серверы (видео, спектр)
-│   │   ├── services/      # FastAPI, камера, спектрометр, БД
+│   │   ├── services/      # FastAPI, камера, спектрометр, позиционер, БД
 │   │   └── utils/         # Обработчики ошибок
 │   ├── Spectrometer/      # Утилиты спектрометра
-│   └── Light_switcher/    # Управление подсветкой Arduino
+│   ├── Light_switcher/    # Управление подсветкой Arduino
+│   ├── Camera_test/       # Легаси-скрипт теста камеры
+│   └── Positioner_test/   # Легаси-скрипт теста позиционера
 └── docs/Diploma/          # Материалы диплома
 ```
 

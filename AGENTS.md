@@ -6,3 +6,11 @@
 - The light switcher uses `/dev/serial/by-path/platform-xhci-hcd.1-usb-0:2:1.0-port0` at 9600 baud.
 - Raspberry Pi unit tests can be run with `python3 -m unittest discover -s tests -v` from `RaspberryPi/`.
 - The Raspberry Pi application runs as `raspberrypi-settings.service`.
+
+## Refactored layout (RaspberryPi)
+
+- `src/api/` contains per-device FastAPI routers: `camera.py`, `positioner.py`, `light_switcher.py`, `settings.py`, plus `common.py` for shared Pydantic models.
+- `src/services/fastapi_server.py` now only sets up the FastAPI app, includes the routers, and keeps the spectrometer endpoints/service instance unchanged.
+- `src/services/camera_service.py` is a high-level orchestrator; backend-specific code lives in `src/services/camera_backends.py` (`RpicamBackend`, `OpenCVBackend`, `TestBackend`).
+- `main.py` stores server instances so it can stop the FastAPI and camera streaming servers cleanly on `Ctrl+C`.
+- The spectrometer source files (`spectrometer_service.py`, `spectrum_streaming.py`, and the `Spectrometer/` utilities) should not be modified without explicit approval.

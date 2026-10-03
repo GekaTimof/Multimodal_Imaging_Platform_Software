@@ -7,7 +7,7 @@
 <a name="english"></a>
 ## English
 
-Hardware control server running on Raspberry Pi 5. Manages camera, spectrometer, light control, and positioner. Provides REST API and streaming services.
+Hardware control server running on Raspberry Pi 5. Manages camera, spectrometer, light control, and positioner. Provides a FastAPI REST API and streaming services for the DesktopApp.
 
 ### Services
 
@@ -22,41 +22,52 @@ Hardware control server running on Raspberry Pi 5. Manages camera, spectrometer,
 ```
 RaspberryPi/
 ├── main.py                         # Entry point - starts all services
-├── requirements.txt                # Dependencies
-├── raspberrypi-settings.service    # Systemd service file
-├── raspberrypi-settings            # Service helper script
-├── light_switcher_daemon.sh        # Light switcher daemon script
+├── requirements.txt                # Python dependencies
+├── raspberrypi-settings.service    # systemd service unit
+├── scripts/
+│   ├── daemons/
+│   │   ├── light_switcher_daemon.py   # Standalone light switcher watchdog
+│   │   └── light_switcher_daemon.sh   # SysV-style control script
+│   └── spectrometer_check.py       # Spectrometer diagnostics script
 ├── src/
+│   ├── api/                        # FastAPI per-device routers
+│   │   ├── __init__.py
+│   │   ├── camera.py              # Camera API endpoints
+│   │   ├── common.py              # Shared Pydantic models
+│   │   ├── light_switcher.py      # Light switcher API endpoints
+│   │   ├── positioner.py          # Positioner API endpoints
+│   │   └── settings.py            # Generic settings endpoints
 │   ├── config/
 │   │   └── settings.py            # Server configuration
 │   ├── core/
-│   │   ├── streaming.py           # MJPEG video streaming
-│   │   └── spectrum_streaming.py  # Spectrometer streaming
+│   │   ├── http_utils.py          # Threaded HTTP server helper
+│   │   ├── spectrum_streaming.py  # Spectrometer streaming server
+│   │   └── streaming.py           # MJPEG video streaming server
 │   ├── services/
-│   │   ├── fastapi_server.py      # FastAPI REST endpoints
-│   │   ├── camera_service.py      # Picamera2 integration
-│   │   ├── spectrometer_service.py # Spectrometer control
-│   │   ├── light_switcher_service.py # Arduino light control
-│   │   ├── light_switcher_daemon.py  # Light switcher daemon
-│   │   ├── database_service.py     # SQLite operations
-│   │   └── database_ini.py        # Database initialization
+│   │   ├── camera_backends.py     # Pluggable camera backends (rpicam/OpenCV/test)
+│   │   ├── camera_service.py      # High-level camera service
+│   │   ├── database_ini.py        # Database initialization and migrations
+│   │   ├── database_service.py    # SQLite operations
+│   │   ├── fastapi_server.py     # FastAPI app, spectrometer endpoints, exception handlers
+│   │   ├── light_switcher_service.py # Arduino light switcher control
+│   │   ├── positioner_service.py  # GRBL positioner control
+│   │   └── spectrometer_service.py # Spectrometer control (kept unchanged)
 │   └── utils/
-│       └── error_handlers.py      # Error handling
-├── Spectrometer/                   # Standalone spectrometer utilities
-│   ├── Get_data/                  # Data acquisition scripts
-│   ├── Visualization/               # Visualization tools
-│   └── run.sh                       # Launch script
-└── Light_switcher/                 # Arduino sketches
-    ├── light_switcher_distance_switch/   # Distance-based switch
-    └── light_switcher_end_switch/        # End-stop switch
+│       └── error_handlers.py      # Error handling decorators
+├── Spectrometer/                 # Standalone spectrometer utilities
+├── Light_switcher/                # Arduino sketches
+├── Camera_test/                   # Legacy camera test script
+├── Positioner_test/               # Legacy positioner test script
+└── DevicesSettings.db             # Single SQLite database (ignored by git)
 ```
 
 ### Hardware Requirements
 
 - **Raspberry Pi 5** (with cooling)
-- **Camera**: Raspberry Pi Camera Module (via Picamera2)
-- **Spectrometer**: USB spectrometer
-- **Light Switcher**: Arduino-based module
+- **Camera**: Raspberry Pi Camera Module (IMX477 via rpicam-apps, with OpenCV fallback)
+- **Spectrometer**: USB spectrometer (Optosky)
+- **Positioner**: MKS DLC32 GRBL controller over USB serial
+- **Light Switcher**: Arduino-based module over USB serial
 
 ### Installation
 
@@ -90,8 +101,9 @@ sudo systemctl start raspberrypi-settings.service
 ### Database
 
 - **File**: `DevicesSettings.db` (SQLite3)
-- **Tables**: `CameraSettings`, `SpectrometerSettings`, `PositionerSettings` (10 slots each)
-- **Note**: Database is the single source of truth, accessed via API only
+- **Tables**: `CameraSettings`, `SpectrometerSettings`, `PositionerSettings`
+- Each table supports slots 0–10 (slot 0 = current session, 1–10 = saved presets)
+- Database is the single source of truth and is accessed via API only
 
 ### API Endpoints
 
@@ -100,18 +112,54 @@ Base URL: `http://<raspberry-pi-ip>:8000/api`
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/health` | GET | Health check |
-| `/settings/{table}` | GET/POST | Get/update settings |
-| `/settings/{table}/slot/{id}` | GET | Get slot (0-9) |
-| `/settings/update` | POST | Update single parameter |
-| `/spectrometer/data` | GET | Get spectrum data |
-| `/camera/mode/{mode}` | POST | Set mode (camera/spectrometer/positioner) |
+| `/settings/{table}` | GET | Get all settings from a table |
+| `/settings/update` | POST | Update a single parameter |
+| `/settings/camera` | GET/POST | Get/update current camera settings |
+| `/settings/camera/slot/{id}` | GET | Get camera settings slot |
+| `/settings/camera/slots` | GET | Get all camera slots |
+| `/settings/camera/save-slot/{id}` | POST | Save camera settings to slot |
+| `/settings/camera/load-slot/{id}` | POST | Load camera settings from slot |
+| `/settings/camera/apply` | POST | Apply camera settings without saving to DB |
+| `/settings/camera/validation-rules` | GET | Camera validation ranges |
+| `/camera/photo` | POST | Capture high-quality photo |
+| `/camera/awb-gains` | GET | Read current AWB gains |
+| `/spectrometer/settings` | GET/POST | Get/update spectrometer settings |
+| `/spectrometer/info` | GET | Spectrometer hardware info |
+| `/spectrometer/spectrum` | GET | Single spectrum snapshot |
+| `/spectrometer/integral-time` | POST | Set integration time |
+| `/spectrometer/dark-spectrum/*` | POST/GET | Dark spectrum capture/clear/load/get |
+| `/spectrometer/reconnect` | POST | Reinitialize spectrometer |
+| `/light-switcher/status` | GET | Get switcher status |
+| `/light-switcher/connect` | POST | Connect to Arduino |
+| `/light-switcher/switch` | POST | Switch to state1/state2 |
+| `/light-switcher/disconnect` | POST | Disconnect from Arduino |
+| `/positioner/settings` | GET/POST | Get/update positioner settings |
+| `/positioner/settings/slots` | GET | Get all positioner slots |
+| `/positioner/settings/{slot_id}` | GET | Get positioner slot |
+| `/positioner/settings/{slot_id}` | POST | Save positioner settings to slot |
+| `/positioner/settings/load/{slot_id}` | POST | Load positioner settings from slot |
+| `/positioner/limits` | GET | Get calibrated axis limits |
+| `/positioner/status` | GET | Get positioner status |
+| `/positioner/connect` | POST | Connect to positioner |
+| `/positioner/move` | POST | Move to absolute coordinates |
+| `/positioner/home` | POST | Home positioner |
+| `/positioner/stop` | POST | Feed hold / stop motion |
+| `/positioner/busy` | GET | Query busy state |
+| `/positioner/calibrate` | POST | Calibrate all axes |
+| `/positioner/calibrate/{axis}` | POST | Calibrate single axis |
+
+### Tests
+
+```bash
+python3 -m unittest discover -s tests -v
+```
 
 ---
 
 <a name="русский"></a>
 ## Русский
 
-Сервер управления оборудованием на Raspberry Pi 5. Управляет камерой, спектрометром, подсветкой и позиционером. Предоставляет REST API и стриминговые сервисы.
+Сервер управления оборудованием на Raspberry Pi 5. Управляет камерой, спектрометром, подсветкой и позиционером. Предоставляет REST API и стриминговые сервисы для DesktopApp.
 
 ### Сервисы
 
@@ -126,41 +174,52 @@ Base URL: `http://<raspberry-pi-ip>:8000/api`
 ```
 RaspberryPi/
 ├── main.py                         # Точка входа - запускает все сервисы
-├── requirements.txt                # Зависимости
-├── raspberrypi-settings.service    # Файл systemd сервиса
-├── raspberrypi-settings            # Вспомогательный скрипт сервиса
-├── light_switcher_daemon.sh        # Скрипт демона подсветки
+├── requirements.txt                # Python-зависимости
+├── raspberrypi-settings.service    # Юнит systemd
+├── scripts/
+│   ├── daemons/
+│   │   ├── light_switcher_daemon.py   # Демон подсветки
+│   │   └── light_switcher_daemon.sh   # Скрипт управления демоном
+│   └── spectrometer_check.py       # Диагностика спектрометра
 ├── src/
+│   ├── api/                        # FastAPI-роутеры по устройствам
+│   │   ├── __init__.py
+│   │   ├── camera.py              # Эндпоинты камеры
+│   │   ├── common.py              # Общие Pydantic-модели
+│   │   ├── light_switcher.py      # Эндпоинты переключателя подсветки
+│   │   ├── positioner.py          # Эндпоинты позиционера
+│   │   └── settings.py            # Общие эндпоинты настроек
 │   ├── config/
 │   │   └── settings.py            # Конфигурация сервера
 │   ├── core/
-│   │   ├── streaming.py           # MJPEG видеостриминг
-│   │   └── spectrum_streaming.py  # Стриминг спектрометра
+│   │   ├── http_utils.py          # Threaded HTTP server
+│   │   ├── spectrum_streaming.py  # Стриминг спектрометра
+│   │   └── streaming.py           # MJPEG видеостриминг
 │   ├── services/
-│   │   ├── fastapi_server.py      # FastAPI endpoints
-│   │   ├── camera_service.py      # Интеграция Picamera2
-│   │   ├── spectrometer_service.py # Управление спектрометром
-│   │   ├── light_switcher_service.py # Управление подсветкой Arduino
-│   │   ├── light_switcher_daemon.py  # Демон подсветки
-│   │   ├── database_service.py     # Операции с SQLite
-│   │   └── database_ini.py        # Инициализация БД
+│   │   ├── camera_backends.py     # Бэкенды камеры (rpicam/OpenCV/test)
+│   │   ├── camera_service.py      # Высокоуровневый сервис камеры
+│   │   ├── database_ini.py        # Инициализация и миграции БД
+│   │   ├── database_service.py    # Операции SQLite
+│   │   ├── fastapi_server.py     # FastAPI-приложение, эндпоинты спектрометра
+│   │   ├── light_switcher_service.py # Управление Arduino подсветкой
+│   │   ├── positioner_service.py  # Управление позиционером GRBL
+│   │   └── spectrometer_service.py # Управление спектрометром (без изменений)
 │   └── utils/
-│       └── error_handlers.py      # Обработка ошибок
-├── Spectrometer/                   # Автономные утилиты спектрометра
-│   ├── Get_data/                  # Скрипты сбора данных
-│   ├── Visualization/               # Инструменты визуализации
-│   └── run.sh                       # Скрипт запуска
-└── Light_switcher/                 # Скетчи Arduino
-    ├── light_switcher_distance_switch/   # Дистанционный переключатель
-    └── light_switcher_end_switch/        # Концевой переключатель
+│       └── error_handlers.py      # Обработчики ошибок
+├── Spectrometer/                 # Утилиты спектрометра
+├── Light_switcher/                # Скетчи Arduino
+├── Camera_test/                   # Легаси-скрипт теста камеры
+├── Positioner_test/               # Легаси-скрипт теста позиционера
+└── DevicesSettings.db             # База SQLite (исключена из git)
 ```
 
 ### Требования к оборудованию
 
 - **Raspberry Pi 5** (с охлаждением)
-- **Камера**: Raspberry Pi Camera Module (через Picamera2)
-- **Спектрометр**: USB спектрометр
-- **Переключатель подсветки**: Модуль на Arduino
+- **Камера**: Raspberry Pi Camera Module (IMX477 через rpicam-apps, с fallback на OpenCV)
+- **Спектрометр**: USB-спектрометр (Optosky)
+- **Позиционер**: GRBL-контроллер MKS DLC32 по USB serial
+- **Переключатель подсветки**: Модуль на Arduino по USB serial
 
 ### Установка
 
@@ -194,8 +253,9 @@ sudo systemctl start raspberrypi-settings.service
 ### База данных
 
 - **Файл**: `DevicesSettings.db` (SQLite3)
-- **Таблицы**: `CameraSettings`, `SpectrometerSettings`, `PositionerSettings` (по 10 слотов)
-- **Примечание**: База данных — единый источник правды, доступ только через API
+- **Таблицы**: `CameraSettings`, `SpectrometerSettings`, `PositionerSettings`
+- Каждая таблица поддерживает слоты 0–10 (0 — текущая сессия, 1–10 — пресеты)
+- База данных — единый источник правды, доступ только через API
 
 ### API Endpoints
 
@@ -204,8 +264,44 @@ sudo systemctl start raspberrypi-settings.service
 | Endpoint | Method | Описание |
 |----------|--------|----------|
 | `/health` | GET | Проверка работоспособности |
-| `/settings/{table}` | GET/POST | Получить/обновить настройки |
-| `/settings/{table}/slot/{id}` | GET | Получить слот (0-9) |
-| `/settings/update` | POST | Обновить параметр |
-| `/spectrometer/data` | GET | Получить данные спектра |
-| `/camera/mode/{mode}` | POST | Установить режим (camera/spectrometer/positioner) |
+| `/settings/{table}` | GET | Получить все настройки таблицы |
+| `/settings/update` | POST | Обновить один параметр |
+| `/settings/camera` | GET/POST | Получить/обновить настройки камеры |
+| `/settings/camera/slot/{id}` | GET | Получить слот настроек камеры |
+| `/settings/camera/slots` | GET | Получить все слоты камеры |
+| `/settings/camera/save-slot/{id}` | POST | Сохранить настройки камеры в слот |
+| `/settings/camera/load-slot/{id}` | POST | Загрузить настройки камеры из слота |
+| `/settings/camera/apply` | POST | Применить настройки камеры без сохранения в БД |
+| `/settings/camera/validation-rules` | GET | Диапазоны валидации камеры |
+| `/camera/photo` | POST | Сделать фото высокого качества |
+| `/camera/awb-gains` | GET | Прочитать текущие AWB-усиления |
+| `/spectrometer/settings` | GET/POST | Получить/обновить настройки спектрометра |
+| `/spectrometer/info` | GET | Информация о спектрометре |
+| `/spectrometer/spectrum` | GET | Один снимок спектра |
+| `/spectrometer/integral-time` | POST | Установить время интеграции |
+| `/spectrometer/dark-spectrum/*` | POST/GET | Захват/очистка/загрузка/получение тёмного спектра |
+| `/spectrometer/reconnect` | POST | Переинициализировать спектрометр |
+| `/light-switcher/status` | GET | Статус переключателя |
+| `/light-switcher/connect` | POST | Подключиться к Arduino |
+| `/light-switcher/switch` | POST | Переключить в state1/state2 |
+| `/light-switcher/disconnect` | POST | Отключиться от Arduino |
+| `/positioner/settings` | GET/POST | Получить/обновить настройки позиционера |
+| `/positioner/settings/slots` | GET | Все слоты позиционера |
+| `/positioner/settings/{slot_id}` | GET | Слот позиционера |
+| `/positioner/settings/{slot_id}` | POST | Сохранить слот позиционера |
+| `/positioner/settings/load/{slot_id}` | POST | Загрузить слот позиционера |
+| `/positioner/limits` | GET | Калиброванные пределы осей |
+| `/positioner/status` | GET | Статус позиционера |
+| `/positioner/connect` | POST | Подключить позиционер |
+| `/positioner/move` | POST | Переместиться в абсолютные координаты |
+| `/positioner/home` | POST | Домой |
+| `/positioner/stop` | POST | Остановить движение |
+| `/positioner/busy` | GET | Состояние занятости |
+| `/positioner/calibrate` | POST | Калибровать все оси |
+| `/positioner/calibrate/{axis}` | POST | Калибровать одну ось |
+
+### Тесты
+
+```bash
+python3 -m unittest discover -s tests -v
+```
