@@ -4,7 +4,8 @@ import time
 import uvicorn
 from src.core.streaming import CameraStreamServer
 from src.core.spectrum_streaming import SpectrumStreamServer
-from src.services.fastapi_server import app, camera_service, spectrometer_service
+from src.services.camera_service import camera_service
+from src.services.fastapi_server import app, spectrometer_service
 from src.services.light_switcher_service import light_switcher_service
 from src.services.positioner_service import positioner_service
 from src.config.settings import config

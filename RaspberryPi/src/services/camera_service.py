@@ -372,3 +372,7 @@ class CameraService:
             self.thread.join(timeout=2.0)
         if self._backend is not None:
             self._backend.stop()
+
+
+# Shared service instance used by the API and streaming server.
+camera_service = CameraService()
