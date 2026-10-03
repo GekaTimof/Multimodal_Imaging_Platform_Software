@@ -146,8 +146,7 @@ class PositionerSlotDialog(QDialog):
                     item.setData(Qt.UserRole, slot_id)
                     self.slots_list.addItem(item)
 
-            last_slot = 10 if self.exclude_slot_0 else 9
-            if slot_id < last_slot:
+            if slot_id < MAX_POSITIONER_SLOTS - 1:
                 self._add_separator()
 
             self._load_individual_slot_details(slot_id + 1)
