@@ -5,10 +5,11 @@ Widget for controlling the GRBL positioner in Acquisition mode.
 Layout (top to bottom):
 1. Speed selection: 3 presets (slow/medium/fast) + custom field with warning >4500
 2. Current XYZ coordinates (3 rows) — each with step buttons + slider
-3. Save / Load position (name + XYZ + speed persisted via API)
-4. Calibrate button
-5. Emergency stop button
+3. Move To / Current position buttons
+4. Save / Load position (name + XYZ + speed persisted via API)
+5. Calibrate button
 6. Status label (minimum height to prevent squishing)
+7. Emergency stop button (at the very bottom of the tab)
 """
 
 import logging
@@ -111,7 +112,18 @@ class PositionerSettingsWidget(QWidget):
         self.btn_calibrate.clicked.connect(self.calibrate_all)
         layout.addWidget(self.btn_calibrate)
 
-        # ---- 5. Emergency stop ----
+        # ---- 5. Status label ----
+        self.status_label = QLabel(_t(self.interface_text, 'ready', 'Ready'))
+        self.status_label.setStyleSheet("QLabel { color: green; font-weight: bold; }")
+        self.status_label.setWordWrap(True)
+        self.status_label.setMinimumHeight(get_relative_margin(3))
+        self.status_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
+        layout.addWidget(self.status_label)
+
+        # Push remaining space above the emergency stop so it sits at the bottom.
+        layout.addStretch()
+
+        # ---- 6. Emergency stop ----
         self.btn_estop = QPushButton(_t(self.interface_text, 'emergency_stop', 'EMERGENCY STOP'))
         self.btn_estop.setMinimumHeight(get_relative_margin(3))
         self.btn_estop.setStyleSheet(
@@ -121,16 +133,6 @@ class PositionerSettingsWidget(QWidget):
         )
         self.btn_estop.clicked.connect(self.stop_positioner)
         layout.addWidget(self.btn_estop)
-
-        # ---- 6. Status label ----
-        self.status_label = QLabel(_t(self.interface_text, 'ready', 'Ready'))
-        self.status_label.setStyleSheet("QLabel { color: green; font-weight: bold; }")
-        self.status_label.setWordWrap(True)
-        self.status_label.setMinimumHeight(get_relative_margin(3))
-        self.status_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
-        layout.addWidget(self.status_label)
-
-        layout.addStretch()
 
     def _shortcut_context_active(self, watched) -> bool:
         return (
@@ -168,8 +170,8 @@ class PositionerSettingsWidget(QWidget):
             Qt.Key_Right: ("X", 1.0),
             Qt.Key_Down: ("Y", -1.0),
             Qt.Key_Up: ("Y", 1.0),
-            Qt.Key_Minus: ("Z", 1.0),
-            Qt.Key_Equal: ("Z", -1.0),
+            Qt.Key_Minus: ("Z", -1.0),
+            Qt.Key_Equal: ("Z", 1.0),
         }
         binding = bindings.get(key)
         if binding is None:
@@ -522,6 +524,7 @@ class PositionerSettingsWidget(QWidget):
         self._set_status(
             _t(self.interface_text, 'loading_positioner_settings', 'Loading...'), 'blue'
         )
+        self._set_motion_enabled(False)
         self._request('GET', ENDPOINTS['positioner_busy'], None, self._on_busy_checked,
                       timeout=_STATUS_TIMEOUT)
 
@@ -569,6 +572,7 @@ class PositionerSettingsWidget(QWidget):
     def _on_status(self, success: bool, message: str, response: dict):
         if not success:
             self._set_status(message, 'red')
+            self._set_motion_enabled(True)
             return
         data = response.get('data', {})
         self._update_position_from_response(data)
@@ -576,6 +580,7 @@ class PositionerSettingsWidget(QWidget):
         state = data.get('state', '?')
         colour = 'green' if connected else 'red'
         self._set_status(f"State: {state}", colour)
+        self._set_motion_enabled(True)
 
     # ------------------------------------------------------------------
     # Emergency stop
@@ -687,12 +692,14 @@ class PositionerSettingsWidget(QWidget):
         self._set_status(
             _t(self.interface_text, 'loading_positioner_settings', 'Loading saved position...'), 'blue'
         )
+        self._set_motion_enabled(False)
         url = ENDPOINTS['positioner_settings_slot'].format(slot_id=slot_id)
         self._request('GET', url, None, self._on_position_loaded)
 
     def _on_position_loaded(self, success: bool, message: str, response: dict):
         if not success:
             self._set_status(f"Load failed: {message}", 'red')
+            self._set_motion_enabled(True)
             return
         self.settings_name_edit.setText(response.get('SettingsName', 'Basic'))
         speed = float(response.get('MovementSpeed', 2000))
@@ -704,6 +711,7 @@ class PositionerSettingsWidget(QWidget):
         self._set_status(
             _t(self.interface_text, 'positioner_settings_loaded', 'Positioner position loaded') + f": {name}"
         )
+        self._set_motion_enabled(True)
 
     # ------------------------------------------------------------------
     # Cleanup
