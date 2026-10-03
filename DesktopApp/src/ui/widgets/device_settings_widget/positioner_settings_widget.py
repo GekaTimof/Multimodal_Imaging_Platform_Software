@@ -21,18 +21,21 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import pyqtSignal, Qt
 
 from config.api_config import ENDPOINTS
-from core.constants.camera_constants import THREAD_TIMEOUT_MS
+from core.constants.camera_constants import THREAD_TIMEOUT_MS, MAX_POSITIONER_SLOTS
 from ui.ui_utils import get_relative_margin
 from .api_client_thread import APIClientThread
+from .positioner_slot_dialog import PositionerSlotDialog
 
 logger = logging.getLogger(__name__)
 
 _POSITIONER_TIMEOUT = 600.0
-_AXIS_MIN = -5000.0
-_AXIS_MAX = 15000.0
+_AXIS_MIN_DEFAULT = -5000.0
+_AXIS_MAX_DEFAULT = 15000.0
 _SLIDER_SCALE = 100  # slider uses int, we multiply by this for 0.01 precision
 _SPEED_WARNING_THRESHOLD = 4500
 _SPEED_PRESETS = {"slow": 100, "medium": 2000, "fast": 4000}
+# Work coordinate minimum is always 0 after calibration.
+_AXIS_MIN = 0.0
 
 
 def _t(interface_text, method_name: str, fallback: str) -> str:
@@ -126,7 +129,7 @@ class PositionerSettingsWidget(QWidget):
         top.addWidget(label)
 
         spinbox = QDoubleSpinBox()
-        spinbox.setRange(_AXIS_MIN, _AXIS_MAX)
+        spinbox.setRange(_AXIS_MIN, _AXIS_MAX_DEFAULT)
         spinbox.setValue(0.0)
         spinbox.setDecimals(2)
         spinbox.setSuffix(" mm")
@@ -147,7 +150,7 @@ class PositionerSettingsWidget(QWidget):
         bottom.addWidget(btn_left)
 
         slider = QSlider(Qt.Horizontal)
-        slider.setRange(int(_AXIS_MIN * _SLIDER_SCALE), int(_AXIS_MAX * _SLIDER_SCALE))
+        slider.setRange(int(_AXIS_MIN * _SLIDER_SCALE), int(_AXIS_MAX_DEFAULT * _SLIDER_SCALE))
         slider.setValue(0)
         slider.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         slider.valueChanged.connect(lambda val, a=axis: self._on_slider_changed(a, val))
@@ -243,10 +246,10 @@ class PositionerSettingsWidget(QWidget):
         btn_row = QHBoxLayout()
         self.btn_save = QPushButton(_t(self.interface_text, 'save', 'Save'))
         self.btn_load = QPushButton(_t(self.interface_text, 'load', 'Load'))
-        self.btn_save.setToolTip("Save current XYZ + speed to Raspberry Pi database")
-        self.btn_load.setToolTip("Load saved XYZ + speed from Raspberry Pi database")
-        self.btn_save.clicked.connect(self.save_position)
-        self.btn_load.clicked.connect(self.load_position)
+        self.btn_save.setToolTip("Save current XYZ + speed to a position slot")
+        self.btn_load.setToolTip("Load XYZ + speed from a position slot")
+        self.btn_save.clicked.connect(self._open_save_slot_dialog)
+        self.btn_load.clicked.connect(self._open_load_slot_dialog)
         btn_row.addWidget(self.btn_save)
         btn_row.addWidget(self.btn_load)
         btn_row.addStretch()
@@ -282,7 +285,9 @@ class PositionerSettingsWidget(QWidget):
         """Move axis by a small step (1mm * direction), then send move command."""
         w = self._axis_widgets[axis]
         current = w["spinbox"].value()
-        new_val = max(_AXIS_MIN, min(_AXIS_MAX, current + direction * 1.0))
+        axis_min = w["spinbox"].minimum()
+        axis_max = w["spinbox"].maximum()
+        new_val = max(axis_min, min(axis_max, current + direction * 1.0))
         w["spinbox"].setValue(new_val)
         self._move_single_axis(axis)
 
@@ -344,7 +349,7 @@ class PositionerSettingsWidget(QWidget):
     def _update_axis_limits_from_calibration(self, data: dict):
         """Update spinbox/slider ranges from calibration data returned by status API.
 
-        After calibration, work coordinates go from 0 to travel (mm).
+        After calibration, work coordinates go from 0 to travel (mm) per axis.
         If calibration data is absent, ranges stay at defaults.
         """
         calibration = data.get('calibration', {})
@@ -451,35 +456,61 @@ class PositionerSettingsWidget(QWidget):
         )
 
     # ------------------------------------------------------------------
-    # Save / Load position
+    # Save / Load position slots
     # ------------------------------------------------------------------
 
-    def save_position(self):
-        name = self.settings_name_edit.text().strip() or "Basic"
+    def _open_save_slot_dialog(self):
+        """Open dialog for selecting slot to save current position into."""
+        dialog = PositionerSlotDialog(self, exclude_slot_0=True)
+        dialog.setWindowTitle(_t(self.interface_text, 'save_to_slot', 'Save Position to Slot'))
+        dialog.slot_selected.connect(self.save_position_to_slot)
+        dialog.exec_()
+
+    def save_position_to_slot(self, slot_id: int):
+        """Save current XYZ + speed to the selected position slot via API."""
+        if slot_id < 1 or slot_id >= MAX_POSITIONER_SLOTS:
+            self._set_status(f"Invalid slot {slot_id}", 'red')
+            return
+        name = self.settings_name_edit.text().strip() or f"Slot {slot_id}"
         settings = {
             'SettingsName': name,
+            'XPosition': self._axis_widgets["X"]["spinbox"].value(),
+            'YPosition': self._axis_widgets["Y"]["spinbox"].value(),
+            'ZPosition': self._axis_widgets["Z"]["spinbox"].value(),
             'MovementSpeed': self.speed_spinbox.value(),
             'Acceleration': 100.0,
         }
         self._set_status(
             _t(self.interface_text, 'applying_positioner_settings', 'Saving position...'), 'blue'
         )
-        self._request('POST', ENDPOINTS['positioner_settings'], settings, self._on_position_saved)
+        url = ENDPOINTS['positioner_settings_slot'].format(slot_id=slot_id)
+        self._request('POST', url, settings, self._on_position_saved)
 
     def _on_position_saved(self, success: bool, message: str, response: dict):
         if not success:
             self._set_status(f"Save failed: {message}", 'red')
             return
-        name = self.settings_name_edit.text().strip() or "Basic"
         self._set_status(
-            _t(self.interface_text, 'position_saved', 'Position saved as preset: {preset_name}').format(preset_name=name)
+            _t(self.interface_text, 'position_saved', 'Position saved to slot')
         )
 
-    def load_position(self):
+    def _open_load_slot_dialog(self):
+        """Open dialog for selecting slot to load position from."""
+        dialog = PositionerSlotDialog(self, exclude_slot_0=True)
+        dialog.setWindowTitle(_t(self.interface_text, 'load_from_slot', 'Load Position from Slot'))
+        dialog.slot_selected.connect(self.load_position_from_slot)
+        dialog.exec_()
+
+    def load_position_from_slot(self, slot_id: int):
+        """Load position from saved slot (1-10) into the UI."""
+        if slot_id < 1 or slot_id >= MAX_POSITIONER_SLOTS:
+            self._set_status(f"Invalid slot {slot_id}", 'red')
+            return
         self._set_status(
             _t(self.interface_text, 'loading_positioner_settings', 'Loading saved position...'), 'blue'
         )
-        self._request('GET', ENDPOINTS['positioner_settings'], None, self._on_position_loaded)
+        url = ENDPOINTS['positioner_settings_slot'].format(slot_id=slot_id)
+        self._request('GET', url, None, self._on_position_loaded)
 
     def _on_position_loaded(self, success: bool, message: str, response: dict):
         if not success:
@@ -488,10 +519,20 @@ class PositionerSettingsWidget(QWidget):
         self.settings_name_edit.setText(response.get('SettingsName', 'Basic'))
         speed = float(response.get('MovementSpeed', 2000))
         self.speed_spinbox.setValue(speed)
-        self.refresh_status()
+        for axis_name in ('X', 'Y', 'Z'):
+            val = float(response.get(f'{axis_name}Position', 0.0))
+            w = self._axis_widgets[axis_name]
+            # Clamp loaded value to current range
+            val = max(w["spinbox"].minimum(), min(w["spinbox"].maximum(), val))
+            w["spinbox"].blockSignals(True)
+            w["spinbox"].setValue(val)
+            w["spinbox"].blockSignals(False)
+            w["slider"].blockSignals(True)
+            w["slider"].setValue(int(val * _SLIDER_SCALE))
+            w["slider"].blockSignals(False)
         name = response.get('SettingsName', 'Basic')
         self._set_status(
-            _t(self.interface_text, 'positioner_settings_loaded', 'Positioner settings loaded') + f": {name}"
+            _t(self.interface_text, 'positioner_settings_loaded', 'Positioner position loaded') + f": {name}"
         )
 
     # ------------------------------------------------------------------
