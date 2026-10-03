@@ -28,7 +28,7 @@ from .positioner_slot_dialog import PositionerSlotDialog
 
 logger = logging.getLogger(__name__)
 
-_POSITIONER_TIMEOUT = 600.0
+_POSITIONER_TIMEOUT = 600.0  # Up to 5+ minutes for calibration and long moves
 _AXIS_MIN_DEFAULT = -5000.0
 _AXIS_MAX_DEFAULT = 15000.0
 _SLIDER_SCALE = 100  # slider uses int, we multiply by this for 0.01 precision
