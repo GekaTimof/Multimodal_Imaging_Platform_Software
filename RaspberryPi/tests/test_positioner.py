@@ -224,7 +224,7 @@ class PositionerServiceTest(unittest.TestCase):
         self.assertEqual(result['final'], 200.0)
         self.assertEqual(service._release_from_limit.call_args_list[0].args, ('x', -1))
         self.assertEqual(service._release_from_limit.call_args_list[1].args, ('x', 1))
-        self.assertIn('G1 X-400.000 F3000.000', [call.args[0] for call in service._send_calib_command.call_args_list])
+        self.assertIn('G1 X-400.000 F2000.000', [call.args[0] for call in service._send_calib_command.call_args_list])
 
 
 if __name__ == '__main__':

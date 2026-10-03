@@ -513,7 +513,7 @@ class PositionerService:
 
         if not self._send_calib_command("G91"):
             return None
-        cmd = f"G1 {axis.upper()}{delta:.3f} F{self.MOVE_FEED:.3f}"
+        cmd = f"G1 {axis.upper()}{delta:.3f} F{self.SEARCH_FEED:.3f}"
         logger.info("Move %s to center: %s", axis, cmd)
         if not self._send_calib_command(cmd):
             return None
