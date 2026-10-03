@@ -37,6 +37,19 @@ class PositionerSettingsUpdate(BaseModel):
     Acceleration: float = Field(default=100.0, ge=0.1, le=1000.0)
 
 
+class PositionerSlotSaveRequest(BaseModel):
+    """Request body for saving a position preset to a non-zero slot."""
+
+    model_config = {"extra": "forbid"}
+
+    SettingsName: str = "Basic"
+    XPosition: float = Field(default=0.0, ge=-5000.0, le=15000.0)
+    YPosition: float = Field(default=0.0, ge=-5000.0, le=15000.0)
+    ZPosition: float = Field(default=0.0, ge=-5000.0, le=15000.0)
+    MovementSpeed: float = Field(default=2000.0, ge=1.0, le=10000.0)
+    Acceleration: float = Field(default=100.0, ge=0.1, le=1000.0)
+
+
 class PositionerMoveRequest(BaseModel):
     x: float = Field(..., ge=-5000.0, le=15000.0)
     y: float = Field(..., ge=-5000.0, le=15000.0)
@@ -102,10 +115,11 @@ async def update_positioner_settings(settings: PositionerSettingsUpdate):
 
 
 @router.post("/positioner/settings/{slot_id}", response_model=APIResponse)
-async def save_positioner_settings_to_slot(slot_id: int, settings: PositionerSettingsUpdate):
+async def save_positioner_settings_to_slot(slot_id: int, settings: PositionerSlotSaveRequest):
+    """Save a position preset (including XYZ) to a slot (1-10)."""
     from src.services.database_service import db_service
-    if not 0 <= slot_id <= 10:
-        raise HTTPException(status_code=400, detail="Slot ID must be between 0 and 10")
+    if not 1 <= slot_id <= 10:
+        raise HTTPException(status_code=400, detail="Slot ID must be between 1 and 10")
     try:
         success, message = await asyncio.to_thread(
             db_service.save_positioner_settings_to_slot, slot_id, settings.model_dump()

@@ -521,10 +521,11 @@ class DatabaseService:
         parameters = ('SettingsName', 'XPosition', 'YPosition', 'ZPosition', 'MovementSpeed', 'Acceleration',
                       'XMin', 'XMax', 'YMin', 'YMax', 'ZMin', 'ZMax',
                       'XHomeAtMin', 'YHomeAtMin', 'ZHomeAtMin')
-        # Preserve calibration and current position from existing slot if not provided.
-        preserved_fields = {'XMin', 'XMax', 'YMin', 'YMax', 'ZMin', 'ZMax',
-                              'XHomeAtMin', 'YHomeAtMin', 'ZHomeAtMin',
-                              'XPosition', 'YPosition', 'ZPosition'}
+        # Calibration fields are always protected from external writes unless the
+        # positioner service itself is persisting its state (allow_system_state=True).
+        calibration_fields = {'XMin', 'XMax', 'YMin', 'YMax', 'ZMin', 'ZMax',
+                              'XHomeAtMin', 'YHomeAtMin', 'ZHomeAtMin'}
+        position_fields = {'XPosition', 'YPosition', 'ZPosition'}
         preserved = {}
         try:
             conn = sqlite3.connect(db_path)
@@ -533,7 +534,7 @@ class DatabaseService:
             row = cursor.fetchone()
             if row:
                 existing = {desc[0]: row[i] for i, desc in enumerate(cursor.description)}
-                for field in preserved_fields:
+                for field in calibration_fields | position_fields:
                     preserved[field] = existing.get(field)
         except sqlite3.Error:
             pass
@@ -541,14 +542,26 @@ class DatabaseService:
             if conn:
                 conn.close()
 
+        def _get_value(parameter: str):
+            default = config.DEFAULT_POSITIONER_SETTINGS.get(parameter)
+            if parameter in calibration_fields:
+                # Calibration values can only be overwritten by the service itself.
+                if allow_system_state and parameter in settings:
+                    return settings.get(parameter, default)
+                return preserved.get(parameter, default)
+            if parameter in position_fields:
+                # Slot 0 is runtime state; preserve it unless the service explicitly
+                # asks to overwrite it. Preset slots (1-10) accept user positions.
+                if slot_id == 0:
+                    if allow_system_state:
+                        return settings.get(parameter, preserved.get(parameter, default))
+                    return preserved.get(parameter, default)
+                return settings.get(parameter, preserved.get(parameter, default))
+            return settings.get(parameter, preserved.get(parameter, default))
+
         validated = {}
         for parameter in parameters:
-            if parameter in preserved_fields and not allow_system_state:
-                value = preserved.get(parameter, config.DEFAULT_POSITIONER_SETTINGS.get(parameter))
-            elif parameter in preserved and parameter not in settings:
-                value = preserved[parameter]
-            else:
-                value = settings.get(parameter, config.DEFAULT_POSITIONER_SETTINGS.get(parameter))
+            value = _get_value(parameter)
             valid, result = config.validate_positioner_parameter(parameter, value)
             if not valid:
                 return False, result

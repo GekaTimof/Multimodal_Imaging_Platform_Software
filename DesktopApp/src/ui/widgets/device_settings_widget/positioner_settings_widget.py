@@ -88,6 +88,10 @@ class PositionerSettingsWidget(QWidget):
         layout.addWidget(self._build_save_load_section())
 
         # ---- 4. Calibrate button ----
+        # TODO: Add an explicit Connect/Disconnect button for the positioner.
+        # Currently refresh_status and move implicitly trigger a serial connect,
+        # which can block the UI for several seconds. The API already exposes
+        # /positioner/connect and /positioner/disconnect endpoints.
         self.btn_calibrate = QPushButton(_t(self.interface_text, 'calibrate', 'Calibrate'))
         self.btn_calibrate.clicked.connect(self.calibrate_all)
         layout.addWidget(self.btn_calibrate)
@@ -474,6 +478,9 @@ class PositionerSettingsWidget(QWidget):
             self._set_status(f"Invalid slot {slot_id}", 'red')
             return
         name = self.settings_name_edit.text().strip() or f"Slot {slot_id}"
+        # TODO: Acceleration is hard-coded to 100.0. Add an acceleration
+        # spinbox or fetch the current value from /positioner/settings so the
+        # saved preset actually reflects the user's configuration.
         settings = {
             'SettingsName': name,
             'XPosition': self._axis_widgets["X"]["spinbox"].value(),
