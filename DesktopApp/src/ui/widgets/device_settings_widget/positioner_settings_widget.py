@@ -13,9 +13,10 @@ Layout (top to bottom):
 
 import logging
 
-from PyQt5.QtCore import QTimer, Qt, pyqtSignal
+from PyQt5.QtCore import QEvent, QTimer, Qt, pyqtSignal
 from PyQt5.QtGui import QDoubleValidator
 from PyQt5.QtWidgets import (
+    QApplication,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -66,6 +67,7 @@ class PositionerSettingsWidget(QWidget):
         self._axis_values: dict = {}
         self._axis_ranges: dict = {}
         self._build_ui()
+        QApplication.instance().installEventFilter(self)
 
     # ------------------------------------------------------------------
     # UI construction
@@ -85,6 +87,10 @@ class PositionerSettingsWidget(QWidget):
         for axis in ("X", "Y", "Z"):
             row_widget = self._build_axis_row(axis)
             layout.addWidget(row_widget)
+
+        self.btn_move = QPushButton(_t(self.interface_text, 'move_to', 'Move To'))
+        self.btn_move.clicked.connect(self._move_to_position)
+        layout.addWidget(self.btn_move)
 
         # ---- Get current position button ----
         self.btn_get_position = QPushButton(
@@ -126,6 +132,53 @@ class PositionerSettingsWidget(QWidget):
 
         layout.addStretch()
 
+    def _shortcut_context_active(self, watched) -> bool:
+        return (
+            isinstance(watched, QWidget)
+            and watched.window() is self.window()
+            and self.isVisible()
+            and self.isEnabled()
+        )
+
+    def eventFilter(self, watched, event):
+        if event.type() != QEvent.KeyPress or event.isAutoRepeat():
+            return super().eventFilter(watched, event)
+        if not self._shortcut_context_active(watched):
+            return super().eventFilter(watched, event)
+
+        key = event.key()
+        modifiers = event.modifiers()
+        if modifiers & (Qt.AltModifier | Qt.MetaModifier):
+            return super().eventFilter(watched, event)
+        if modifiers & Qt.ShiftModifier:
+            return super().eventFilter(watched, event)
+
+        control_pressed = bool(modifiers & Qt.ControlModifier)
+        if key == Qt.Key_S and control_pressed:
+            self.stop_positioner()
+            return True
+        if not self.btn_move.isEnabled():
+            return super().eventFilter(watched, event)
+        if key == Qt.Key_M and control_pressed:
+            self._move_to_position()
+            return True
+
+        bindings = {
+            Qt.Key_Left: ("X", -1.0),
+            Qt.Key_Right: ("X", 1.0),
+            Qt.Key_Down: ("Y", -1.0),
+            Qt.Key_Up: ("Y", 1.0),
+            Qt.Key_Minus: ("Z", 1.0),
+            Qt.Key_Equal: ("Z", -1.0),
+        }
+        binding = bindings.get(key)
+        if binding is None:
+            return super().eventFilter(watched, event)
+
+        axis, direction = binding
+        self._nudge_axis(axis, direction * (10.0 if control_pressed else 1.0))
+        return True
+
     # ---- Axis row builder ----
 
     def _build_axis_row(self, axis: str) -> QWidget:
@@ -135,7 +188,7 @@ class PositionerSettingsWidget(QWidget):
         vbox.setContentsMargins(0, 0, 0, 0)
         vbox.setSpacing(2)
 
-        # Top: axis label + current value field + Move To
+        # Top: axis label + current value field
         top = QHBoxLayout()
         label = QLabel(f"{axis}:")
         label.setStyleSheet("QLabel { font-weight: bold; }")
@@ -152,10 +205,6 @@ class PositionerSettingsWidget(QWidget):
         # Store current value/range for this axis
         self._axis_values[axis] = 0.0
         self._axis_ranges[axis] = (_AXIS_MIN, _AXIS_MAX_DEFAULT)
-
-        btn_move = QPushButton(_t(self.interface_text, 'move_to', 'Move To'))
-        btn_move.clicked.connect(lambda _, a=axis: self._move_single_axis(a))
-        top.addWidget(btn_move)
         vbox.addLayout(top)
 
         # Bottom: [<<][<] slider [>][>>]
@@ -179,7 +228,6 @@ class PositionerSettingsWidget(QWidget):
         slider.setValue(0)
         slider.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         slider.valueChanged.connect(lambda val, a=axis: self._on_slider_changed(a, val))
-        slider.sliderReleased.connect(lambda a=axis: self._on_slider_released(a))
         bottom.addWidget(slider)
 
         btn_plus_1 = QPushButton("\u25BA")  # > (slow +1)
@@ -204,7 +252,6 @@ class PositionerSettingsWidget(QWidget):
             "btn_minus_1": btn_minus_1,
             "btn_plus_1": btn_plus_1,
             "btn_plus_10": btn_plus_10,
-            "btn_move": btn_move,
         }
         return container
 
@@ -228,10 +275,9 @@ class PositionerSettingsWidget(QWidget):
         self.btn_slow.clicked.connect(lambda: self._set_speed(_SPEED_PRESETS["slow"]))
         self.btn_medium.clicked.connect(lambda: self._set_speed(_SPEED_PRESETS["medium"]))
         self.btn_fast.clicked.connect(lambda: self._set_speed(_SPEED_PRESETS["fast"]))
-        preset_row.addWidget(self.btn_slow)
-        preset_row.addWidget(self.btn_medium)
-        preset_row.addWidget(self.btn_fast)
-        preset_row.addStretch()
+        preset_row.addWidget(self.btn_slow, 1)
+        preset_row.addWidget(self.btn_medium, 1)
+        preset_row.addWidget(self.btn_fast, 1)
         vbox.addLayout(preset_row)
 
         # Custom speed field, clamped to the supported range after editing
@@ -285,9 +331,8 @@ class PositionerSettingsWidget(QWidget):
         self.btn_load.setToolTip("Load XYZ + speed from a position slot")
         self.btn_save.clicked.connect(self._open_save_slot_dialog)
         self.btn_load.clicked.connect(self._open_load_slot_dialog)
-        btn_row.addWidget(self.btn_save)
-        btn_row.addWidget(self.btn_load)
-        btn_row.addStretch()
+        btn_row.addWidget(self.btn_save, 1)
+        btn_row.addWidget(self.btn_load, 1)
         vbox.addLayout(btn_row)
 
         return container
@@ -304,10 +349,6 @@ class PositionerSettingsWidget(QWidget):
         w["line_edit"].blockSignals(True)
         w["line_edit"].setText(f"{value:.2f}")
         w["line_edit"].blockSignals(False)
-
-    def _on_slider_released(self, axis: str):
-        """When user releases slider, move to the new position immediately."""
-        self._move_single_axis(axis)
 
     def _parse_line_edit(self, axis: str) -> float:
         """Parse axis line edit text, clamp to current range and update UI."""
@@ -341,9 +382,8 @@ class PositionerSettingsWidget(QWidget):
         self._set_axis_value(axis, value)
 
     def _on_line_edit_return(self, axis: str):
-        """On Enter in axis line edit: clamp and move."""
+        """Clamp the entered axis value without starting a move."""
         self._clamp_line_edit(axis)
-        self._move_single_axis(axis)
 
     def _get_axis_value(self, axis: str) -> float:
         """Get current clamped axis value from stored state."""
@@ -355,9 +395,9 @@ class PositionerSettingsWidget(QWidget):
         axis_min, axis_max = self._axis_ranges.get(axis, (_AXIS_MIN, _AXIS_MAX_DEFAULT))
         new_val = max(axis_min, min(axis_max, current + step))
         self._set_axis_value(axis, new_val)
-        self._move_single_axis(axis)
+        self._move_to_position()
 
-    def _move_single_axis(self, axis: str):
+    def _move_to_position(self):
         """Send move command for the current XYZ values."""
         self._set_status(
             _t(self.interface_text, 'moving_to_position', 'Moving to position...'), 'blue'
@@ -431,9 +471,9 @@ class PositionerSettingsWidget(QWidget):
             axis_w["btn_minus_1"].setEnabled(enabled)
             axis_w["btn_plus_1"].setEnabled(enabled)
             axis_w["btn_plus_10"].setEnabled(enabled)
-            axis_w["btn_move"].setEnabled(enabled)
             axis_w["slider"].setEnabled(enabled)
             axis_w["line_edit"].setEnabled(enabled)
+        self.btn_move.setEnabled(enabled)
         self.btn_calibrate.setEnabled(enabled)
         self.btn_save.setEnabled(enabled)
         self.btn_load.setEnabled(enabled)
