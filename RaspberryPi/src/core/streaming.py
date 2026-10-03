@@ -1,8 +1,11 @@
+import logging
 import time
 from http.server import BaseHTTPRequestHandler
 
 from src.core.http_utils import ThreadedHTTPServer
 from src.services.camera_service import CameraService
+
+logger = logging.getLogger(__name__)
 
 
 class MJPEGHandler(BaseHTTPRequestHandler):
@@ -52,19 +55,31 @@ class CameraStreamServer:
         self.port = port
         self.camera_service = camera_service if camera_service is not None else CameraService(fps=fps)
         self._owns_camera_service = camera_service is None
+        self._server: ThreadedHTTPServer | None = None
 
     def run(self):
         if self._owns_camera_service:
             self.camera_service.start()
-        server = ThreadedHTTPServer((self.host, self.port), MJPEGHandler)
-        server.camera_service = self.camera_service
+        self._server = ThreadedHTTPServer((self.host, self.port), MJPEGHandler)
+        self._server.camera_service = self.camera_service
 
-        print(f'Raspberry Pi camera MJPEG stream available at http://{self.host}:{self.port}/video')
+        logger.info(
+            'Raspberry Pi camera MJPEG stream available at http://%s:%s/video',
+            self.host,
+            self.port,
+        )
         try:
-            server.serve_forever()
+            self._server.serve_forever()
         except KeyboardInterrupt:
             pass
         finally:
             if self._owns_camera_service:
                 self.camera_service.stop()
-            server.server_close()
+            self._server.server_close()
+
+    def stop(self):
+        """Stop the HTTP server and, if owned, the camera service."""
+        if self._server is not None:
+            self._server.shutdown()
+        if self._owns_camera_service:
+            self.camera_service.stop()
