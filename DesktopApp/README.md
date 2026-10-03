@@ -27,22 +27,22 @@ DesktopApp/
 │   │   └── theme_manager.py       # Dark/light theme
 │   ├── core/
 │   │   ├── constants/             # Constants (camera, spectrometer, UI)
-│   │   └── threads/               # Worker threads (camera, photo capture)
+│   │   └── threads/               # Worker threads (camera, photo capture, spectrum)
 │   ├── models/
 │   │   ├── errors.py              # Error definitions
 │   │   └── interface_text.py      # UI text and translations
 │   ├── services/
 │   │   ├── directory_control.py   # Directory management
 │   │   ├── light_switcher_service.py  # Light control API
+│   │   ├── network_discovery.py   # Device discovery on local network
 │   │   ├── raspberry_mode.py      # Raspberry Pi mode switching
 │   │   ├── save_photo.py          # Photo saving utility
 │   │   └── spectrometer_service.py    # Spectrometer API client
 │   ├── ui/
 │   │   ├── main_window.py         # Main application window
 │   │   ├── tabs/                  # Three tabs: camera, spectrometer, acquisition
+│   │   ├── ui_utils.py            # Shared UI helpers
 │   │   └── widgets/               # UI widgets (video, spectrometer, settings)
-│   └── utils/
-│       └── error_handler.py       # Error handling utilities
 ├── resources/
 │   ├── interface_settings.json    # UI settings
 │   ├── paths_config.json          # Path configuration
@@ -70,7 +70,7 @@ python main.py
 ### Configuration
 
 Edit `resources/settings.json`:
-- `api.base_url` — Raspberry Pi IP (default: `http://10.78.112.189:8000/api`)
+- `api.base_url` — Raspberry Pi IP (default: `http://192.168.1.23:8000/api`)
 - `ui.theme` — Theme setting
 - `ui.language` — Language (English/Russian)
 
@@ -107,22 +107,22 @@ DesktopApp/
 │   │   └── theme_manager.py       # Тёмная/светлая тема
 │   ├── core/
 │   │   ├── constants/             # Константы (камера, спектрометр, UI)
-│   │   └── threads/               # Рабочие потоки (камера, захват фото)
+│   │   └── threads/               # Рабочие потоки (камера, захват фото, спектр)
 │   ├── models/
 │   │   ├── errors.py              # Определения ошибок
 │   │   └── interface_text.py      # Текст UI и переводы
 │   ├── services/
 │   │   ├── directory_control.py   # Управление директориями
 │   │   ├── light_switcher_service.py  # API управления подсветкой
+│   │   ├── network_discovery.py   # Обнаружение устройств в локальной сети
 │   │   ├── raspberry_mode.py      # Переключение режимов Raspberry Pi
 │   │   ├── save_photo.py          # Утилита сохранения фото
 │   │   └── spectrometer_service.py    # API клиент спектрометра
 │   ├── ui/
 │   │   ├── main_window.py         # Главное окно приложения
 │   │   ├── tabs/                  # Три вкладки: камера, спектрометр, приобретение
+│   │   ├── ui_utils.py            # Общие UI-хелперы
 │   │   └── widgets/               # UI виджеты (видео, спектрометр, настройки)
-│   └── utils/
-│       └── error_handler.py       # Утилиты обработки ошибок
 ├── resources/
 │   ├── interface_settings.json    # Настройки UI
 │   ├── paths_config.json          # Конфигурация путей
@@ -150,7 +150,7 @@ python main.py
 ### Конфигурация
 
 Отредактируйте `resources/settings.json`:
-- `api.base_url` — IP Raspberry Pi (по умолчанию: `http://10.78.112.189:8000/api`)
+- `api.base_url` — IP Raspberry Pi (по умолчанию: `http://192.168.1.23:8000/api`)
 - `ui.theme` — Настройка темы
 - `ui.language` — Язык (English/Russian)
 
