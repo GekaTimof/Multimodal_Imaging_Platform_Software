@@ -29,6 +29,7 @@ from .positioner_slot_dialog import PositionerSlotDialog
 logger = logging.getLogger(__name__)
 
 _POSITIONER_TIMEOUT = 600.0  # Up to 5+ minutes for calibration and long moves
+_STATUS_TIMEOUT = 15.0  # Status request should return quickly
 _AXIS_MIN_DEFAULT = -5000.0
 _AXIS_MAX_DEFAULT = 15000.0
 _SLIDER_SCALE = 100  # slider uses int, we multiply by this for 0.01 precision
@@ -392,7 +393,8 @@ class PositionerSettingsWidget(QWidget):
         self._set_status(
             _t(self.interface_text, 'loading_positioner_settings', 'Loading...'), 'blue'
         )
-        self._request('GET', ENDPOINTS['positioner_status'], None, self._on_status)
+        self._request('GET', ENDPOINTS['positioner_status'], None, self._on_status,
+                      timeout=_STATUS_TIMEOUT)
 
     def _on_status(self, success: bool, message: str, response: dict):
         if not success:
