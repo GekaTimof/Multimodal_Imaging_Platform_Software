@@ -1,6 +1,6 @@
-# Spectrometer / Спектрометр
+# Spectrometer
 
-**[English](#english) | [Русский](#русский)**
+**[English](#english)**
 
 ---
 
@@ -198,46 +198,45 @@ Categories=Utility;
 
 ---
 
-<a name="русский"></a>
-## Русский
+## Standalone Visualization
 
-Автономное приложение визуализации спектрометра для Raspberry Pi.
+For standalone GUI visualization (not part of the main service):
 
-### Установка
+### Installation
 
 ```bash
-# Установка зависимостей
+# Install dependencies
 pip3 install --user -r requirements.txt
 ```
 
-### Конфигурация
+### Configuration
 
-Отредактируйте `run.sh`:
+Edit `run.sh`:
 ```bash
 #!/bin/bash
 sudo python3 /path/to/Visualization/main.py
 ```
 
-### Запуск
+### Running
 
 ```bash
 ./run.sh
 ```
 
-### Настройка
+### Customization
 
-Отредактируйте `Visualization/SpectrometerApplication/Constants.py`:
+Edit `Visualization/SpectrometerApplication/Constants.py`:
 
-| Параметр | Описание |
-|----------|----------|
-| `BASE_FILES_DIR` | Директория сохранения/загрузки по умолчанию |
-| `DARK_THEME` | `True` = тёмная тема, `False` = светлая |
-| `FONT_SIZE` | Размер текста кнопок |
-| `FONT` | Название шрифта |
-| `WARNING_FONT_SIZE` | Размер текста предупреждения о пересвете |
-| `COORDINATES_FONT_SIZE` | Размер текста координат мыши |
+| Parameter | Description |
+|-----------|-------------|
+| `BASE_FILES_DIR` | Default save/load directory |
+| `DARK_THEME` | `True` = dark, `False` = light |
+| `FONT_SIZE` | Button text size |
+| `FONT` | Font family name |
+| `WARNING_FONT_SIZE` | Saturation warning text size |
+| `COORDINATES_FONT_SIZE` | Mouse coordinates text size |
 
-### Ярлык на рабочем столе
+### Desktop Shortcut
 
 ```bash
 nano ~/.local/share/applications/spectrometer.desktop
@@ -247,9 +246,9 @@ nano ~/.local/share/applications/spectrometer.desktop
 [Desktop Entry]
 Name=Spectrometer
 Comment=Spectrometer Visualization Tool
-Exec=/путь/к/run.sh
-Icon=/путь/к/Visualization/Assets/icon.png
+Exec=/path/to/run.sh
+Icon=/path/to/Visualization/Assets/icon.png
 Terminal=false
 Type=Application
 Categories=Utility;
-``` 
+```
